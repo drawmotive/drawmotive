@@ -4,6 +4,7 @@ import { createManagedInstance, throwIfAborted, validateAbi, waitForInitialResou
 
 export { validateEditorAdapters } from './adapters.js';
 export { DrawMotiveError } from './runtime/errors.js';
+export { resolveRuntimeAssets } from './runtime/assets.js';
 
 export const abiManifest = Object.freeze({
   packageName: '@drawmotive/editor',

@@ -7,6 +7,8 @@ import type {
 } from '@drawmotive/textgraph';
 
 export type { AdapterContext, FileAdapter, NetworkAdapter } from '@drawmotive/textgraph';
+export type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset } from '@drawmotive/textgraph';
+import type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset } from '@drawmotive/textgraph';
 
 export interface EditorRuntimeManifest {
   readonly packageName: '@drawmotive/editor';
@@ -70,5 +72,11 @@ export declare class DrawMotiveError extends Error {
 }
 
 export declare function validateEditorAdapters(adapters?: EditorAdapters): Readonly<EditorAdapters>;
+
+export declare function resolveRuntimeAssets(options: {
+  manifest: RuntimeAssetManifest;
+  moduleUrl?: string | URL;
+  resolveAsset?(asset: RuntimeAsset, defaultUrl: URL): string | URL;
+}): readonly ResolvedRuntimeAsset[];
 
 export declare function initializeEditor(options: EditorInitializeOptions): Promise<EditorInstance>;
