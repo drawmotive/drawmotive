@@ -1,0 +1,29 @@
+import {
+  initializeEditor,
+  type EditorInstance,
+  type EditorInitializeOptions,
+  type EditorRuntimeManifest,
+} from '../src/index.js';
+
+const options: EditorInitializeOptions = {
+  initializeTextGraph: async () => ({
+    readonly: async (operation) => operation(),
+    mutate: async (operation) => operation(),
+    dispose: async () => undefined,
+  }),
+  loadRuntime: async (): Promise<EditorInstance> => ({
+    readonly: async (operation) => operation(),
+    mutate: async (operation) => operation(),
+    dispose: async () => undefined,
+  }),
+};
+
+const instance: Promise<EditorInstance> = initializeEditor(options);
+const manifest: EditorRuntimeManifest = {
+  packageName: '@drawmotive/editor',
+  packageVersion: '0.0.0-development',
+  abiVersion: '1.0.0',
+};
+
+void instance;
+void manifest;
