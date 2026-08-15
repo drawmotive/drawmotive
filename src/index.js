@@ -1,4 +1,7 @@
 import { initializeTextGraph as defaultInitializeTextGraph } from '@drawmotive/textgraph';
+import { createManagedInstance, throwIfAborted, validateAbi, waitForInitialResource } from './runtime/lifecycle.js';
+
+export { DrawMotiveError } from './runtime/errors.js';
 
 export const abiManifest = Object.freeze({
   packageName: '@drawmotive/editor',
@@ -8,13 +11,19 @@ export const abiManifest = Object.freeze({
 
 /** Initializes TextGraph first and then creates one editor runtime instance. */
 export async function initializeEditor(options = {}) {
+  throwIfAborted(options.signal);
   const initializeTextGraph = options.initializeTextGraph ?? defaultInitializeTextGraph;
-  const textgraph = await initializeTextGraph(options.textGraphOptions ?? options);
+  const textgraph = await waitForInitialResource(
+    () => initializeTextGraph({ ...(options.textGraphOptions ?? options), signal: options.signal }),
+    options.signal,
+  );
   try {
     if (typeof options.loadRuntime !== 'function') {
       throw new TypeError('initializeEditor requires a loadRuntime function');
     }
-    return await options.loadRuntime({ ...options, textgraph });
+    const runtime = await waitForInitialResource(() => options.loadRuntime({ ...options, textgraph }), options.signal);
+    await validateAbi(runtime, abiManifest.abiVersion);
+    return createManagedInstance([runtime, textgraph]);
   } catch (error) {
     await textgraph.dispose?.();
     throw error;

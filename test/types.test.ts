@@ -7,15 +7,12 @@ import {
 
 const options: EditorInitializeOptions = {
   initializeTextGraph: async () => ({
+    state: 'ready',
     readonly: async (operation) => operation(),
     mutate: async (operation) => operation(),
     dispose: async () => undefined,
   }),
-  loadRuntime: async (): Promise<EditorInstance> => ({
-    readonly: async (operation) => operation(),
-    mutate: async (operation) => operation(),
-    dispose: async () => undefined,
-  }),
+  loadRuntime: async () => ({ abiVersion: '1.0.0' }),
 };
 
 const instance: Promise<EditorInstance> = initializeEditor(options);

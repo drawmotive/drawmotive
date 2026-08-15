@@ -32,11 +32,11 @@ test('editor ESM entry composes TextGraph and editor runtime initialization', as
     },
     loadRuntime: async () => {
       calls.push('editor');
-      return { kind: 'editor' };
+      return { abiVersion: '1.0.0' };
     },
   });
   assert.deepEqual(calls, ['textgraph', 'editor']);
-  assert.equal(instance.kind, 'editor');
+  assert.equal(instance.state, 'ready');
   assert.equal(editor.abiManifest.packageName, '@drawmotive/editor');
 });
 
