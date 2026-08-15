@@ -14,15 +14,15 @@
       "default": "./src/platform/browser.js"
     },
     "./browser": {
-      "types": "./src/index.d.ts",
+      "types": "./src/platform/browser.d.ts",
       "default": "./src/platform/browser.js"
     },
     "./node": {
-      "types": "./src/index.d.ts",
+      "types": "./src/platform/node.d.ts",
       "default": "./src/platform/node.js"
     },
     "./worker": {
-      "types": "./src/index.d.ts",
+      "types": "./src/platform/worker.d.ts",
       "default": "./src/platform/worker.js"
     }
   },

@@ -8,7 +8,8 @@ import type {
 
 export type { AdapterContext, FileAdapter, NetworkAdapter } from '@drawmotive/textgraph';
 export type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset } from '@drawmotive/textgraph';
-import type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset } from '@drawmotive/textgraph';
+export type { LoadedRuntimeAsset, RuntimeAssetLoader } from '@drawmotive/textgraph';
+import type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset, RuntimeAssetLoader } from '@drawmotive/textgraph';
 
 export interface EditorRuntimeManifest {
   readonly packageName: '@drawmotive/editor';
