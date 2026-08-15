@@ -8,8 +8,22 @@
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "import": "./src/index.js",
-      "default": "./src/index.js"
+      "worker": "./src/platform/worker.js",
+      "browser": "./src/platform/browser.js",
+      "node": "./src/platform/node.js",
+      "default": "./src/platform/browser.js"
+    },
+    "./browser": {
+      "types": "./src/index.d.ts",
+      "default": "./src/platform/browser.js"
+    },
+    "./node": {
+      "types": "./src/index.d.ts",
+      "default": "./src/platform/node.js"
+    },
+    "./worker": {
+      "types": "./src/index.d.ts",
+      "default": "./src/platform/worker.js"
     }
   },
   "files": [
