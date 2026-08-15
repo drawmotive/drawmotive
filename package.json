@@ -1,0 +1,26 @@
+{
+  "name": "@drawmotive/editor",
+  "version": "0.0.0-development",
+  "description": "Embeddable DrawMotive visual diagram editor",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "files": [
+    "src",
+    "generated/wasm",
+    "generated/wasm-manifest.json"
+  ],
+  "scripts": {
+    "build": "node --check src/index.js",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm test && npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drawmotive/drawmotive.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  }
+}
