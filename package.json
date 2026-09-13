@@ -34,7 +34,8 @@
   "scripts": {
     "build": "node --check src/index.js && tsc -p tsconfig.json",
     "test": "node --test test/*.test.mjs",
-    "prepack": "npm test && npm run build"
+    "prepack": "node .release/check.cjs --ready && npm test && npm run build",
+    "release:check": "node .release/check.cjs --ready"
   },
   "repository": {
     "type": "git",

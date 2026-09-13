@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.2.0",
+  "channel": "stable",
+  "name": "@drawmotive/editor",
+  "version": "0.2.0",
+  "dependencies": {
+    "@drawmotive/textgraph": "0.2.0"
+  },
+  "native": true,
+  "publishable": false,
+  "excludedReason": "Editor SDK is private and its public API/runtime is not release-ready."
+}
