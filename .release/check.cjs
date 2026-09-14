@@ -118,6 +118,7 @@ function verifyNative(root, name, expected, sourceCommit, readJson, report) {
   const generated = path.join(root, "generated");
   const manifest = readJson(path.join(generated, "wasm-manifest.json"), `${name} native manifest`);
   if (!record(manifest)) { if (manifest !== undefined) report(`${name} native manifest must be an object.`); return; }
+  if (manifest.privateSource?.development === true) report(`${name} contains development native assets; rebuild from the recorded release source before publishing.`);
   if (manifest.packageName !== name || manifest.packageVersion !== expected) report(`${name} native manifest identity must match ${name}@${expected}; prepare and verify the intended native release.`);
   if (!/^[a-f0-9]{40}$/.test(manifest.privateSource?.commit ?? "")) report(`${name} native source provenance is missing or invalid.`);
   if (sourceCommit && manifest.privateSource?.commit !== sourceCommit) report(`${name} native source commit ${manifest.privateSource?.commit} does not match required ${sourceCommit}; changing packageVersion cannot supply the intended native build.`);
