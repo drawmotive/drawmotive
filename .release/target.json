@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.0",
+  "releaseVersion": "0.2.1",
   "channel": "stable",
   "name": "@drawmotive/editor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "dependencies": {
-    "@drawmotive/textgraph": "0.2.0"
+    "@drawmotive/textgraph": "0.2.1"
   },
   "native": true,
   "publishable": false,
