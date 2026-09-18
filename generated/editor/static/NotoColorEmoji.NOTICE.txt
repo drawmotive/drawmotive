@@ -1,0 +1,20 @@
+Noto Color Emoji
+Copyright 2022 Google Inc.
+
+These are unmodified fonts from googlefonts/noto-emoji.
+Version: 2.051
+Upstream commit: 8998f5dd683424a73e2314a8c1f1e359c19e8742
+
+NotoColorEmoji.ttf (used by the Skia renderer):
+Source: https://github.com/googlefonts/noto-emoji/blob/8998f5dd683424a73e2314a8c1f1e359c19e8742/fonts/NotoColorEmoji.ttf
+SHA-256: 72a635cb3d2f3524c51620cdde406b217204e8a6a06c6a096ff8ed4b5fd6e27b
+
+Noto-COLRv1.ttf (used by CSS and in-place editing):
+Source: https://github.com/googlefonts/noto-emoji/blob/8998f5dd683424a73e2314a8c1f1e359c19e8742/fonts/Noto-COLRv1.ttf
+SHA-256: 0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2
+The COLRv1 build supplies outline tables required by Firefox's webfont
+sanitizer, which rejects the bitmap-only NotoColorEmoji.ttf.
+
+Licensed under the SIL Open Font License, Version 1.1.
+See NotoColorEmoji.LICENSE.txt for the complete license.
+Redistributions of the font must retain its copyright notice and license.

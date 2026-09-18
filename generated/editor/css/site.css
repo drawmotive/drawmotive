@@ -1,0 +1,563 @@
+body {
+  background: #EEEEEE !important;
+}
+
+/****************************************************************
+ *
+ * Fix to Radzen standard styles
+ *
+ ***************************************************************/
+.rz-menu-toggle-item {
+  display: none !important;
+}
+
+/* ensure menu at the right side will not expand to outside of right edge */
+.right-menu .rz-navigation-menu {
+  right: 0
+}
+
+/* hide the arrow icon for menu items with children */
+.no-arrow-menu .rz-navigation-item-icon-children {
+  display: none;
+}
+
+/* remove margin for menu items with no arrow icon */
+.no-arrow-menu .rz-navigation-item-icon:not(.rz-navigation-menu .rz-navigation-item-icon) {
+  margin: 0 !important;
+}
+
+/* ref: https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded */
+
+/* optimize size by overriding: ensure that the @font-face rule for MaterialSymbolsRounded.woff2 is defined after any other @font-face rules for "Material Symbols" to give it higher precedence. */
+@font-face {
+  font-family: "Material Symbols";
+  src: url("../fonts/MaterialSymbolsRounded.woff2") format("woff2 supports variations"), url("../fonts/MaterialSymbolsRounded.woff2") format("woff2-variations");
+  font-style: normal;
+  font-weight: 100 700;
+}
+
+@font-face {
+  font-family: "iconfont";
+  src: url("../fonts/iconfont.woff2?v=7b17441a4411") format("woff2"), /* Super Modern Browsers */
+  url("../fonts/iconfont.woff?v=7b17441a4411") format("woff"), /* chrome, firefox */
+  url("../fonts/iconfont.ttf?v=7b17441a4411") format("truetype"), /* chrome, firefox, opera, Safari, Android, iOS 4.2+*/
+}
+
+i.rzi {
+  --rz-icon-font-family: "iconfont", "Material Symbols";
+}
+
+i.rz-navigation-item-icon-children {
+  --rz-icon-font-family: "Material Symbols"
+}
+
+/* Font-face declarations for custom fonts - moved from site.js to avoid CSP issues */
+@font-face {
+  font-family: "NotoSans-Regular";
+  src: url("../static/NotoSans-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "FuzzyBubbles-Regular";
+  src: url("../static/FuzzyBubbles-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "NotoColorEmoji";
+  /* Firefox rejects the bitmap-only font as a webfont; use the upstream COLRv1 build. */
+  src: url("../static/Noto-COLRv1.ttf") format("truetype") tech(color-COLRv1),
+       url("../static/NotoColorEmoji.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* Keyframe for loading spinner - moved from site.js to avoid CSP issues */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Loading blocker and animation styles - moved from inline styles in site.js */
+.dd-loading-blocker {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0);
+  z-index: 9998;
+  pointer-events: all;
+  cursor: wait;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dd-loading-animation {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 300px;
+  min-width: 300px;
+}
+
+.dd-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  margin: 0 auto 20px auto;
+  animation: spin 1s linear infinite;
+}
+
+.dd-loading-title {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-weight: 600;
+  font-size: 16px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.dd-loading-message {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+#blazor-error-ui {
+  background: lightyellow;
+  bottom: 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+  display: none;
+  left: 0;
+  padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+  position: fixed;
+  width: 100%;
+  z-index: var(--z-error-ui);
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+}
+
+:root {
+  font-size: var(--rz-root-font-size);
+}
+
+html, body {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: "NotoSans-Regular", "NotoColorEmoji", "Source Sans Pro", sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Segoe UI Symbol", Tahoma, Verdana;
+  color: var(--rz-text-color);
+  font-size: var(--rz-body-font-size);
+  line-height: var(--rz-body-line-height);
+  background-color: var(--rz-body-background-color);
+}
+
+#app {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+}
+
+.canvas-container {
+  height: 100%;
+  background-color: transparent; /* Match canvas background to prevent visible flash during resize */
+}
+
+.rz-body {
+  --rz-body-padding: 0;
+}
+
+a {
+  color: var(--rz-link-color);
+}
+
+a:hover,
+a:focus {
+  color: var(--rz-link-hover-color);
+}
+
+.blazor-error-boundary {
+  background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+  padding: 1rem 1rem 1rem 3.7rem;
+  color: white;
+}
+
+.blazor-error-boundary::after {
+  content: "An error has occurred."
+}
+
+.loading-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+}
+
+.loading-progress {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  animation: rotate 2s linear infinite;
+}
+
+.loading-progress circle {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.loading-progress circle:nth-child(1) {
+  stroke: #3498db;
+  stroke-dasharray: 150, 200;
+  stroke-dashoffset: 0;
+  animation: dash 1.5s ease-in-out infinite;
+}
+
+.loading-progress circle:nth-child(2) {
+  stroke: #e74c3c;
+  stroke-dasharray: 150, 200;
+  stroke-dashoffset: -75;
+  animation: dash 1.5s ease-in-out infinite, color-change 3s linear infinite;
+}
+
+.loading-progress-text {
+  position: absolute;
+  font-size: 1.2em;
+  color: #333;
+  text-align: center;
+}
+
+.loading-progress-text:after {
+  content: var(--blazor-load-percentage-text, "Loading");
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dash {
+  0% {
+    stroke-dasharray: 1, 200;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 150, 200;
+    stroke-dashoffset: -75;
+  }
+  100% {
+    stroke-dasharray: 150, 200;
+    stroke-dashoffset: -150;
+  }
+}
+
+@keyframes color-change {
+  0%, 100% {
+    stroke: #e74c3c;
+  }
+  50% {
+    stroke: #f1c40f;
+  }
+}
+
+.separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 24px 0;
+}
+
+.separator::before,
+.separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid;
+}
+
+.login .separator::before,
+.login .separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid;
+}
+
+.separator:not(:empty)::before {
+  margin-right: 1em;
+}
+
+.separator:not(:empty)::after {
+  margin-left: 1em;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  vertical-align: -0.15em;
+  fill: currentColor;
+  overflow: hidden;
+}
+
+.icon-button {
+  padding: 0 !important;
+}
+
+.canvas-container {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: white; /* Match canvas background to prevent visible flash during resize */
+}
+
+.profile-popup {
+  display: none;
+  position: absolute;
+  overflow: hidden;
+  width: 300px;
+  left: auto !important;
+  right: 0 !important;
+  padding: 12px 10px 20px 20px;
+}
+
+.profile-popup-container {
+  width: 100%;
+  height: 100%;
+  background-color: var(--rz-white);
+}
+
+.application-menu-popup {
+  display: none;
+  position: absolute;
+  overflow: hidden;
+  width: 300px;
+  left: 0 !important;
+  right: auto !important;
+  padding: 12px 20px 20px 10px;
+}
+
+.application-popup-container {
+  width: 100%;
+  height: 100%;
+  background-color: var(--rz-white);
+}
+
+.site-toolbar {
+  background-color: var(--rz-white);
+  z-index: var(--z-toolbar);
+  padding: 2px;
+  position: fixed;
+}
+
+/* Canvas Related Styles */
+/* Z-index variables */
+:root {
+  --z-text-edit: 2;
+  --z-app-toolbar: 1000;
+  --z-toolbar: 200;
+  --z-error-ui: 3000; /* Ensure error UI is above context panel (2000) */
+  --z-tooltip: 10000;
+}
+
+/* Apply tooltip z-index to tooltip container */
+#tooltip-container, .tooltip-wrapper, .tooltip-arrow, .tooltip-content {
+  z-index: var(--z-tooltip);
+}
+
+/* Add any other component-specific styles here */
+.rz-menu:not(.rz-profile-menu) .rz-stack .rzi:not(.rz-navigation-item-icon-children) {
+  margin-inline: 0;
+}
+
+.rz-menu .rz-stack .rz-text-overline {
+  margin-block-end: 0;
+}
+
+.rz-border-radius-2 .rz-navigation-item-wrapper {
+  border-radius: var(--rz-border-radius-2) !important;
+}
+
+.d-toolbar-sub-panel {
+  padding: 2px;
+  background: var(--rz-white)
+}
+
+canvas {
+  display: block;
+}
+
+/* Extended Tooltip Styles */
+.tooltip-wrapper {
+  /* Container will be sized by its content */
+  display: inline-block;
+}
+
+.tooltip-content {
+  background-color: #333;
+  color: #fff;
+  padding: 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  text-align: left;
+
+  /* Content sizing */
+  max-width: 300px;
+  width: max-content;
+  white-space: normal;
+  word-wrap: break-word;
+
+  /* Allow content to determine size */
+  display: inline-block;
+  overflow: hidden;
+}
+
+/* Remove margins - they create unwanted space between arrow and content */
+.tooltip-content.bottom {
+  /* No margin */
+}
+
+.tooltip-content.top {
+  /* No margin */
+}
+
+/* Alignment classes - no transform needed, JS handles positioning */
+.tooltip-content.align-left {
+  /* Left alignment handled by JS */
+}
+
+.tooltip-content.align-center {
+  /* Center alignment handled by JS */
+}
+
+.tooltip-content.align-right {
+  /* Right alignment handled by JS */
+}
+
+.tooltip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0.8)) drop-shadow(1px 0 0 rgba(255, 255, 255, 0.8)) drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.8)) drop-shadow(0 1px 0 rgba(255, 255, 255, 0.8)) drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.8));
+}
+
+.tooltip-arrow.bottom {
+  border-width: 0 5px 5px 5px;
+  border-color: transparent transparent #333 transparent;
+}
+
+.tooltip-arrow.top {
+  border-width: 5px 5px 0 5px;
+  border-color: #333 transparent transparent transparent;
+}
+
+.tooltip-arrow.right {
+  border-width: 5px 5px 5px 0;
+  border-color: transparent #333 transparent transparent;
+}
+
+.tooltip-arrow.left {
+  border-width: 5px 0 5px 5px;
+  border-color: transparent transparent transparent #333;
+}
+
+/* First and second level content */
+.first-level, .second-level {
+  /* Absolute positioning to overlay */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+
+  /* Fade transition */
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+
+  /* Hide when not visible */
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.first-level.visible, .second-level.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.first-level.transition-out {
+  opacity: 0;
+}
+
+.second-level.transition-in {
+  opacity: 1;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Button Group Styles */
+.button-group {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--rz-base);
+  border-radius: var(--rz-border-radius, 4px);
+}
+
+.button-group .tooltip-container {
+  display: flex;
+}
+
+.button-group .tooltip-container .rz-button {
+  border: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.button-group .tooltip-container:not(:last-child) .rz-button {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.button-group .tooltip-container:not(:first-child) .rz-button {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+.button-group .tooltip-container:not(:first-child):not(:last-child) .rz-button {
+  border-radius: 0 !important;
+}
+
+.button-group .tooltip-container:first-child .rz-button {
+  border-top-left-radius: var(--rz-border-radius, 4px) !important;
+  border-bottom-left-radius: var(--rz-border-radius, 4px) !important;
+}
+
+.button-group .tooltip-container:last-child .rz-button {
+  border-top-right-radius: var(--rz-border-radius, 4px) !important;
+  border-bottom-right-radius: var(--rz-border-radius, 4px) !important;
+}

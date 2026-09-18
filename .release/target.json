@@ -4,10 +4,8 @@
   "channel": "stable",
   "name": "@drawmotive/editor",
   "version": "0.2.1",
-  "dependencies": {
-    "@drawmotive/textgraph": "0.2.1"
-  },
+  "dependencies": {},
   "native": true,
-  "publishable": false,
-  "excludedReason": "Editor SDK is private and its public API/runtime is not release-ready."
+  "publishable": true,
+  "nativeSourceCommit": "260d079c33732273d3d9b43e58a0440e57eae34d"
 }

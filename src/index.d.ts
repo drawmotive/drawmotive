@@ -1,83 +1,39 @@
-import type {
-  AdapterContext,
-  FileAdapter,
-  NetworkAdapter,
-  TextGraphInitializeOptions,
-  TextGraphInstance,
-} from '@drawmotive/textgraph';
+/** Mount one isolated visual editor into a browser element. */
+export interface EditorInitializeOptions {
+  container: HTMLElement;
+  /** Directory containing the copied embed.html and its runtime assets. */
+  assetBaseUrl?: string | URL;
+  /** Initial TextGraph source. Mutually exclusive with document. */
+  source?: string;
+  /** Opaque base64 document returned by exportDocument(). */
+  document?: string;
+  /** Accessible title for the editor iframe. */
+  title?: string;
+  /** Cancels initialization, including the initial import. */
+  signal?: AbortSignal;
+  /** Startup/request deadline in milliseconds. Default: 120000. */
+  timeoutMs?: number;
+}
 
-export type { AdapterContext, FileAdapter, NetworkAdapter } from '@drawmotive/textgraph';
-export type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset } from '@drawmotive/textgraph';
-export type { LoadedRuntimeAsset, RuntimeAssetLoader } from '@drawmotive/textgraph';
-import type { RuntimeAsset, RuntimeAssetManifest, ResolvedRuntimeAsset, RuntimeAssetLoader } from '@drawmotive/textgraph';
-
-export interface EditorRuntimeManifest {
-  readonly packageName: '@drawmotive/editor';
-  readonly packageVersion: string;
-  readonly abiVersion: string;
+export interface EditorDocument {
+  /** PNG image bytes encoded as base64. */
+  readonly png: string;
+  /** Editable DrawMotive document encoded as base64. Persist this to reopen it. */
+  readonly raw: string;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface EditorInstance {
   readonly state: 'ready' | 'disposing' | 'disposed';
-  readonly<T>(operation: () => T | Promise<T>): Promise<T>;
-  mutate<T>(operation: () => T | Promise<T>): Promise<T>;
+  /** Replace the current diagram with automatically laid out TextGraph. */
+  importTextGraph(source: string): Promise<void>;
+  /** Replace the current diagram with an exported document. */
+  importDocument(raw: string): Promise<void>;
+  /** Return an editable document and its rendered PNG. */
+  exportDocument(): Promise<EditorDocument>;
+  /** Remove the frame and release its runtime. Safe to call more than once. */
   dispose(): Promise<void>;
 }
-
-export interface EditorRuntime {
-  readonly abiVersion: string;
-  dispose?(): void | Promise<void>;
-}
-
-export interface StorageAdapter {
-  get(key: string, context: AdapterContext): Promise<unknown>;
-  set(key: string, value: unknown, context: AdapterContext): Promise<void>;
-  delete(key: string, context: AdapterContext): Promise<void>;
-}
-
-export interface ThemeAdapter {
-  getCurrent(): unknown;
-  subscribe(listener: (theme: unknown) => void): () => void;
-}
-
-export interface CommandAdapter {
-  execute(command: string, args: readonly unknown[], context: AdapterContext): Promise<unknown>;
-  subscribe(listener: (command: string, args: readonly unknown[]) => void): () => void;
-}
-
-export interface EditorAdapters {
-  readonly files?: FileAdapter;
-  readonly storage?: StorageAdapter;
-  readonly theme?: ThemeAdapter;
-  readonly commands?: CommandAdapter;
-  readonly network?: NetworkAdapter;
-}
-
-export interface EditorRuntimeOptions extends EditorInitializeOptions {
-  readonly textgraph: TextGraphInstance;
-}
-
-export interface EditorInitializeOptions {
-  initializeTextGraph?(options: TextGraphInitializeOptions): Promise<TextGraphInstance>;
-  textGraphOptions?: TextGraphInitializeOptions;
-  loadRuntime(options: EditorRuntimeOptions): Promise<EditorRuntime>;
-  signal?: AbortSignal;
-  adapters?: EditorAdapters;
-}
-
-export declare const abiManifest: Readonly<EditorRuntimeManifest>;
-
-export declare class DrawMotiveError extends Error {
-  readonly code: string;
-  readonly details: Readonly<Record<string, unknown>>;
-}
-
-export declare function validateEditorAdapters(adapters?: EditorAdapters): Readonly<EditorAdapters>;
-
-export declare function resolveRuntimeAssets(options: {
-  manifest: RuntimeAssetManifest;
-  moduleUrl?: string | URL;
-  resolveAsset?(asset: RuntimeAsset, defaultUrl: URL): string | URL;
-}): readonly ResolvedRuntimeAsset[];
 
 export declare function initializeEditor(options: EditorInitializeOptions): Promise<EditorInstance>;

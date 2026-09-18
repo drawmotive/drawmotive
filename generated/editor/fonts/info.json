@@ -1,0 +1,134 @@
+{
+  "add_text": {
+    "encodedCode": "\\ea01",
+    "prefix": "iconfont",
+    "className": "iconfont-add_text",
+    "unicode": "&#59905;"
+  },
+  "arrow-end-1": {
+    "encodedCode": "\\ea02",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-end-1",
+    "unicode": "&#59906;"
+  },
+  "arrow-end-2": {
+    "encodedCode": "\\ea03",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-end-2",
+    "unicode": "&#59907;"
+  },
+  "arrow-end-3": {
+    "encodedCode": "\\ea04",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-end-3",
+    "unicode": "&#59908;"
+  },
+  "arrow-end-4": {
+    "encodedCode": "\\ea05",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-end-4",
+    "unicode": "&#59909;"
+  },
+  "arrow-end-5": {
+    "encodedCode": "\\ea06",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-end-5",
+    "unicode": "&#59910;"
+  },
+  "arrow-start-1": {
+    "encodedCode": "\\ea07",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-start-1",
+    "unicode": "&#59911;"
+  },
+  "arrow-start-2": {
+    "encodedCode": "\\ea08",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-start-2",
+    "unicode": "&#59912;"
+  },
+  "arrow-start-3": {
+    "encodedCode": "\\ea09",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-start-3",
+    "unicode": "&#59913;"
+  },
+  "arrow-start-4": {
+    "encodedCode": "\\ea0a",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-start-4",
+    "unicode": "&#59914;"
+  },
+  "arrow-start-5": {
+    "encodedCode": "\\ea0b",
+    "prefix": "iconfont",
+    "className": "iconfont-arrow-start-5",
+    "unicode": "&#59915;"
+  },
+  "color-palette-fill": {
+    "encodedCode": "\\ea0c",
+    "prefix": "iconfont",
+    "className": "iconfont-color-palette-fill",
+    "unicode": "&#59916;"
+  },
+  "connector-curved": {
+    "encodedCode": "\\ea0d",
+    "prefix": "iconfont",
+    "className": "iconfont-connector-curved",
+    "unicode": "&#59917;"
+  },
+  "connector-elbow": {
+    "encodedCode": "\\ea0e",
+    "prefix": "iconfont",
+    "className": "iconfont-connector-elbow",
+    "unicode": "&#59918;"
+  },
+  "connector-straight": {
+    "encodedCode": "\\ea0f",
+    "prefix": "iconfont",
+    "className": "iconfont-connector-straight",
+    "unicode": "&#59919;"
+  },
+  "line-style-dash": {
+    "encodedCode": "\\ea10",
+    "prefix": "iconfont",
+    "className": "iconfont-line-style-dash",
+    "unicode": "&#59920;"
+  },
+  "line-style-dot": {
+    "encodedCode": "\\ea11",
+    "prefix": "iconfont",
+    "className": "iconfont-line-style-dot",
+    "unicode": "&#59921;"
+  },
+  "line-style-solid": {
+    "encodedCode": "\\ea12",
+    "prefix": "iconfont",
+    "className": "iconfont-line-style-solid",
+    "unicode": "&#59922;"
+  },
+  "line-width-bold": {
+    "encodedCode": "\\ea13",
+    "prefix": "iconfont",
+    "className": "iconfont-line-width-bold",
+    "unicode": "&#59923;"
+  },
+  "line-width-normal": {
+    "encodedCode": "\\ea14",
+    "prefix": "iconfont",
+    "className": "iconfont-line-width-normal",
+    "unicode": "&#59924;"
+  },
+  "line-width-thin": {
+    "encodedCode": "\\ea15",
+    "prefix": "iconfont",
+    "className": "iconfont-line-width-thin",
+    "unicode": "&#59925;"
+  },
+  "swap2": {
+    "encodedCode": "\\ea16",
+    "prefix": "iconfont",
+    "className": "iconfont-swap2",
+    "unicode": "&#59926;"
+  }
+}

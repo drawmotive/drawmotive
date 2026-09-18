@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DrawMotive editor · Browser example</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"@drawmotive/editor":"../../src/index.js"}}</script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="https://textgraph.dev/">TextGraph <span>/ DrawMotive</span></a>
+    <a href="https://textgraph.dev/editor/">Editor documentation ↗</a>
+  </header>
+  <main>
+    <div class="intro">
+      <p class="eyebrow">@drawmotive/editor · Browser example</p>
+      <h1>From text to a diagram you can edit.</h1>
+      <p>Generate a diagram, then move shapes, edit labels and draw connections on the canvas. Everything runs in your browser.</p>
+    </div>
+    <section class="workspace" aria-label="Interactive editor example">
+      <div class="source-panel">
+        <label for="source">1. Start with TextGraph</label>
+        <textarea id="source" spellcheck="false">User: User
+App: Application
+DB: Database
+User -> App -> DB</textarea>
+        <button id="generate" disabled>Generate diagram</button>
+        <p class="hint">Generating replaces the canvas. Save your edits before starting again.</p>
+        <h2>2. Make it yours</h2>
+        <p>Drag shapes to move them. Double-click a label to edit it. Use the canvas tools to add shapes and connections.</p>
+        <h2>3. Take it with you</h2>
+        <div class="actions">
+          <button id="download" disabled>Download PNG</button>
+          <button id="save" disabled>Save document</button>
+          <button id="open" disabled>Open document</button>
+          <input id="file" type="file" accept=".drawmotive,text/plain" hidden>
+        </div>
+        <p class="hint">Save a document to reopen and keep editing. A PNG is an image for sharing.</p>
+      </div>
+      <div class="canvas-panel">
+        <div class="canvas-heading"><strong>Visual editor</strong><span id="status" role="status">Loading editor…</span></div>
+        <div id="editor" aria-label="Diagram editor"></div>
+      </div>
+    </section>
+    <section class="usage" aria-labelledby="usage-title">
+      <div><p class="eyebrow">Your page, your data</p><h2 id="usage-title">Embed the same editor.</h2>
+        <p>Install the package, copy its runtime assets, and give it an element with a height. Save the exported document wherever your application stores data.</p>
+        <pre><code>npm install @drawmotive/editor
+npx drawmotive-copy-assets public/editor</code></pre>
+        <p><a href="./main.js">View this page’s JavaScript</a> · <a href="https://textgraph.dev/editor/">Read the API guide</a></p>
+      </div>
+      <pre class="code"><code>import { initializeEditor } from '@drawmotive/editor';
+
+const editor = await initializeEditor({
+  container: document.querySelector('#editor'),
+  assetBaseUrl: '/editor/',
+  source: 'User -> Application -> Database',
+});
+
+// Export both a shareable image and editable data.
+const { png, raw } = await editor.exportDocument();
+await editor.importDocument(raw);
+
+// Clean up when your component unmounts.
+await editor.dispose();</code></pre>
+    </section>
+  </main>
+  <footer><a href="https://textgraph.dev/examples/textgraph/">Only need a PNG? Try the TextGraph browser example →</a></footer>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

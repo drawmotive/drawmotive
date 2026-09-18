@@ -1,7 +1,12 @@
 .local/
+node_modules/
+*.tgz
 
 # Tracked release policy; generated archives/receipts remain ignored.
 .release/*
 !.release/
 !.release/target.json
 !.release/check.cjs
+
+test-results/
+playwright-report/

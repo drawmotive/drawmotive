@@ -1,0 +1,42 @@
+Bundled editor font notices
+
+The fonts retain their embedded copyright and SIL Open Font License 1.1
+notices. Matching upstream licenses accompany them in this directory.
+The hashes below identify the actual distributed files; current upstream
+font binaries have not been asserted byte-identical to these local files.
+
+NotoSans-Regular.ttf
+Embedded version: 2.015
+SHA-256: fe8c022f48d8dd29f17b744d16f9346f4357e16f7d4f7be58b000ae7c291b614
+License: NotoSans-LICENSE.txt
+License source: https://raw.githubusercontent.com/notofonts/latin-greek-cyrillic/NotoSans-v2.015/OFL.txt
+
+FuzzyBubbles-Regular.ttf
+Embedded version: 1.010
+SHA-256: 0fcfecadb6cf574cb5009967a3da171471f7633de00d96cb4b86b3c6a6f61cca
+License: FuzzyBubbles-LICENSE.txt
+License source: https://raw.githubusercontent.com/google/fonts/19311a025d3069c8882a130bce378178e45dac9f/ofl/fuzzybubbles/OFL.txt
+
+NotoSansMono-Regular.ttf
+Embedded version: 2.014
+SHA-256: 11b5d661e57865bce89d3f103a654cfa4faf9347abebac252e30742be1e657b2
+License: NotoSansMono-LICENSE.txt
+License source: https://raw.githubusercontent.com/google/fonts/b346dc3e18bed8b4ca602e00537eb35d76ed5025/ofl/notosansmono/OFL.txt
+
+NotoSansSC-Regular.ttf
+Embedded version: 2.004-H2
+SHA-256: dc71173babc38dfd019912965f2b4b3421fb347ebd854e7b96f64ad63673924a
+License: NotoSansSC-LICENSE.txt
+License source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/OFL.txt
+
+MaShanZheng-Regular.ttf
+Embedded version: 2.001
+SHA-256: c97aa8b67b70e0c80fd383404db0fb386f0c0daaccdee6ff6e8f289e51670dee
+License: MaShanZheng-LICENSE.txt
+License source: https://raw.githubusercontent.com/google/fonts/b346dc3e18bed8b4ca602e00537eb35d76ed5025/ofl/mashanzheng/OFL.txt
+
+NotoColorEmoji.ttf and Noto-COLRv1.ttf: see NotoColorEmoji.NOTICE.txt
+and NotoColorEmoji.LICENSE.txt for their source, hashes and full license.
+
+Material Symbols Rounded: see ../fonts/MaterialSymbols-NOTICE.txt
+and ../fonts/MaterialSymbols-LICENSE.txt.

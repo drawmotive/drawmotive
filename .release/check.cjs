@@ -7,6 +7,27 @@ const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\
 const packagePattern = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const has = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+const editorRequiredAssets = [
+  "embed.html", "js/editor-embed.js", "js/site.js", "js/interop.js",
+  "css/site.css", "Editor.Client.styles.css", "_framework/blazor.webassembly.js",
+  "_content/Radzen.Blazor/Radzen.Blazor.js", "_content/Radzen.Blazor/css/standard-base.css",
+  "fonts/MaterialSymbolsRounded.woff2", "static/files.json", "static/themes.css",
+  "static/NotoSans-Regular.ttf", "static/FuzzyBubbles-Regular.ttf",
+].map(file => `editor/${file}`);
+
+/** The embedded host owns a narrow distributable surface; application shell,
+ * analytics, source and debug files are never release assets. */
+function isEditorAssetPath(value) {
+  if (typeof value !== "string" || !value.startsWith("editor/")) return false;
+  const parts = value.split("/");
+  if (parts.some(part => !/^[A-Za-z0-9_@+.-]+$/.test(part) || part === "." || part === ".." || part.startsWith("."))) return false;
+  const relative = parts.slice(1).join("/");
+  if (["embed.html", "Editor.Client.styles.css"].includes(relative)) return true;
+  if (!["_framework", "_content", "css", "fonts", "js", "static"].includes(parts[1])) return false;
+  if (parts[1] === "_content" && ["Blazor-Analytics", "Microsoft.AspNetCore.Components.WebAssembly.Authentication"].includes(parts[2])) return false;
+  if (parts[1] === "js" && !["js/site.js", "js/interop.js", "js/editor-embed.js"].includes(relative)) return false;
+  return /\.(?:js|mjs|json|css|wasm|dll|dat|bin|ico|svg|woff2?|ttf|eot|png|jpe?g|gif|webp|avif|txt)$/i.test(relative);
+}
 
 /** Standalone copies consume a committed release projection. Metadata checks
  * describe the intended release; ready/installed checks forbid packaging old
@@ -103,6 +124,10 @@ function verifyInstalled(root, name, expected, readJson, report) {
   } catch { report(`Installed ${name}@${expected} is missing; run npm ci in this component after its public release.`); return; }
   const installed = readJson(path.join(packageRoot, "package.json"), `Installed ${name} manifest`);
   if (installed?.name !== name || installed?.version !== expected) report(`Installed ${name} version ${installed?.version} does not match ${expected}; run npm ci before building.`);
+  if (name === "@drawmotive/editor") {
+    verifyNative(packageRoot, name, expected, undefined, readJson, report);
+    return;
+  }
   if (name !== "@drawmotive/textgraph") return;
   try {
     const entry = createRequire(path.join(root, "package.json")).resolve("@drawmotive/textgraph/node");
@@ -115,6 +140,10 @@ function verifyInstalled(root, name, expected, readJson, report) {
 /** Package identity never changes native provenance. Hashes and the required
  * producer commit must describe the existing files; this gate rewrites nothing. */
 function verifyNative(root, name, expected, sourceCommit, readJson, report) {
+  if (name === "@drawmotive/editor") {
+    verifyEditor(root, expected, sourceCommit, readJson, report);
+    return;
+  }
   const generated = path.join(root, "generated");
   const manifest = readJson(path.join(generated, "wasm-manifest.json"), `${name} native manifest`);
   if (!record(manifest)) { if (manifest !== undefined) report(`${name} native manifest must be an object.`); return; }
@@ -147,7 +176,71 @@ function verifyNative(root, name, expected, sourceCommit, readJson, report) {
   } catch (error) { report(`${name} native asset directory cannot be read (${error.code ?? error.message}).`); }
 }
 
-module.exports = { checkComponent };
+/** Recursing over the actual tree prevents hidden extras and symlinked
+ * directories from escaping the manifest boundary. */
+function editorFiles(root, current = root) {
+  if (fs.realpathSync(current) !== current) throw new Error("symlinked editor asset directory");
+  const files = [];
+  for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+    const file = path.join(current, entry.name);
+    if (entry.isDirectory()) files.push(...editorFiles(root, file));
+    else if (entry.isFile()) files.push(`editor/${path.relative(root, file).split(path.sep).join("/")}`);
+    else throw new Error("symlink or nonregular editor asset");
+  }
+  return files;
+}
+
+/** .NET 10 Blazor embeds its boot JSON in dotnet.js; standalone WASM and
+ * older Blazor emit a separate file. Inspect SDK JSON without executing it. */
+function hasEditorBootConfiguration(generated, seen) {
+  if ([...seen].some(file => /^editor\/_framework\/(?:blazor\.boot\.json|dotnet\.boot(?:\.[A-Za-z0-9_-]+)?\.js)$/.test(file))) return true;
+  for (const file of seen) {
+    if (!/^editor\/_framework\/dotnet(?:\.[A-Za-z0-9_-]+)?\.js$/.test(file)) continue;
+    try {
+      const content = fs.readFileSync(path.join(generated, file), "utf8");
+      const start = content.indexOf("/*json-start*/");
+      const end = content.indexOf("/*json-end*/", start);
+      if (start < 0 || end < 0) continue;
+      const config = JSON.parse(content.slice(start + "/*json-start*/".length, end));
+      if (["Editor.Client", "Editor.Client.dll"].includes(config.mainAssemblyName) && record(config.resources)) return true;
+    } catch { /* The ordinary file/hash checks also report unreadable assets. */ }
+  }
+  return false;
+}
+
+function verifyEditor(root, expected, sourceCommit, readJson, report) {
+  const name = "@drawmotive/editor";
+  const generated = path.join(root, "generated");
+  const manifest = readJson(path.join(generated, "editor-manifest.json"), `${name} native manifest`);
+  if (!record(manifest)) { if (manifest !== undefined) report(`${name} native manifest must be an object.`); return; }
+  if (manifest.schemaVersion !== 1 || manifest.protocolVersion !== 1) report(`${name} editor schemaVersion and protocolVersion must be 1.`);
+  if (manifest.packageName !== name || manifest.packageVersion !== expected) report(`${name} native manifest identity must match ${name}@${expected}.`);
+  if (manifest.privateSource?.project !== "Editor.Client" || !/^[a-f0-9]{40}$/.test(manifest.privateSource?.commit ?? "")) report(`${name} native source provenance must name an exact Editor.Client commit.`);
+  if (manifest.privateSource?.development === true) report(`${name} contains development native assets.`);
+  if (sourceCommit && manifest.privateSource?.commit !== sourceCommit) report(`${name} native source commit does not match required ${sourceCommit}; changing packageVersion cannot supply the intended native build.`);
+  if (!Array.isArray(manifest.assets) || !manifest.assets.length) { report(`${name} native manifest must list its assets.`); return; }
+  const seen = new Set();
+  for (const asset of manifest.assets) {
+    if (!record(asset) || !isEditorAssetPath(asset.path) || seen.has(asset.path)) { report(`${name} editor manifest has an unsafe, excluded or duplicate asset path.`); continue; }
+    seen.add(asset.path);
+    if (!Number.isSafeInteger(asset.bytes) || asset.bytes < 0 || !/^[a-f0-9]{64}$/.test(asset.sha256 ?? "")) { report(`${name} asset ${asset.path} lacks valid byte length/SHA-256.`); continue; }
+    const file = path.join(generated, asset.path);
+    try {
+      if (fs.realpathSync(file) !== file) { report(`${name} asset ${asset.path} must not reference a symlink or external native file.`); continue; }
+      const bytes = fs.readFileSync(file);
+      if (bytes.length !== asset.bytes || createHash("sha256").update(bytes).digest("hex") !== asset.sha256) report(`${name} asset ${asset.path} does not match its recorded bytes/SHA-256.`);
+    } catch (error) { report(`${name} asset ${asset.path} cannot be read (${error.code ?? error.message}).`); }
+  }
+  for (const required of editorRequiredAssets) if (!seen.has(required)) report(`${name} editor manifest is missing required host asset ${required}.`);
+  if (!hasEditorBootConfiguration(generated, seen)) report(`${name} editor manifest is missing the Blazor boot configuration.`);
+  if (!manifest.assets.some(asset => record(asset) && typeof asset.path === "string" && /^editor\/_framework\/.+\.wasm$/.test(asset.path) && asset.bytes > 0)) report(`${name} editor manifest is missing nonempty WebAssembly runtime assets.`);
+  try {
+    const disk = editorFiles(path.join(generated, "editor"));
+    if (disk.length !== seen.size || disk.some(file => !seen.has(file))) report(`${name} editor assets include unmanifested files; regenerate and verify the native release.`);
+  } catch (error) { report(`${name} editor asset directory cannot be read (${error.code ?? error.message}).`); }
+}
+
+module.exports = { checkComponent, editorRequiredAssets, isEditorAssetPath };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

@@ -1,0 +1,93 @@
+/* Default appearance: compose palette.light and styling.default on the same target. */
+.palette.light {
+    /* Theme Colors: Black + White + 5 Colors */
+    --color-black: #1B1B1B;
+    --color-white: #F7F7F7;
+    --color-primary-stroke: #007AFF;
+    --color-primary-fill: #B3D7FF;
+    --color-secondary-stroke: #5A6268;
+    --color-secondary-fill: #D6D8DB;
+    --color-accent-stroke: #FF4081;
+    --color-accent-fill: #FFC1DC;
+    --color-success-stroke: #34C759;
+    --color-success-fill: #B8EFB3;
+    --color-warning-stroke: #FFCC00;
+    --color-warning-fill: #FFF3BF;
+
+    /* Editor colors are consumed directly from the palette. */
+    --color-selection-stroke: rgba(0, 255, 0, 0.9);
+    --color-selection-fill: rgba(0, 255, 0, 0.5);
+    --color-selection-stroke-reverse: rgba(255, 0, 0, 0.9);
+    --color-selection-fill-reverse: rgba(255, 0, 0, 0.5);
+    --color-bound-stroke: rgba(0, 255, 255, 0.8);
+    --color-grip-stroke: rgba(0, 0, 0, 0.8);
+    --color-grip-fill: rgba(0, 255, 255, 0.8);
+}
+
+.styling.default {
+    /* Selection Styles */
+    --selection-blend-mode: SrcOver;
+    --selection-stroke-path-effect: solid;
+    --selection-stroke-path-effect-reverse: dashed, 5, 2;
+
+    /* Bound, Bounding Box, Styles */
+    --bound-blend-mode: SrcOver;
+    --bound-stroke-width: 1px;
+    --bound-stroke-path-effect: solid;
+
+    /* Grip Styles */
+    --grip-blend-mode: SrcOver;
+    --grip-radius: 5px;
+    --grip-stroke-width: 1px;
+
+    /* Font Styles */
+    --font-family: "NotoSans-Regular";
+    --font-family-sketchy: "FuzzyBubbles-Regular";
+    --font-size-small: 12px;
+    --font-size-medium: 16px;
+    --font-size-large: 24px;
+
+    /* Line Styles */
+    --line-width-thin: 1px;
+    --line-width-normal: 2px;
+    --line-width-bold: 4px;
+    /* Display-only line-to-node gap along the connector path in drawing units, after stroke compensation.
+       Positive values add space; negative values bring ends closer. Stored geometry is unchanged.
+       Accepts finite signed px or unitless 0; omitted values default to 0. */
+    --line-node-gap: 0px;
+    --stroke-cap: round;
+    --stroke-join: round;
+    --stroke-miter: 10;
+    --blend-mode: SrcOver;
+
+    /* TextGraph Styles */
+    --textgraph-node-min-width: 80px;
+    --textgraph-node-fixed-height: 40px;
+    --textgraph-node-character-width: 8px;
+    --textgraph-node-horizontal-padding: 24px;
+    --textgraph-canvas-hint-width: 800px;
+    --textgraph-canvas-hint-height: 600px;
+    --textgraph-default-node-gap: 40px;
+    --textgraph-default-group-gap: 80px;
+    --textgraph-default-layer-gap: 120px;
+    --textgraph-default-port-gap: 12px;
+    --textgraph-default-route-clearance: 16px;
+    --textgraph-layout-padding: 12px;
+    --textgraph-group-padding: 24px;
+    --textgraph-shared-band-lane-gap: 16px;
+    --textgraph-long-edge-route-clearance: 24px;
+    --textgraph-edge-label-reservation-step: 16px;
+    --textgraph-edge-label-self-loop-padding: 8px;
+    --textgraph-edge-label-center-nudge-limit: 12px;
+    --textgraph-edge-label-font-size: medium;
+    --textgraph-edge-label-padding: 2px 2px 2px 2px;
+    --textgraph-edge-label-opacity: 0.88;
+    --textgraph-preview-export-padding: 48px;
+    --textgraph-preview-group-corner-radius: 4px;
+    --textgraph-preview-node-corner-radius: 3px;
+    --textgraph-preview-edge-corner-radius: 8px;
+    --textgraph-preview-group-header-height: 22px;
+    --textgraph-preview-polyline-route-color: secondary-stroke;
+
+    --textgraph-default-opacity: 1;
+}

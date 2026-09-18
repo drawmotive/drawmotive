@@ -1,41 +1,37 @@
 {
   "name": "@drawmotive/editor",
-  "version": "0.0.0-development",
-  "description": "Embeddable DrawMotive visual diagram editor",
-  "private": true,
+  "version": "0.2.1",
+  "description": "Embed the DrawMotive visual diagram editor in any browser application.",
   "type": "module",
   "types": "./src/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "worker": "./src/platform/worker.js",
-      "browser": "./src/platform/browser.js",
-      "node": "./src/platform/node.js",
-      "default": "./src/platform/browser.js"
+      "default": "./src/index.js"
     },
     "./browser": {
-      "types": "./src/platform/browser.d.ts",
-      "default": "./src/platform/browser.js"
-    },
-    "./node": {
-      "types": "./src/platform/node.d.ts",
-      "default": "./src/platform/node.js"
-    },
-    "./worker": {
-      "types": "./src/platform/worker.d.ts",
-      "default": "./src/platform/worker.js"
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
     }
   },
   "files": [
     "src",
-    "generated/wasm",
-    "generated/wasm-manifest.json"
+    "generated/editor",
+    "generated/editor-manifest.json",
+    "scripts/copy-assets.mjs",
+    "scripts/verify-assets.mjs",
+    "examples",
+    "licenses",
+    "scripts/audit-package.mjs"
   ],
   "scripts": {
     "build": "node --check src/index.js && tsc -p tsconfig.json",
-    "test": "node --test test/*.test.mjs",
-    "prepack": "node .release/check.cjs --ready && npm test && npm run build",
-    "release:check": "node .release/check.cjs --ready"
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "test:browser": "playwright test",
+    "prepack": "node .release/check.cjs --ready && npm test && npm run build && npm run audit:package",
+    "release:check": "node .release/check.cjs --ready",
+    "assets:verify": "node scripts/verify-assets.mjs",
+    "audit:package": "node scripts/audit-package.mjs"
   },
   "repository": {
     "type": "git",
@@ -45,10 +41,29 @@
   "engines": {
     "node": ">=22"
   },
-  "dependencies": {
-    "@drawmotive/textgraph": "0.0.0-development"
-  },
   "devDependencies": {
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "jsdom": "^26.1.0",
+    "@playwright/test": "1.61.0"
+  },
+  "keywords": [
+    "diagram",
+    "editor",
+    "flowchart",
+    "textgraph",
+    "browser",
+    "webassembly"
+  ],
+  "homepage": "https://textgraph.dev/editor/",
+  "bugs": {
+    "url": "https://github.com/drawmotive/drawmotive/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "tag": "latest"
+  },
+  "bin": {
+    "drawmotive-copy-assets": "./scripts/copy-assets.mjs"
   }
 }

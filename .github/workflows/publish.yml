@@ -1,0 +1,33 @@
+name: Publish editor
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact verified package version
+        required: true
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci --ignore-scripts
+      - name: Verify requested version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("package.json")); if(p.version!==process.env.RELEASE_VERSION) throw new Error("Version mismatch");'
+      - run: npm run release:check
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npm pack --pack-destination .release
+      - run: npm publish .release/drawmotive-editor-${{ inputs.version }}.tgz --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

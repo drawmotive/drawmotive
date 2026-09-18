@@ -1,0 +1,18 @@
+Material Symbols Rounded
+Copyright Google LLC.
+
+Bundled file: MaterialSymbolsRounded.woff2
+SHA-256: 05773c4521373668376192a5e17a7a1912811ded3255d393db9982cbb1e57c98
+Upstream project: https://github.com/google/material-design-icons
+Licensed under the Apache License, Version 2.0.
+See MaterialSymbols-LICENSE.txt for the complete license.
+
+License source (immutable upstream revision):
+https://raw.githubusercontent.com/google/material-design-icons/27e9ef1dbeedc13d682fece4a58e1eda4cb0961a/LICENSE
+
+The upstream README applies this license to Material Symbols and Material
+Icons. The hash identifies the distributed font; the current upstream font
+binary has not been asserted byte-identical to this local file.
+
+The separate iconfont.* assets are generated from DrawMotive's repository
+SVG inputs by build-icons.js; they are not the Material Symbols font.
