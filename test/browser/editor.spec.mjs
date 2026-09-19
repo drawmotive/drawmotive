@@ -1,9 +1,21 @@
 import { test, expect } from '@playwright/test';
 
-test('real embedded editor imports, exports and reopens a document', async ({ page }) => {
+test('real embedded editor loads WASM in parallel, imports, exports and reopens a document', async ({ page, context }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  const gate = Promise.withResolvers();
+  const wasmRequests = new Set();
+  await context.route('**/generated/editor/_framework/*.wasm', async route => {
+    wasmRequests.add(route.request().url());
+    await gate.promise;
+    await route.continue();
+  });
   await page.goto('/examples/browser/');
+  try {
+    // Hold every WASM response: Blazor must request independent assemblies
+    // concurrently before any download can finish, even on a cold startup.
+    await expect.poll(() => wasmRequests.size, { timeout: 15_000 }).toBeGreaterThan(1);
+  } finally { gate.resolve(); }
   await expect(page.locator('#status')).toHaveText('Ready to edit');
   const editor = page.frameLocator('iframe');
   await expect(editor.locator('[data-testid="dcanvas"]')).toBeVisible();

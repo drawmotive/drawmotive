@@ -64,6 +64,8 @@ Serve over HTTPS or localhost with JavaScript modules and `.wasm` files (`applic
 
 Each instance uses an iframe to isolate its styles, .NET runtime and document. The frame has an accessible title and fills the supplied container. Loading multiple editors loads multiple runtimes, so dispose instances when no longer needed. The package can be imported during SSR, but mounting requires a browser. There is no Node.js or Worker visual editor entry.
 
+The frame uses Blazor's built-in concurrent WASM loader, with its normal integrity checks and browser caching. It does not depend on the TextGraph SDK's startup loader; upgrading `@drawmotive/textgraph` does not change the editor runtime.
+
 The host application owns saving, upload, and collaboration. This initial browser API does not expose account login, server synchronization, custom toolbar adapters or TextGraph export.
 
 ## Development and release
