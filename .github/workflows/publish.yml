@@ -7,28 +7,61 @@ on:
         required: true
 permissions:
   contents: read
+concurrency:
+  group: editor-npm-publication
+  cancel-in-progress: false
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
-    environment: npm
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org/
+          cache: npm
       - run: npm ci --ignore-scripts
-      - name: Verify requested version
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
-        run: node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("package.json")); if(p.version!==process.env.RELEASE_VERSION) throw new Error("Version mismatch");'
-      - run: npm run release:check
+      - run: node scripts/npm-release.mjs check
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
-      - run: npm pack --pack-destination .release
-      - run: npm publish ".release/drawmotive-editor-$RELEASE_VERSION.tgz" --access public
+      - run: node scripts/npm-release.mjs pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: editor-npm-release
+          path: |
+            .release/*.tgz
+            .release/npm-release.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+      - run: npm install --global npm@11.19.1
+      - uses: actions/download-artifact@v4
+        with:
+          name: editor-npm-release
+          path: .release
+      # npm uses trusted publishing when configured; the optional token supports
+      # packages that have not enrolled this repository/workflow as a publisher.
+      - name: Publish and verify the exact tested archive
+        run: node scripts/npm-release.mjs publish
         env:
-          RELEASE_VERSION: ${{ inputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
