@@ -1,0 +1,47 @@
+/* Additive standard styling schema. Palette leaves always belong to the active host theme. */
+.styling.default {
+    --text-body-font-family: var(--font-family);
+    --text-fallback-font-families: NotoColorEmoji, NotoSansSC-Regular;
+    --text-body-font-size: medium;
+    --text-body-font-weight: 400;
+    --text-heading-font-weight: 600;
+    --text-line-height: font-metrics;
+    --text-overflow: clip;
+    --group-color-role: secondary-stroke;
+    --group-surface-role: background;
+    --group-foreground-role: foreground;
+    --group-contrast-light-role: background;
+    --group-contrast-dark-role: foreground;
+    --group-body-fill-mix: 0.28;
+    --group-header-fill-mix: 0.52;
+    --group-emphasis-fill-mix: 0.60;
+    --group-emphasis-header-fill-mix: 0.78;
+    --group-border-mix: 0.42;
+    --group-title-foreground-mix: 0.65;
+    --group-title-min-contrast: 4.5;
+    --group-border-min-contrast: 3;
+    --group-contrast-adjustment: true;
+    --group-border-width: thin;
+    --group-border-style: solid;
+    --standard-group-corner-radius: 8px;
+    --group-corner-radius: var(--standard-group-corner-radius);
+    --group-opacity: 1;
+    --group-header-visible: true;
+    --group-header-padding: 12px var(--group-content-padding);
+    --group-header-content-gap: 16px;
+    --group-content-padding: 24px;
+    --standard-group-header-min-height: 0;
+    --group-header-min-height: var(--standard-group-header-min-height);
+    --group-title-font-family: var(--text-body-font-family);
+    --group-title-font-size: var(--text-body-font-size);
+    --group-title-font-weight: var(--text-heading-font-weight);
+    --group-title-font-slant: upright;
+    --group-title-align: center;
+    --group-title-vertical-align: center;
+    --line-dashed-pattern: 2.5 2.5;
+    --line-dotted-pattern: 1 2.5;
+    --editor-text-background-role: background;
+    --editor-text-border-role: secondary-stroke;
+    --editor-text-border-width: var(--line-width-thin);
+    --editor-text-padding: 3px;
+}
