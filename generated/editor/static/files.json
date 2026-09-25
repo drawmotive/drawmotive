@@ -1,10 +1,11 @@
 {
-  "static/themes.css": "65cc256f1c9504674298cfd93a320a7359f101c1941da0ce9fc14378a0960fde",
+  "static/themes.css": "a73a9d0069d07e7db57c63ac509b63ac95a5abe2dfa81df1107161c8258c2d1b",
   "static/FuzzyBubbles-Regular.ttf": "0fcfecadb6cf574cb5009967a3da171471f7633de00d96cb4b86b3c6a6f61cca",
   "static/MaShanZheng-Regular.ttf": "c97aa8b67b70e0c80fd383404db0fb386f0c0daaccdee6ff6e8f289e51670dee",
   "static/Noto-COLRv1.ttf": "0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2",
   "static/NotoColorEmoji.ttf": "72a635cb3d2f3524c51620cdde406b217204e8a6a06c6a096ff8ed4b5fd6e27b",
-  "static/NotoSans-Regular.ttf": "fe8c022f48d8dd29f17b744d16f9346f4357e16f7d4f7be58b000ae7c291b614",
+  "static/NotoSans-Regular.ttf": "bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d",
+  "static/NotoSansJP-Regular.ttf": "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
   "static/NotoSansMono-Regular.ttf": "11b5d661e57865bce89d3f103a654cfa4faf9347abebac252e30742be1e657b2",
-  "static/NotoSansSC-Regular.ttf": "dc71173babc38dfd019912965f2b4b3421fb347ebd854e7b96f64ad63673924a"
+  "static/NotoSansSC-Regular.ttf": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"
 }

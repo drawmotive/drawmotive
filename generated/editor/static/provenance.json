@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "fonts": [
+    {
+      "id": "noto-sans-sc",
+      "path": "NotoSansSC-Regular.ttf",
+      "sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+      "version": "2.004-H2",
+      "revision": "2894aab31764f10f29c421bdfd2340d3b382d384",
+      "source": "https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf",
+      "license": "NotoSansSC-LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/OFL.txt"
+    },
+    {
+      "id": "noto-sans-jp",
+      "path": "NotoSansJP-Regular.ttf",
+      "sha256": "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
+      "version": "2.004-H2",
+      "revision": "23e54b51ddffbc7713c583748e3bd86f62b1fa4a",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+      "license": "NotoSansJP-LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/notosansjp/OFL.txt"
+    },
+    {
+      "id": "noto-color-emoji",
+      "path": "NotoColorEmoji.ttf",
+      "sha256": "72a635cb3d2f3524c51620cdde406b217204e8a6a06c6a096ff8ed4b5fd6e27b",
+      "version": "2.051",
+      "revision": "8998f5dd683424a73e2314a8c1f1e359c19e8742",
+      "source": "https://raw.githubusercontent.com/googlefonts/noto-emoji/8998f5dd683424a73e2314a8c1f1e359c19e8742/fonts/NotoColorEmoji.ttf",
+      "license": "NotoColorEmoji.LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/googlefonts/noto-emoji/8998f5dd683424a73e2314a8c1f1e359c19e8742/fonts/LICENSE"
+    }
+  ]
+}

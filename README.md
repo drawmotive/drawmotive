@@ -9,7 +9,7 @@ Use **@drawmotive/textgraph** to render text to a PNG. Use **@drawmotive/editor*
 ## Install
 
 ```bash
-npm install @drawmotive/editor
+npm install @drawmotive/editor@0.2.2-alpha.1
 npx drawmotive-copy-assets public/editor
 ```
 

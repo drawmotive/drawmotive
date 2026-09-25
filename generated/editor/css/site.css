@@ -55,6 +55,14 @@ i.rz-navigation-item-icon-children {
 @font-face {
   font-family: "NotoSans-Regular";
   src: url("../static/NotoSans-Regular.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "NotoSansSC-Regular";
+  src: url("../static/NotoSansSC-Regular.ttf") format("truetype");
+  font-weight: 100 900;
   font-display: swap;
 }
 

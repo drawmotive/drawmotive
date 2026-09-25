@@ -1,8 +1,8 @@
 /* Default appearance: compose palette.light and styling.default on the same target. */
 .palette.light {
-    /* Theme Colors: Black + White + 5 Colors */
-    --color-black: #1B1B1B;
-    --color-white: #F7F7F7;
+    /* Theme Colors: Foreground + Background + 5 Colors */
+    --color-foreground: #1B1B1B;
+    --color-background: #FFFFFF;
     --color-primary-stroke: #007AFF;
     --color-primary-fill: #B3D7FF;
     --color-secondary-stroke: #5A6268;
@@ -59,6 +59,11 @@
     --stroke-join: round;
     --stroke-miter: 10;
     --blend-mode: SrcOver;
+
+    /* Opt in to current group geometry; older hosts retain their legacy group tokens.
+       The referenced values are declared by the shared embedded standard styling resource. */
+    --group-corner-radius: var(--standard-group-corner-radius);
+    --group-header-min-height: var(--standard-group-header-min-height);
 
     /* TextGraph Styles */
     --textgraph-node-min-width: 80px;

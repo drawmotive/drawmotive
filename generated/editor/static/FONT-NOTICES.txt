@@ -7,7 +7,9 @@ font binaries have not been asserted byte-identical to these local files.
 
 NotoSans-Regular.ttf
 Embedded version: 2.015
-SHA-256: fe8c022f48d8dd29f17b744d16f9346f4357e16f7d4f7be58b000ae7c291b614
+SHA-256: bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d
+Variable axes: wght 100–900, wdth 62.5–100 (resource alias retained).
+Binary source: https://raw.githubusercontent.com/google/fonts/2984c575fdce412ee02b2baaba67672b9a9434d8/ofl/notosans/NotoSans%5Bwdth,wght%5D.ttf
 License: NotoSans-LICENSE.txt
 License source: https://raw.githubusercontent.com/notofonts/latin-greek-cyrillic/NotoSans-v2.015/OFL.txt
 
@@ -25,7 +27,9 @@ License source: https://raw.githubusercontent.com/google/fonts/b346dc3e18bed8b4c
 
 NotoSansSC-Regular.ttf
 Embedded version: 2.004-H2
-SHA-256: dc71173babc38dfd019912965f2b4b3421fb347ebd854e7b96f64ad63673924a
+SHA-256: a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da
+Variable axis: wght 100–900 (resource alias retained).
+Binary source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf
 License: NotoSansSC-LICENSE.txt
 License source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/OFL.txt
 
