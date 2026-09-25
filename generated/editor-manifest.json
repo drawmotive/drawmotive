@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "packageName": "@drawmotive/editor",
-  "packageVersion": "0.2.2-alpha.1",
+  "packageVersion": "0.2.2-alpha.2",
   "protocolVersion": 1,
   "privateSource": {
-    "commit": "166386683b3b90a4917eb4cfc1a04361b30f1710",
+    "commit": "ee355b6d3770f2b712440a1b61d89d628067652d",
     "project": "Editor.Client"
   },
   "assets": [
@@ -224,9 +224,9 @@
       "sha256": "6c8bc2b649fcf2956c3a6e43a8b18aae1477923d55c21846f0a745d4793cc8b1"
     },
     {
-      "path": "editor/_framework/Blazor.IndexedDB.j9vht16vbq.wasm",
+      "path": "editor/_framework/Blazor.IndexedDB.kx61p8jpir.wasm",
       "bytes": 72469,
-      "sha256": "7946ea674c6e7997a6cc9312ee5e8ae8214b9d906b19c4ea8adb4827c4928bde"
+      "sha256": "582237cfe9e456045d26418745b488c84eb10680825d26362b41b288cf521e17"
     },
     {
       "path": "editor/_framework/Blazored.LocalStorage.12n6dz54qr.wasm",
@@ -239,9 +239,9 @@
       "sha256": "9d05ee0861e8b3b8b0a765b145481aaca99680960285a550a7635a8e0354dd5f"
     },
     {
-      "path": "editor/_framework/Editor.Client.9s9gnal33w.wasm",
+      "path": "editor/_framework/Editor.Client.7q4juxe4tm.wasm",
       "bytes": 701717,
-      "sha256": "89841dfd0b6d1d807bf14a5ef39a36afe3b296f7a60781dedf7083edc564ce36"
+      "sha256": "af806e322ae39efd6750848de9077f0068d65229aad488eede619fd537ca792e"
     },
     {
       "path": "editor/_framework/ExCSS.kf2rou82s3.wasm",
@@ -249,9 +249,9 @@
       "sha256": "f06ab9b06af96d87b5ece2cd2cdb5599efbcd3770196e8246d57e78b7fcab557"
     },
     {
-      "path": "editor/_framework/Graphics.Core.4gtm5id0el.wasm",
-      "bytes": 3848985,
-      "sha256": "6c443a4c4a4b9022ec29498aa774c3226ef4e8c613d0e51afcb6ccaa0ebec085"
+      "path": "editor/_framework/Graphics.Core.rdnbyam6qp.wasm",
+      "bytes": 3851545,
+      "sha256": "1ff5281b98e781f660d1ae3f83409815783154978ab5a203e11f646376141c92"
     },
     {
       "path": "editor/_framework/Grpc.Core.Api.kr6zfbi4fx.wasm",
@@ -474,9 +474,9 @@
       "sha256": "7edf1bf34d3ab23694c7c9cecc28dc58845f2101a1562fd90c95c60a809ee4cf"
     },
     {
-      "path": "editor/_framework/RBush.s4sqsktaws.wasm",
+      "path": "editor/_framework/RBush.jj0sdlnk09.wasm",
       "bytes": 24341,
-      "sha256": "eccc180749143b651e0e06b82f0b343205d36a0debe0a4309acd78a73de43c86"
+      "sha256": "bf02bc34550798ff6e9b8f697048c70a0218a4186eeb4866dfd47da8cd35b505"
     },
     {
       "path": "editor/_framework/Radzen.Blazor.d1bj9xkpib.wasm",
@@ -831,7 +831,7 @@
     {
       "path": "editor/_framework/dotnet.js",
       "bytes": 70977,
-      "sha256": "4a2d96691ee97ee74e018800d4c9b621b513d343f7de3fc3cb4fb15ae31b3b65"
+      "sha256": "ebcb42a68bb91cc24ee786eb1e4180770c29090e2e2daee849622fb631953ea0"
     },
     {
       "path": "editor/_framework/dotnet.native.lccqz8spb6.wasm",
