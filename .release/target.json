@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.2-alpha.2",
+  "releaseVersion": "0.2.2-alpha.3",
   "channel": "alpha",
   "name": "@drawmotive/editor",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-alpha.3",
   "dependencies": {},
   "native": true,
-  "publishable": true,
-  "nativeSourceCommit": "ee355b6d3770f2b712440a1b61d89d628067652d"
+  "publishable": false,
+  "nativeSourceCommit": "ee355b6d3770f2b712440a1b61d89d628067652d",
+  "excludedReason": "Renderer service milestone releases only the TextGraph SDK; retain the existing published component artifact."
 }
