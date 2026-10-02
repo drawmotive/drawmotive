@@ -1,0 +1,26 @@
+DrawMotive Editor redistribution notices
+
+The public package code uses the MIT license in LICENSE. The compiled editor
+distribution retains the accompanying third-party terms:
+- licenses/DotNet-LICENSE.txt
+- licenses/DotNet-THIRD-PARTY-NOTICES.txt
+- licenses/SkiaSharp-LICENSE.txt
+- licenses/HarfBuzzSharp-LICENSE.txt
+- licenses/Radzen-LICENSE.txt
+- licenses/RBush-LICENSE.txt
+
+Bundled text fonts retain their SIL Open Font License 1.1 notices under
+generated/editor/static/. See FONT-NOTICES.txt there, the matching *LICENSE*
+files, and NotoColorEmoji.NOTICE.txt for source details and distributed hashes.
+Noto Sans JP and SC also have individual license files in that directory.
+
+Material Symbols Rounded uses Apache License 2.0. Preserve
+generated/editor/fonts/MaterialSymbols-LICENSE.txt and
+generated/editor/fonts/MaterialSymbols-NOTICE.txt when redistributing it.
+The separate generated iconfont assets are not the Material Symbols font.
+
+Deploy the complete copied runtime, including these licenses and notices.
+The runtime manifest identifies its private producer source commit; this
+notice grants no license to producer source absent from this public package.
+Additional npm dependencies retain their own terms. This index does not amend
+any license or grant trademark rights.

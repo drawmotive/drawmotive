@@ -15,6 +15,20 @@ npx drawmotive-copy-assets public/editor
 
 Copy the assets again after every package upgrade. Deploy the complete `public/editor` directory with your application. For Vite, add `drawmotive-copy-assets public/editor` to both `predev` and `prebuild`.
 
+## Supported environments
+
+| Layer | Supported environment | Verification boundary |
+| --- | --- | --- |
+| Package development and asset-copy CLI | Node.js 22 or 24; npm 10 or 11 | Applications using Vite require Node 22.12+ on the 22 line |
+| Desktop build and packaging | Linux, Windows, macOS | CI targets all three systems with Node 22 and 24 |
+| Visual editor | Current Chromium on HTTPS or localhost | The browser suite covers Chromium; Firefox, WebKit and mobile browsers are not currently verified |
+| Server rendering | Import during SSR is supported | Mounting, editing and export require a browser; there is no Node or Worker editor |
+
+The standalone package audit on 2026-10-01 ran Linux x64 with Node 22.23.2
+and npm 10.9.8. Declared OS/Node support and CI jobs do not imply that the
+other platforms or the browser suite ran in that audit. Browser hosts need
+WebAssembly, JavaScript modules, browser storage and correct HTML/WASM serving.
+
 ## Mount an editor
 
 Give the container an explicit height:
@@ -75,8 +89,9 @@ npm ci
 npm test
 npm run build
 npm run assets:verify
+npx playwright install chromium
 npm run test:browser
-npm pack --dry-run
+npm pack
 ```
 
 The package contains compiled runtime assets with an integrity manifest. Release checks verify their version, producer commit and hashes before packaging. No .NET SDK or private source checkout is needed to consume the package. The publication audit rejects original C#/Razor source, debug symbols, source maps and embedded portable PDBs. Compiled .NET assemblies are shipped and can be decompiled; this is not source secrecy or copy protection.
@@ -84,3 +99,5 @@ The package contains compiled runtime assets with an integrity manifest. Release
 ## License
 
 Package code is MIT licensed. Bundled dependencies and fonts retain their own license notices.
+See [NOTICE](NOTICE), [Contributing](CONTRIBUTING.md) and [Changelog](CHANGELOG.md).
+Vulnerability reports follow [Security reporting](SECURITY.md).
