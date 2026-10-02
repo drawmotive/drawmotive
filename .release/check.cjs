@@ -34,6 +34,7 @@ function isEditorAssetPath(value) {
  * ready/installed additionally enforce permission to publish this release. */
 function checkComponent(root, { ready = false, installed = false, build = false } = {}) {
   const errors = [];
+  if (build && (ready || installed)) return ['Build validation cannot be combined with publication readiness; choose one authority mode.'];
   installed ||= build;
   ready ||= installed;
   const report = message => errors.push(message);
