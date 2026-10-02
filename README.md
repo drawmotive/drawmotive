@@ -19,8 +19,8 @@ Copy the assets again after every package upgrade. Deploy the complete `public/e
 
 | Layer | Supported environment | Verification boundary |
 | --- | --- | --- |
-| Package development and asset-copy CLI | Node.js 22 or 24; npm 10 or 11 | Applications using Vite require Node 22.12+ on the 22 line |
-| Desktop build and packaging | Linux, Windows, macOS | CI targets all three systems with Node 22 and 24 |
+| Package development and asset-copy CLI | Node.js 22; npm 10 | Applications using Vite require Node 22.12+ on the 22 line |
+| Desktop build and packaging | Linux, Windows, macOS | CI targets all three systems with Node 22 |
 | Visual editor | Current Chromium on HTTPS or localhost | The browser suite covers Chromium; Firefox, WebKit and mobile browsers are not currently verified |
 | Server rendering | Import during SSR is supported | Mounting, editing and export require a browser; there is no Node or Worker editor |
 

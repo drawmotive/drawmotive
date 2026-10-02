@@ -1,3 +1,6 @@
 
 # Blazor boot integrity hashes require exact published bytes.
 generated/editor/** -text
+
+# Resource-audit fixtures must retain the exact reviewed embedded bytes too.
+test/fixtures/GroupThemeDefaults.css -text
