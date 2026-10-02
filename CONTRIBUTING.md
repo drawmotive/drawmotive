@@ -4,7 +4,7 @@ Report package/API bugs in the
 [issue tracker](https://github.com/drawmotive/drawmotive/issues), with version,
 OS, Node/npm or browser version, expected behavior and a small host example.
 
-Use Node.js 22 or 24 and npm 10 or 11 on Linux, Windows or macOS. Vite host
+Use Node.js 22 and its bundled npm on Linux, Windows or macOS. Vite host
 applications require Node 22.12+ on the 22 line. Browser support is currently
 verified in Chromium; see the [support matrix](README.md#supported-environments).
 
