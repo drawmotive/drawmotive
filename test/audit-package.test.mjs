@@ -149,8 +149,8 @@ test("exact file list rejects source, debug files, traversal, duplicates and sym
   assert.deepEqual(auditPackageFiles(root, ["src/index.js", "generated/editor/Editor.Client.wasm"]), { files: 2, wasmFiles: 1, managedAssemblies: 1 });
   for (const file of ["Program.cs", "Page.razor", "project.csproj", "runtime.pdb", "app.js.map", "SourceLink.json", "obj/cache.json"]) assert.throws(() => auditPackageFiles(root, [file]), /cannot be published/);
   for (const files of [["../secret"], ["src/index.js", "src/index.js"]]) assert.throws(() => auditPackageFiles(root, files), /Unsafe or duplicate/);
-  symlinkSync(path.join(root, "src/index.js"), path.join(root, "alias.js"));
-  assert.throws(() => auditPackageFiles(root, ["alias.js"]), /regular local files/);
+  symlinkSync(path.join(root, "src"), path.join(root, "alias"), "junction");
+  assert.throws(() => auditPackageFiles(root, ["alias/index.js"]), /regular local files/);
 });
 
 test("producer source paths fail while third-party toolchain paths and JS license headers remain distributable", t => {
