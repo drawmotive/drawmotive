@@ -27,9 +27,13 @@ test('asset verifier rejects tampering, extra files and symbolic links before co
   await writeFile(path.join(root, 'generated/editor/unlisted.js'), 'unexpected');
   await assert.rejects(verifyAssets(root), /complete asset tree/);
   await rm(path.join(root, 'generated/editor/unlisted.js'));
-  await rm(file);
-  await writeFile(path.join(root, 'outside.html'), content);
-  await symlink(path.join(root, 'outside.html'), file);
+  // Windows directory junctions exercise the same authority boundary without
+  // requiring Developer Mode or a file-symlink privilege in CI.
+  await rm(path.join(root, 'generated/editor'), { recursive: true });
+  const outside = path.join(root, 'outside');
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'embed.html'), content);
+  await symlink(outside, path.join(root, 'generated/editor'), 'junction');
   await assert.rejects(verifyAssets(root), /symbolic links/);
 });
 
