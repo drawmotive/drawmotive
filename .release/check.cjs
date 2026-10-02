@@ -29,11 +29,13 @@ function isEditorAssetPath(value) {
   return /\.(?:js|mjs|json|css|wasm|dll|dat|bin|ico|svg|woff2?|ttf|eot|png|jpe?g|gif|webp|avif|txt)$/i.test(relative);
 }
 
-/** Standalone copies consume a committed release projection. Metadata checks
- * describe the intended release; ready/installed checks forbid packaging old
- * dependencies or presenting an old native build as the intended release. */
-function checkComponent(root, { ready = false, installed = false } = {}) {
+/** Standalone builds and releases use the same identity/dependency authority.
+ * Build validates installed public inputs even when publication is deferred;
+ * ready/installed additionally enforce permission to publish this release. */
+function checkComponent(root, { ready = false, installed = false, build = false } = {}) {
   const errors = [];
+  if (build && (ready || installed)) return ['Build validation cannot be combined with publication readiness; choose one authority mode.'];
+  installed ||= build;
   ready ||= installed;
   const report = message => errors.push(message);
   const readJson = (file, label) => {
@@ -65,7 +67,7 @@ function checkComponent(root, { ready = false, installed = false } = {}) {
   if (target.nativeSourceCommit !== undefined && !/^[a-f0-9]{40}$/.test(target.nativeSourceCommit)) report("Release target nativeSourceCommit must be an exact 40-character Git commit.");
   if (target.excludedReason !== undefined && (typeof target.excludedReason !== "string" || !target.excludedReason.trim())) report("Release target excludedReason must be nonempty text.");
   if (errors.length || !ready) return errors;
-  if (!target.publishable) {
+  if (!build && !target.publishable) {
     report(`Component ${target.name} is not publishable in release ${target.releaseVersion}: ${target.excludedReason ?? "explicitly excluded by the release authority"}.`);
     return errors;
   }
@@ -244,11 +246,11 @@ module.exports = { checkComponent, editorRequiredAssets, isEditorAssetPath };
 
 if (require.main === module) {
   const args = process.argv.slice(2);
-  if (args.some(arg => !["--ready", "--installed"].includes(arg))) {
-    console.error("Usage: node .release/check.cjs [--ready] [--installed]");
+  if (args.some(arg => !["--ready", "--installed", "--build"].includes(arg)) || (args.includes("--build") && args.some(arg => arg !== "--build"))) {
+    console.error("Usage: node .release/check.cjs [--ready] [--installed] | --build");
     process.exitCode = 1;
   } else {
-    const errors = checkComponent(path.dirname(__dirname), { ready: args.includes("--ready"), installed: args.includes("--installed") });
+    const errors = checkComponent(path.dirname(__dirname), { ready: args.includes("--ready"), installed: args.includes("--installed"), build: args.includes("--build") });
     if (errors.length) { for (const error of errors) console.error(`Release check: ${error}`); process.exitCode = 1; }
   }
 }
