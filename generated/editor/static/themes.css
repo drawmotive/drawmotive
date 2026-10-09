@@ -85,7 +85,7 @@
     --textgraph-edge-label-self-loop-padding: 8px;
     --textgraph-edge-label-center-nudge-limit: 12px;
     --textgraph-edge-label-font-size: medium;
-    --textgraph-edge-label-padding: 2px 2px 2px 2px;
+    --textgraph-edge-label-padding: 3px 6px;
     --textgraph-edge-label-opacity: 0.88;
     --textgraph-preview-export-padding: 48px;
     --textgraph-preview-group-corner-radius: 4px;

@@ -7,6 +7,8 @@ node_modules/
 !.release/
 !.release/target.json
 !.release/check.cjs
+!.release/release-registry.mjs
+!.release/remote-npm.mjs
 
 test-results/
 playwright-report/

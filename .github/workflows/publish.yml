@@ -2,6 +2,18 @@ name: Publish editor
 on:
   workflow_dispatch:
     inputs:
+      artifact_tag:
+        description: Draft release retaining the already tested archive
+        required: false
+        type: string
+      archive_file:
+        description: Exact retained archive filename
+        required: false
+        type: string
+      artifact_integrity:
+        description: Reviewed SHA512 integrity
+        required: false
+        type: string
       version:
         description: Exact verified package version
         required: true
@@ -14,6 +26,7 @@ env:
   RELEASE_VERSION: ${{ inputs.version }}
 jobs:
   verify:
+    if: inputs.artifact_tag == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,3 +78,30 @@ jobs:
         run: node scripts/npm-release.mjs publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  retained:
+    if: inputs.artifact_tag != ''
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --global npm@11.19.1
+      - name: Download the reviewed archive without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_TAG: ${{ inputs.artifact_tag }}
+          ARCHIVE_FILE: ${{ inputs.archive_file }}
+        run: gh release download "$ARTIFACT_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ARCHIVE_FILE" --pattern github-evidence.json --dir .retained
+      - name: Verify commit and retained bytes, publish with trusted npm identity
+        env:
+          ARTIFACT_INTEGRITY: ${{ inputs.artifact_integrity }}
+          ARCHIVE_FILE: ${{ inputs.archive_file }}
+          RECEIPT_FILE: github-evidence.json
+        run: node ./.release/remote-npm.mjs .retained .

@@ -4,9 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
-// Reviewed against Graphics.Core resources at producer commit 166386683b3b90a4917eb4cfc1a04361b30f1710.
 // StandardTheme has a public byte-for-byte counterpart; additive defaults do not.
-const groupDefaultsHash = "27496b24a6086fa1b45e78c7f9fe07ce431533647ea51acda71d0df63a5deecb";
+// Retain historical approval so existing distributions remain auditable. Each
+// new payload requires source review rather than trusting its declared filename.
+const groupDefaultsHashes = new Set([
+  "27496b24a6086fa1b45e78c7f9fe07ce431533647ea51acda71d0df63a5deecb", // 166386683b3b90a4917eb4cfc1a04361b30f1710
+  "9025ba845d24308a8687379b6e7983f7e40df7c1c5e1b123315202a1c7cd473b", // be84f251d1a3c5154879ffb1706f550cf2e27b7a: two public line-label CSS defaults
+]);
 const prefix = "Graphics.Core.Styles.Resources.";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 function range(bytes, offset, size) {
@@ -69,7 +73,7 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
     names.add(resource.name);
     if (resource.offset < end || resource.offset-end > 7 || range(resources,end,resource.offset-end).some(byte=>byte!==0)) throw new Error("Unaccounted managed resource bytes");
     if (resource.name === prefix+"GroupThemeDefaults.css") {
-      if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
+      if (!groupDefaultsHashes.has(hash(resource.data))) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
     } else if (resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
     } else throw new Error("Unapproved managed resource: "+resource.name);

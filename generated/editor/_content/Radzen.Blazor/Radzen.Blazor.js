@@ -2305,6 +2305,23 @@ window.Radzen = {
         }
     }
 
+    if (popup.__contentResizeObserver) {
+        popup.__contentResizeObserver.disconnect();
+        delete popup.__contentResizeObserver;
+    }
+
+    if (!position && parent && disableSmartPosition !== true && !popup.__viewportResizeHandler && typeof ResizeObserver !== 'undefined') {
+        var observedHeight = popup.getBoundingClientRect().height;
+        popup.__contentResizeObserver = new ResizeObserver(function () {
+            if (popup.style.display !== 'block') return;
+            var height = popup.getBoundingClientRect().height;
+            if (height === observedHeight) return;
+            observedHeight = height;
+            Radzen.repositionPopup(parent, id);
+        });
+        popup.__contentResizeObserver.observe(popup);
+    }
+
     var p = parent;
     while (p && p != document.body) {
         if (p.scrollWidth > p.clientWidth || p.scrollHeight > p.clientHeight) {
@@ -2445,6 +2462,10 @@ window.Radzen = {
         delete popup.__originalWrapperMaxHeight;
         delete popup.__originalPopupTop;
     }
+    if (popup && popup.__contentResizeObserver) {
+        popup.__contentResizeObserver.disconnect();
+        delete popup.__contentResizeObserver;
+    }
     document.removeEventListener('mousedown', Radzen[id]);
     window.removeEventListener('resize', Radzen[id]);
     Radzen[id] = null;
@@ -2516,6 +2537,10 @@ window.Radzen = {
           delete popup.__viewportResizeHandler;
           delete popup.__originalWrapperMaxHeight;
           delete popup.__originalPopupTop;
+      }
+      if (popup.__contentResizeObserver) {
+          popup.__contentResizeObserver.disconnect();
+          delete popup.__contentResizeObserver;
       }
       if (popup.__radzenHome && popup.__radzenHome.isConnected) {
           popup.__radzenHome.appendChild(popup);
@@ -3489,6 +3514,108 @@ window.Radzen = {
       updateLabels(start, end);
     }
 
+    ref.navTooltipPoints = [];
+
+    ref.navHideTooltip = function () {
+      var tooltip = ref.querySelector('.rz-range-nav-tooltip');
+      if (tooltip) tooltip.style.display = 'none';
+    };
+
+    function nearestPoint(pos) {
+      var points = ref.navTooltipPoints;
+      var lo = 0, hi = points.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi) >> 1;
+        if (points[mid].x < pos) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      if (lo > 0 && pos - points[lo - 1].x < points[lo].x - pos) lo--;
+      return points[lo];
+    }
+
+    function isOverTrack(e) {
+      var rect = ref.getBoundingClientRect();
+      return e.clientY <= rect.bottom - (parseFloat(getComputedStyle(ref).paddingBottom) || 0);
+    }
+
+    function clipBounds() {
+      var bounds = { top: 0, left: 0, right: document.documentElement.clientWidth };
+      for (var el = ref.parentElement; el && el !== document.body; el = el.parentElement) {
+        var style = getComputedStyle(el);
+        var rect = el.getBoundingClientRect();
+        if (style.overflowY !== 'visible') {
+          bounds.top = Math.max(bounds.top, rect.top);
+        }
+        if (style.overflowX !== 'visible') {
+          bounds.left = Math.max(bounds.left, rect.left);
+          bounds.right = Math.min(bounds.right, rect.right);
+        }
+        if (style.position === 'fixed') {
+          break;
+        }
+      }
+      return bounds;
+    }
+
+    function positionTooltip(tooltip, point) {
+      var track = ref.querySelector('svg');
+      tooltip.style.insetInlineStart = (point.x * 100) + '%';
+      tooltip.style.insetBlockStart = (point.y * (track ? track.clientHeight : 0)) + 'px';
+
+      var content = tooltip.querySelector('.rz-chart-tooltip-content');
+      var popup = content.parentElement;
+      var bounds = clipBounds();
+      popup.style.left = '';
+      popup.classList.remove('rz-bottom-chart-tooltip');
+      popup.classList.add('rz-top-chart-tooltip');
+      if (content.getBoundingClientRect().top < bounds.top) {
+        popup.classList.remove('rz-top-chart-tooltip');
+        popup.classList.add('rz-bottom-chart-tooltip');
+      }
+
+      var rect = popup.getBoundingClientRect();
+      if (rect.left < bounds.left) {
+        popup.style.left = (bounds.left - rect.left) + 'px';
+      } else if (rect.right > bounds.right) {
+        popup.style.left = (bounds.right - rect.right) + 'px';
+      }
+    }
+
+    var tooltipPoint = null;
+
+    ref.navHover = function (e) {
+      if (!ref.navTooltipPoints.length) return;
+
+      var tooltip = ref.querySelector('.rz-range-nav-tooltip');
+      if (!tooltip || dragging || !isOverTrack(e)) {
+        ref.navHideTooltip();
+        return;
+      }
+      var point = nearestPoint(getPositionFromEvent(e));
+      var wasHidden = tooltip.style.display === 'none';
+      var content = tooltip.querySelector('.rz-chart-tooltip-content');
+
+      if (point !== tooltipPoint || wasHidden) {
+        tooltipPoint = point;
+        tooltip.querySelector('.rz-chart-tooltip-title').textContent = point.category;
+        tooltip.querySelector('.rz-chart-tooltip-item-value').textContent = point.value;
+        tooltip.style.setProperty('--rz-series-color', point.color || 'currentColor');
+        content.style.border = '1px solid ' + getComputedStyle(tooltip.querySelector('.rz-active-point-dot')).fill;
+      }
+
+      tooltip.style.display = '';
+      positionTooltip(tooltip, point);
+
+      if (wasHidden) {
+        content.classList.remove('rz-chart-tooltip-enter');
+        void content.offsetWidth;
+        content.classList.add('rz-chart-tooltip-enter');
+      }
+    };
+
     function notifyBlazor(start, end) {
       instance.invokeMethodAsync('OnNavigatorDrag', snap(start), snap(end)).catch(function (ex) {
         console.error('RangeNav invoke error:', ex);
@@ -3498,6 +3625,7 @@ window.Radzen = {
     readPositionFromDOM();
 
     ref.navMouseDown = function (e) {
+      ref.navHideTooltip();
       // Always read fresh position from DOM on mousedown
       readPositionFromDOM();
 
@@ -3573,6 +3701,8 @@ window.Radzen = {
 
     ref.addEventListener('mousedown', ref.navMouseDown);
     ref.addEventListener('touchstart', ref.navMouseDown, { passive: false });
+    ref.addEventListener('mousemove', ref.navHover);
+    ref.addEventListener('mouseleave', ref.navHideTooltip);
     document.addEventListener('mousemove', ref.navMouseMove);
     document.addEventListener('touchmove', ref.navMouseMove, { passive: false });
     document.addEventListener('mouseup', ref.navMouseUp);
@@ -3594,6 +3724,12 @@ window.Radzen = {
         ref.removeEventListener('mousedown', ref.navMouseDown);
         ref.removeEventListener('touchstart', ref.navMouseDown);
         delete ref.navMouseDown;
+      }
+      if (ref.navHover) {
+        ref.removeEventListener('mousemove', ref.navHover);
+        ref.removeEventListener('mouseleave', ref.navHideTooltip);
+        delete ref.navHover;
+        delete ref.navHideTooltip;
       }
       if (ref.navMouseMove) {
         document.removeEventListener('mousemove', ref.navMouseMove);
@@ -3619,6 +3755,12 @@ window.Radzen = {
         ref.navLabelInputStart = inputStart;
         ref.navLabelInputEnd = inputEnd;
         ref.handleLabelFormatString = handleLabelFormatString;
+    },
+
+    updateRangeNavigatorTooltip: function (ref, points) {
+        if (!ref) return;
+        ref.navTooltipPoints = points || [];
+        if (!ref.navTooltipPoints.length && ref.navHideTooltip) ref.navHideTooltip();
     },
 
   destroyGauge: function (ref) {
@@ -3768,12 +3910,27 @@ window.Radzen = {
     ref.mouseEnterHandler = function () {
         inside = true;
     };
+    function leave() {
+      inside = false;
+      pendingMove = null;
+      if (moveRafId) {
+        cancelAnimationFrame(moveRafId);
+        moveRafId = null;
+      }
+      try { suppressDisposed(instance.invokeMethodAsync('MouseMove', -1, -1)); } catch { }
+    }
+
     ref.mouseLeaveHandler = function (e) {
-        if (e.relatedTarget && (e.relatedTarget.matches('.rz-chart-tooltip') || e.relatedTarget.closest('.rz-chart-tooltip'))) {
+        var tooltip = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.rz-chart-tooltip');
+        if (tooltip) {
+            tooltip.addEventListener('mouseleave', function (te) {
+                if (inside && !(te.relatedTarget && ref.contains(te.relatedTarget))) {
+                    leave();
+                }
+            }, { once: true });
             return;
         }
-        inside = false;
-        try { suppressDisposed(instance.invokeMethodAsync('MouseMove', -1, -1)); } catch { }
+        leave();
     };
     ref.clickHandler = function (e) {
       var rect = ref.getBoundingClientRect();
@@ -4838,9 +4995,28 @@ window.Radzen = {
   deleteTable: function (context) {
     context.table.remove();
   },
+  getEditorHtml: function (ref) {
+    var selected = Array.from(ref.querySelectorAll('img.rz-state-selected'));
+
+    for (var img of selected) {
+      img.classList.remove('rz-state-selected');
+
+      if (!img.getAttribute('class')) {
+        img.removeAttribute('class');
+      }
+    }
+
+    var html = ref.innerHTML;
+
+    for (var img of selected) {
+      img.classList.add('rz-state-selected');
+    }
+
+    return html;
+  },
   queryCommands: function (ref) {
     return {
-      html: ref != null ? ref.innerHTML : null,
+      html: ref != null ? this.getEditorHtml(ref) : null,
       fontName: document.queryCommandValue('fontName'),
       fontSize: document.queryCommandValue('fontSize'),
       formatBlock: document.queryCommandValue('formatBlock'),
@@ -4880,8 +5056,330 @@ window.Radzen = {
     }
   },
   createEditor: function (ref, uploadUrl, paste, instance, shortcuts) {
+    function trackDrag(move, end, key) {
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', end);
+
+      if (key) {
+        document.addEventListener('keydown', key, true);
+      }
+
+      return function () {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', end);
+
+        if (key) {
+          document.removeEventListener('keydown', key, true);
+        }
+      };
+    }
+
+    var imageHandleDirections = {
+      nw: [-1, -1], n: [0, -1], ne: [1, -1],
+      w: [-1, 0], e: [1, 0],
+      sw: [-1, 1], s: [0, 1], se: [1, 1]
+    };
+    var minImageSize = 24;
+
+    ref.getSelectedImage = function () {
+      return ref.querySelector('img.rz-state-selected');
+    };
+
+    ref.getEditorContainer = function () {
+      return ref.closest('.rz-html-editor');
+    };
+
+    ref.removeImageHandles = function () {
+      if (!ref.imageHandles) {
+        return;
+      }
+
+      window.removeEventListener('resize', ref.positionImageHandles);
+      ref.imageHandlesClip.remove();
+      ref.imageHandlesClip = null;
+      ref.imageHandles = null;
+      ref.imageSizeLabel = null;
+      ref.imageSizeLabelSpace = 0;
+    };
+
+    ref.positionImageHandles = function () {
+      if (!ref.imageHandles) {
+        return;
+      }
+
+      var img = ref.getSelectedImage();
+      var container = ref.getEditorContainer();
+
+      if (!img || !container || ref.hidden || !ref.isContentEditable) {
+        ref.removeImageHandles();
+        return;
+      }
+
+      var containerRect = container.getBoundingClientRect();
+      var contentRect = ref.getBoundingClientRect();
+      var imgRect = img.getBoundingClientRect();
+      var clipLeft = contentRect.left - containerRect.left - container.clientLeft;
+      var clipTop = contentRect.top - containerRect.top - container.clientTop;
+
+      ref.imageHandlesClip.style.left = clipLeft + 'px';
+      ref.imageHandlesClip.style.top = clipTop + 'px';
+      ref.imageHandlesClip.style.width = contentRect.width + 'px';
+      ref.imageHandlesClip.style.height = contentRect.height + 'px';
+
+      ref.imageHandles.style.left = (imgRect.left - contentRect.left) + 'px';
+      ref.imageHandles.style.top = (imgRect.top - contentRect.top) + 'px';
+      ref.imageHandles.style.width = imgRect.width + 'px';
+      ref.imageHandles.style.height = imgRect.height + 'px';
+
+      var label = ref.imageSizeLabel;
+
+      if (label && !label.hidden) {
+        label.textContent = Math.round(imgRect.width) + ' × ' + Math.round(imgRect.height);
+        label.classList.toggle('rz-inside', imgRect.bottom + ref.imageSizeLabelSpace > contentRect.bottom);
+      }
+    };
+
+    ref.createImageHandles = function () {
+      ref.removeImageHandles();
+
+      var img = ref.getSelectedImage();
+      var container = ref.getEditorContainer();
+
+      if (!img || !container || !ref.isContentEditable) {
+        return;
+      }
+
+      var clip = document.createElement('div');
+      clip.className = 'rz-html-editor-image-clip';
+      clip.setAttribute('contenteditable', 'false');
+
+      var handles = document.createElement('div');
+      handles.className = 'rz-html-editor-image-handles';
+
+      Object.keys(imageHandleDirections).forEach(function (position) {
+        var handle = document.createElement('div');
+        handle.className = 'rz-html-editor-image-handle rz-' + position;
+        handle.dataset.position = position;
+        handle.addEventListener('mousedown', ref.imageResizeStartListener);
+        handles.appendChild(handle);
+      });
+
+      ref.imageSizeLabel = document.createElement('div');
+      ref.imageSizeLabel.className = 'rz-html-editor-image-size';
+      ref.imageSizeLabel.hidden = true;
+      handles.appendChild(ref.imageSizeLabel);
+
+      clip.appendChild(handles);
+      container.appendChild(clip);
+      ref.imageHandlesClip = clip;
+      ref.imageHandles = handles;
+
+      window.addEventListener('resize', ref.positionImageHandles);
+      ref.positionImageHandles();
+    };
+
+    ref.showImageSizeLabel = function (visible) {
+      var label = ref.imageSizeLabel;
+
+      if (!label) {
+        return;
+      }
+
+      label.hidden = !visible;
+
+      if (visible) {
+        label.textContent = '0 × 0';
+        ref.imageSizeLabelSpace = label.offsetHeight + parseFloat(getComputedStyle(label).marginTop || 0);
+      }
+    };
+
+    ref.imageResizeStartListener = function (e) {
+      var img = ref.getSelectedImage();
+
+      if (!img || ref.imageResize) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      ref.imageResize = {
+        img: img,
+        direction: imageHandleDirections[e.currentTarget.dataset.position],
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: img.offsetWidth,
+        startHeight: img.offsetHeight,
+        startAttributes: { width: img.getAttribute('width'), height: img.getAttribute('height') },
+        startStyles: { width: img.style.width, height: img.style.height },
+        ratio: img.offsetHeight ? img.offsetWidth / img.offsetHeight : 1
+      };
+
+      img.style.width = '';
+      img.style.height = '';
+      img.setAttribute('width', ref.imageResize.startWidth);
+      img.setAttribute('height', ref.imageResize.startHeight);
+
+      ref.releaseImageDrag = trackDrag(
+        ref.documentImageResizeMoveListener,
+        ref.documentImageResizeEndListener,
+        ref.documentImageResizeKeyListener);
+      ref.showImageSizeLabel(true);
+      ref.positionImageHandles();
+    };
+
+    ref.restoreImageSize = function (state) {
+      Object.keys(state.startAttributes).forEach(function (name) {
+        var value = state.startAttributes[name];
+
+        if (value !== null) {
+          state.img.setAttribute(name, value);
+        } else {
+          state.img.removeAttribute(name);
+        }
+
+        state.img.style[name] = state.startStyles[name];
+      });
+    };
+
+    ref.documentImageResizeKeyListener = function (e) {
+      if (e.key !== 'Escape' || !ref.imageResize) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      ref.restoreImageSize(ref.imageResize);
+      ref.stopImageDrag();
+      ref.positionImageHandles();
+    };
+
+    ref.documentImageResizeMoveListener = function (e) {
+      var state = ref.imageResize;
+
+      if (!state || !ref.isConnected) {
+        return;
+      }
+
+      e.preventDefault();
+
+      var horizontal = state.direction[0];
+      var vertical = state.direction[1];
+      var width = state.startWidth;
+      var height = state.startHeight;
+
+      if (horizontal) {
+        width = Math.max(Math.round(state.startWidth + horizontal * (e.clientX - state.startX)), minImageSize);
+      }
+
+      if (vertical && (!horizontal || e.shiftKey)) {
+        height = Math.max(Math.round(state.startHeight + vertical * (e.clientY - state.startY)), minImageSize);
+      } else if (horizontal && vertical) {
+        height = Math.max(Math.round(width / state.ratio), minImageSize);
+      }
+
+      state.img.setAttribute('width', width);
+      state.img.setAttribute('height', height);
+
+      ref.positionImageHandles();
+    };
+
+    ref.documentImageResizeEndListener = function () {
+      var state = ref.imageResize;
+
+      if (!state) {
+        return;
+      }
+
+      var img = state.img;
+      var width = img.getAttribute('width');
+      var height = img.getAttribute('height');
+
+      var index = Array.prototype.indexOf.call(ref.querySelectorAll('img'), img);
+
+      ref.stopImageDrag();
+      ref.restoreImageSize(state);
+
+      if (width === String(state.startWidth) && height === String(state.startHeight)) {
+        ref.positionImageHandles();
+        return;
+      }
+
+      ref.deselectImage(img);
+
+      var target = img;
+
+      while (target.parentElement && target.parentElement !== ref && getComputedStyle(target.parentElement).display === 'inline') {
+        target = target.parentElement;
+      }
+
+      var replacement = target.cloneNode(true);
+      var replacementImg = target === img
+        ? replacement
+        : replacement.querySelectorAll('img')[Array.prototype.indexOf.call(target.querySelectorAll('img'), img)];
+
+      replacementImg.setAttribute('width', width);
+      replacementImg.setAttribute('height', height);
+      replacementImg.style.width = '';
+      replacementImg.style.height = '';
+
+      if (!replacementImg.style.length) {
+        replacementImg.removeAttribute('style');
+      }
+
+      var range = document.createRange();
+      range.selectNode(target);
+      var selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      ref.focus();
+      document.execCommand('insertHTML', false, replacement.outerHTML);
+
+      ref.selectImage(ref.querySelectorAll('img')[index]);
+    };
+
+    ref.deselectImage = function (img) {
+      img.classList.remove('rz-state-selected');
+
+      if (!img.getAttribute('class')) {
+        img.removeAttribute('class');
+      }
+
+      ref.removeImageHandles();
+    };
+
+    ref.selectImage = function (img) {
+      if (!img) {
+        ref.removeImageHandles();
+        return;
+      }
+
+      img.classList.add('rz-state-selected');
+
+      var range = document.createRange();
+      range.selectNode(img);
+      var selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      ref.createImageHandles();
+    };
+
+    ref.imageHandlesObserver = new MutationObserver(ref.positionImageHandles);
+
+    ref.stopImageDrag = function () {
+      ref.imageResize = null;
+      ref.showImageSizeLabel(false);
+
+      if (ref.releaseImageDrag) {
+        ref.releaseImageDrag();
+        ref.releaseImageDrag = null;
+      }
+    };
+
     ref.inputListener = function () {
-      try { suppressDisposed(instance.invokeMethodAsync('OnChange', ref.innerHTML)); } catch { }
+      ref.positionImageHandles();
+      try { suppressDisposed(instance.invokeMethodAsync('OnChange', Radzen.getEditorHtml(ref))); } catch { }
     };
     ref.keydownListener = function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
@@ -4985,15 +5483,11 @@ window.Radzen = {
         }
 
         for (var img of ref.querySelectorAll('img.rz-state-selected')) {
-          img.classList.remove('rz-state-selected');
+          ref.deselectImage(img);
         }
 
         if (e.target.matches('img')) {
-          e.target.classList.add('rz-state-selected');
-          var range = document.createRange();
-          range.selectNode(e.target);
-          getSelection().removeAllRanges();
-          getSelection().addRange(range);
+          ref.selectImage(e.target);
         } else {
           var clickedCell = e.target.closest && e.target.closest('td,th');
           if (clickedCell && ref.contains(clickedCell)) {
@@ -5052,8 +5546,7 @@ window.Radzen = {
         ref.isResizingColumn = true;
         ref.resizeStartX = e.clientX;
         ref.resizeStartWidth = ref.resizeTargetCell.getBoundingClientRect().width;
-        document.addEventListener('mouseup', ref.mouseupResizeListener);
-        document.addEventListener('mousemove', ref.documentMouseMoveResizeListener);
+        ref.releaseColumnDrag = trackDrag(ref.documentMouseMoveResizeListener, ref.mouseupResizeListener);
       }
     };
 
@@ -5061,9 +5554,9 @@ window.Radzen = {
       if (ref.isResizingColumn) {
         ref.isResizingColumn = false;
         ref.style.cursor = '';
-        document.removeEventListener('mouseup', ref.mouseupResizeListener);
-        document.removeEventListener('mousemove', ref.documentMouseMoveResizeListener);
-        try { instance.invokeMethodAsync('OnChange', ref.innerHTML); } catch { }
+        ref.releaseColumnDrag();
+        ref.releaseColumnDrag = null;
+        ref.inputListener();
       }
     };
 
@@ -5085,6 +5578,12 @@ window.Radzen = {
 
     ref.selectionChangeListener = function () {
       if (document.activeElement == ref) {
+        var selectedImage = ref.getSelectedImage();
+
+        if (selectedImage && !ref.imageResize && !getSelection().containsNode(selectedImage)) {
+          ref.deselectImage(selectedImage);
+        }
+
         try { suppressDisposed(instance.invokeMethodAsync('OnSelectionChange')); } catch { }
       }
     };
@@ -5190,6 +5689,8 @@ window.Radzen = {
     ref.addEventListener('contextmenu', ref.contextMenuListener);
     ref.addEventListener('mousemove', ref.mousemoveListener);
     ref.addEventListener('mousedown', ref.mousedownResizeListener);
+    ref.addEventListener('scroll', ref.positionImageHandles);
+    ref.imageHandlesObserver.observe(ref, { attributes: true, attributeFilter: ['hidden', 'contenteditable'], childList: true });
     document.addEventListener('selectionchange', ref.selectionChangeListener);
     document.execCommand('styleWithCSS', false, true);
     return {
@@ -5203,9 +5704,16 @@ window.Radzen = {
           ref.removeEventListener('contextmenu', ref.contextMenuListener);
           ref.removeEventListener('mousemove', ref.mousemoveListener);
           ref.removeEventListener('mousedown', ref.mousedownResizeListener);
+          ref.removeEventListener('scroll', ref.positionImageHandles);
+          ref.imageHandlesObserver.disconnect();
+          ref.stopImageDrag();
+          ref.removeImageHandles();
           ref.isResizingColumn = false;
-          document.removeEventListener('mouseup', ref.mouseupResizeListener);
-          document.removeEventListener('mousemove', ref.documentMouseMoveResizeListener);
+
+          if (ref.releaseColumnDrag) {
+            ref.releaseColumnDrag();
+            ref.releaseColumnDrag = null;
+          }
           document.removeEventListener('selectionchange', ref.selectionChangeListener);
         }
       }
@@ -5545,13 +6053,34 @@ window.Radzen = {
         resize.mouseUpHandler();
     }
   },
+  // A grid rendered inside another grid's row-detail template is a descendant of it, so every lookup
+  // here is scoped to this grid's own table and to a row's own cells. Descendant queries reach the
+  // inner grid and pin its cells to the outer grid's offsets.
+  frozenCellsOf: function(row, side) {
+      var found = [];
+      if (!row) return found;
+      var prefix = 'rz-frozen-cell-' + side;
+      for (var i = 0; i < row.children.length; i++) {
+          var cell = row.children[i];
+          if (cell.classList.contains(prefix)
+              || cell.classList.contains(prefix + '-end')
+              || cell.classList.contains(prefix + '-inner')) {
+              found.push(cell);
+          }
+      }
+      return found;
+  },
   updateFrozenColumnPositions: function(gridElement) {
       if (!gridElement) return;
+      // This grid's own table. querySelector returns the first in document order, which is this
+      // grid's rather than one nested inside it.
+      var table = gridElement.querySelector('.rz-grid-table');
+      if (!table) return;
       // Get frozen cell positions from the header row first, then apply to all rows
-      var headerRow = gridElement.querySelector('thead tr');
+      var headerRow = table.querySelector(':scope > thead > tr');
       if (!headerRow) return;
-      var leftHeaderCells = headerRow.querySelectorAll('.rz-frozen-cell-left, .rz-frozen-cell-left-end, .rz-frozen-cell-left-inner');
-      var rightHeaderCells = headerRow.querySelectorAll('.rz-frozen-cell-right, .rz-frozen-cell-right-end, .rz-frozen-cell-right-inner');
+      var leftHeaderCells = Radzen.frozenCellsOf(headerRow, 'left');
+      var rightHeaderCells = Radzen.frozenCellsOf(headerRow, 'right');
       // Calculate offsets from header widths
       var leftOffsets = [];
       var offset = 0;
@@ -5565,15 +6094,15 @@ window.Radzen = {
           rightOffsets[i] = offset;
           offset += rightHeaderCells[i].getBoundingClientRect().width;
       }
-      // Apply offsets to all rows
-      var rows = gridElement.querySelectorAll('tr');
+      // Apply offsets to this grid's own rows
+      var rows = table.querySelectorAll(':scope > thead > tr, :scope > tbody > tr, :scope > tfoot > tr');
       for (var r = 0; r < rows.length; r++) {
           var row = rows[r];
-          var leftCells = row.querySelectorAll('.rz-frozen-cell-left, .rz-frozen-cell-left-end, .rz-frozen-cell-left-inner');
+          var leftCells = Radzen.frozenCellsOf(row, 'left');
           for (var i = 0; i < leftCells.length && i < leftOffsets.length; i++) {
               leftCells[i].style.setProperty('inset-inline-start', leftOffsets[i] + 'px');
           }
-          var rightCells = row.querySelectorAll('.rz-frozen-cell-right, .rz-frozen-cell-right-end, .rz-frozen-cell-right-inner');
+          var rightCells = Radzen.frozenCellsOf(row, 'right');
           for (var i = 0; i < rightCells.length && i < rightOffsets.length; i++) {
               rightCells[i].style.setProperty('inset-inline-end', rightOffsets[i] + 'px');
           }
@@ -6371,7 +6900,9 @@ class Spreadsheet {
     this.dotNetRef = dotNetRef;
     this.shortcuts = shortcuts || {}; // map of key -> isGlobal (true = global, false = grid-only)
     this.rtl = Radzen.isRTL(element);
+    this.pendingKeys = null;
     this.element.addEventListener('keydown', this.onKeyDown);
+    this.element.addEventListener('focusin', this.onFocusIn);
     this.element.addEventListener('pointerdown', this.onPointerDown);
     this.element.addEventListener('dblclick', this.onDoubleClick);
     this.element.addEventListener('contextmenu', this.onContextMenu);
@@ -6396,6 +6927,15 @@ class Spreadsheet {
     return target == this.element || this.element.contains(target);
   }
 
+  isCellEditorTextEntry = (target) => {
+    if (!target.isContentEditable && target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+      return false;
+    }
+
+    const cellEditor = target.closest('.rz-spreadsheet-cell-editor');
+    return cellEditor != null && this.element.contains(cellEditor);
+  }
+
   copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -6414,6 +6954,8 @@ class Spreadsheet {
 
   onPointerDown = async (e) => {
     if (e.button != 0) return;
+
+    this.pendingKeys = null;
 
     this.rtl = Radzen.isRTL(this.element);
 
@@ -6584,6 +7126,11 @@ class Spreadsheet {
   }
 
   onKeyDown = (e) => {
+    if (this.isCellEditorTextEntry(e.target) &&
+        (e.isComposing || (e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Tab' && e.key !== 'F6'))) {
+      return;
+    }
+
     let key = '';
 
     if (e.ctrlKey || e.metaKey) {
@@ -6615,14 +7162,60 @@ class Spreadsheet {
       e.preventDefault();
     }
 
+    const printable = global === undefined && !e.ctrlKey && !e.metaKey && !e.altKey &&
+      e.key.length === 1 && e.target === this.element;
+
     // Prevent default for printable characters when not already editing.
     // Without this, the character gets inserted twice: once by StartEdit and
     // once by the browser's default insertText when the editor receives focus.
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && e.target === this.element) {
+    if (printable) {
       e.preventDefault();
     }
 
+    if (printable) {
+      if (this.pendingKeys != null) {
+        this.pendingKeys += e.key;
+        return;
+      }
+
+      this.pendingKeys = '';
+    } else if (!e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      this.pendingKeys = null;
+    }
+
     this.dotNetRef.invokeMethodAsync('OnKeyDownAsync', this.toEventArgs(e), isGridContext);
+  }
+
+  onFocusIn = (e) => {
+    const keys = this.pendingKeys;
+
+    this.pendingKeys = null;
+
+    const target = e.target;
+
+    if (!keys || !(target.matches('.rz-spreadsheet-editor-input') || this.isCellEditorTextEntry(target))) {
+      return;
+    }
+
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      try {
+        target.setRangeText(keys, target.value.length, target.value.length, 'end');
+      } catch {
+        target.value += keys;
+      }
+    } else {
+      target.innerText += keys;
+
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+
+      const selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    target.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   // F6 / Shift+F6 cycle focus between the spreadsheet regions in their visible top-to-bottom order:
@@ -6728,6 +7321,7 @@ class Spreadsheet {
 
   dispose() {
     this.element.removeEventListener('keydown', this.onKeyDown);
+    this.element.removeEventListener('focusin', this.onFocusIn);
     this.element.removeEventListener('pointerdown', this.onPointerDown);
     this.element.removeEventListener('dblclick', this.onDoubleClick);
     this.element.removeEventListener('contextmenu', this.onContextMenu);
@@ -6958,13 +7552,30 @@ Radzen.createVirtualItemContainer = (scrollable, content, ref) => {
 
   var rtl = Radzen.isRTL(scrollable);
 
-  scrollable.addEventListener('scroll', function () {
+  var inflight = false;
+
+  function notifyScroll() {
     var scrollTop = scrollable.scrollTop;
     // In RTL the native scrollLeft is 0 at the right and negative toward the left;
     // report a non-negative logical scroll so the C# layout math stays direction-agnostic.
     var scrollLeft = rtl ? -scrollable.scrollLeft : scrollable.scrollLeft;
 
-    ref.invokeMethodAsync('OnScroll', scrollLeft, scrollTop);
+    inflight = true;
+
+    ref.invokeMethodAsync('OnScroll', scrollLeft, scrollTop).finally(function () {
+      inflight = false;
+
+      if (scrollTop !== scrollable.scrollTop ||
+          scrollLeft !== (rtl ? -scrollable.scrollLeft : scrollable.scrollLeft)) {
+        notifyScroll();
+      }
+    });
+  }
+
+  scrollable.addEventListener('scroll', function () {
+    if (!inflight) {
+      notifyScroll();
+    }
   });
 
   var observer = new ResizeObserver(function () {

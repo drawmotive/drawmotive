@@ -121,6 +121,16 @@ test('resource audit rejects source names, changed contents, aliases and hidden 
  }
 });
 
+test('alpha.4 resource approval accepts only the reviewed line-label defaults',()=>{
+ const entries=themeEntries();
+ entries[0].data=readFileSync(new URL('./fixtures/GroupThemeDefaults-alpha4.css',import.meta.url));
+ const fixture=resourceMetadata(entries);
+ assert.doesNotThrow(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss));
+ entries[0].data=Buffer.concat([entries[0].data,Buffer.from('/* unreviewed */')]);
+ const changed=resourceMetadata(entries);
+ assert.throws(()=>auditManagedResources(changed.streams,changed.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
+});
+
 test('package resource approval requires the theme counterpart in its published file list',t=>{
  const filename='generated/editor/_framework/Graphics.Core.abc.wasm',theme='generated/editor/static/themes.css';
  const root=fixture(t,{[filename]:resourceAssembly(resourceMetadata(themeEntries())),[theme]:standardCss});

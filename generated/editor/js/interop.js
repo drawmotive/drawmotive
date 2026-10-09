@@ -13,6 +13,22 @@ export function getCanvas() {
     return null;
 }
 
+export function setupCanvasFocusHandler() {
+    const canvas = getCanvas();
+    if (!canvas) return;
+    if (canvas._focusHandler) {
+        canvas.removeEventListener('pointerdown', canvas._focusHandler);
+    }
+
+    // Radzen popup closure queues a delayed restoration through this cache. A later
+    // canvas gesture owns the focus intent, just as Radzen's own dropdown mousedown
+    // cancels that cache. Leave keyboard-only menu closure and native focus intact.
+    canvas._focusHandler = () => {
+        if (window.Radzen) window.Radzen.activeElement = null;
+    };
+    canvas.addEventListener('pointerdown', canvas._focusHandler);
+}
+
 export function getOS() {
     let userAgent = window.navigator.userAgent;
     let platform = window.navigator.platform;
@@ -145,10 +161,11 @@ export function setupCanvasWheelHandler(dotnetHelper) {
             e.preventDefault();
 
             // Call back to C# to handle canvas zoom
+            const rect = canvas.getBoundingClientRect();
             dotnetHelper.invokeMethodAsync('OnWheelJS',
                 e.deltaY,
-                e.clientX,
-                e.clientY,
+                e.clientX - rect.left,
+                e.clientY - rect.top,
                 e.ctrlKey
             );
         }
