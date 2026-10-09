@@ -16,10 +16,18 @@ export async function publishRetainedNpm({ directory, componentRoot, env = proce
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: componentRoot, encoding: 'utf8' }).trim();
   assert.equal(env.GITHUB_ACTIONS, 'true');
   assert.equal(env.GITHUB_EVENT_NAME, 'workflow_dispatch');
-  assert.equal(env.GITHUB_SHA, commit); assert.equal(evidence.commits.component, commit);
+  assert.equal(env.GITHUB_SHA, commit);
+  if(evidence.publisher) {
+    assert.equal(pkg.name,'@drawmotive/markdown-it-textgraph');
+    assert.equal(evidence.publisher.commit,commit);
+    assert.equal(env.GITHUB_REF,'refs/tags/'+evidence.publisher.tag);
+    execFileSync('git',['merge-base','--is-ancestor',evidence.commits.component,commit],{cwd:componentRoot});
+    const changed=execFileSync('git',['diff','--name-only',evidence.commits.component,commit],{cwd:componentRoot,encoding:'utf8'}).trim().split('\n').filter(Boolean);
+    assert.ok(changed.every(file=>file==='.github/workflows/release.yml'||/^\.release\/(?:remote-npm|release-registry)[.]mjs$/.test(file)),'Publisher changed tested package inputs');
+  } else assert.equal(evidence.commits.component, commit);
   const prefixes = { '@drawmotive/textgraph-fonts': 'textgraph-fonts-v', '@drawmotive/textgraph': 'textgraph-v', '@drawmotive/editor': 'editor-v', '@drawmotive/markdown-it-textgraph': 'markdown-v' };
   assert.ok(prefixes[pkg.name], 'Unknown trusted publication product');
-  assert.equal(env.GITHUB_REF, 'refs/tags/' + prefixes[pkg.name] + pkg.version, 'Trusted publication must run on its immutable version tag');
+  if(!evidence.publisher) assert.equal(env.GITHUB_REF, 'refs/tags/' + prefixes[pkg.name] + pkg.version, 'Trusted publication must run on its immutable version tag');
   assert.equal(pkg.repository.url, 'https://github.com/' + env.GITHUB_REPOSITORY + '.git');
   assert.equal(evidence.receipt.name, pkg.name); assert.equal(evidence.receipt.version, pkg.version);
   assert.equal(target.version, pkg.version); assert.equal(target.publishable, true);
