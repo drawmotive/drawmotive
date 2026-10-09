@@ -61,7 +61,7 @@ export async function verifyNpmArchive(receipt, directory) {
 }
 
 /** Publication is irreversible. Only confirmed exact bytes permit the next dependency step. */
-export async function publishNpmArchive(receipt, directory, { run, request = fetch, delay = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+export async function publishNpmArchive(receipt, directory, { run, request = fetch, delay = ms => new Promise(resolve => setTimeout(resolve, ms)), deferConfirmation = false } = {}) {
   await verifyNpmArchive(receipt, directory);
   const before = await npmState(receipt, request);
   if (before.metadata) {
@@ -69,6 +69,9 @@ export async function publishNpmArchive(receipt, directory, { run, request = fet
     return { status: 'already-published', integrity: receipt.integrity };
   }
   await run('npm', ['publish', path.join(directory, receipt.filename), '--ignore-scripts', '--access', 'public', '--tag', receipt.tag, '--registry', registry], { cwd: directory });
+  // Trusted runners submit once. The coordinator owns final public byte/channel
+  // confirmation, which can remain pending while npm processes the upload.
+  if (deferConfirmation) return { status: 'submitted', integrity: receipt.integrity };
   for (let attempt = 0; attempt < 10; attempt++) {
     const after = await npmState(receipt, request);
     if (receipt.tag === 'alpha' && before.tags.latest !== undefined) assert.equal(after.tags.latest, before.tags.latest, 'Alpha publication changed latest');

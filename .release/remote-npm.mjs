@@ -27,7 +27,7 @@ export async function publishRetainedNpm({ directory, componentRoot, env = proce
   assert.equal(evidence.receipt.filename, env.ARCHIVE_FILE, 'Dispatch archive filename differs');
   const errors = createRequire(path.join(componentRoot, 'package.json'))(path.join(componentRoot, '.release/check.cjs')).checkComponent(componentRoot, { ready: true });
   assert.equal(errors.length, 0, errors.join('\n'));
-  return publishNpmArchive(evidence.receipt, directory, { run });
+  return publishNpmArchive(evidence.receipt, directory, { run, deferConfirmation: true });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
