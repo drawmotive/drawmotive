@@ -25,7 +25,7 @@ export async function npmState(receipt, request = fetch) {
   assert.equal(receipt.tag, receipt.version.includes('-') ? 'alpha' : 'latest');
   const options = { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30000), redirect: 'error' };
   const response = await request(registry + encodeURIComponent(receipt.name) + '/' + receipt.version, options);
-  let metadata;
+  let metadata, archiveAvailable = false;
   if (response.status !== 404) {
     assert.ok(response.ok, 'npm version lookup failed: HTTP ' + response.status);
     metadata = await response.json();
@@ -34,8 +34,13 @@ export async function npmState(receipt, request = fetch) {
     assert.equal(metadata.dist?.integrity, receipt.integrity, 'Published npm archive conflicts with the retained artifact');
     assert.equal(metadata.dist?.tarball, `${registry}${receipt.name}/-/${receipt.name.split('/').at(-1)}-${receipt.version}.tgz`);
     const archive = await request(metadata.dist.tarball, { ...options, signal: AbortSignal.timeout(60000) });
-    assert.ok(archive.ok, 'npm archive lookup failed: HTTP ' + archive.status);
-    assert.equal(integrity(Buffer.from(await archive.arrayBuffer())), receipt.integrity, 'Downloaded npm archive differs from retained bytes');
+    // npm exposes metadata before the asynchronous archive promotion finishes.
+    // A 404 is pending evidence, never permission to republish or advance.
+    if (archive.status !== 404) {
+      assert.ok(archive.ok, 'npm archive lookup failed: HTTP ' + archive.status);
+      assert.equal(integrity(Buffer.from(await archive.arrayBuffer())), receipt.integrity, 'Downloaded npm archive differs from retained bytes');
+      archiveAvailable = true;
+    }
   }
   const tagsResponse = await request(`${registry}-/package/${encodeURIComponent(receipt.name)}/dist-tags`, options);
   const tags = tagsResponse.status === 404 && !metadata ? {} : await (async () => {
@@ -46,7 +51,7 @@ export async function npmState(receipt, request = fetch) {
   for (const tag of new Set(['latest', receipt.tag])) if (tags[tag]) {
     assert.ok(compareReleaseVersions(receipt.version, tags[tag]) >= 0, 'Refusing npm channel rollback: ' + tag);
   }
-  return { metadata, tags, confirmed: Boolean(metadata && tags[receipt.tag] === receipt.version) };
+  return { metadata, tags, archiveAvailable, confirmed: Boolean(metadata && archiveAvailable && tags[receipt.tag] === receipt.version) };
 }
 
 /** Hash retained bytes before both first publication and every resume. */
