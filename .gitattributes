@@ -3,4 +3,4 @@
 generated/editor/** -text
 
 # Resource-audit fixtures must retain the exact reviewed embedded bytes too.
-test/fixtures/GroupThemeDefaults.css -text
+test/fixtures/GroupThemeDefaults*.css -text
