@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "packageName": "@drawmotive/editor",
-  "packageVersion": "0.2.2-alpha.4",
+  "packageVersion": "0.2.2-alpha.6",
   "protocolVersion": 1,
   "privateSource": {
-    "commit": "be84f251d1a3c5154879ffb1706f550cf2e27b7a",
+    "commit": "c92d7f10fcd7ac723621d835684fc084513d60ac",
     "project": "Editor.Client"
   },
   "assets": [
@@ -224,9 +224,9 @@
       "sha256": "6c8bc2b649fcf2956c3a6e43a8b18aae1477923d55c21846f0a745d4793cc8b1"
     },
     {
-      "path": "editor/_framework/Blazor.IndexedDB.5we3nhojct.wasm",
+      "path": "editor/_framework/Blazor.IndexedDB.rqpiqev065.wasm",
       "bytes": 72469,
-      "sha256": "25093d48fdc3f6286df1fa24d049226d889afe4581e31b4849b9615d4c083fcb"
+      "sha256": "d39489061474e79811337617a19be21385dd1fbf773f7fc27148f7a2640c66ec"
     },
     {
       "path": "editor/_framework/Blazored.LocalStorage.12n6dz54qr.wasm",
@@ -239,9 +239,9 @@
       "sha256": "9d05ee0861e8b3b8b0a765b145481aaca99680960285a550a7635a8e0354dd5f"
     },
     {
-      "path": "editor/_framework/Editor.Client.0ccilqfsl7.wasm",
+      "path": "editor/_framework/Editor.Client.f7nfwctuvl.wasm",
       "bytes": 724245,
-      "sha256": "f0dbfd8004ca64c0600aba32d5b73aeefc5436466f5d12d13370b21b4ddd0ca7"
+      "sha256": "3b43f2801d8bf2bf3ab03422647b1479a211308842462be5bc5d41c9880f80d3"
     },
     {
       "path": "editor/_framework/ExCSS.1jyjm4dx0m.wasm",
@@ -249,9 +249,9 @@
       "sha256": "7354d17ae4ca035d9f1af9fd76abe8b4d289c532e186ee50b22c18b7e6699982"
     },
     {
-      "path": "editor/_framework/Graphics.Core.q0xtw2wfny.wasm",
-      "bytes": 3978521,
-      "sha256": "968bea110c202951e506edc282f1600460f01576691b86758a33d32e31610906"
+      "path": "editor/_framework/Graphics.Core.s5g3qg897d.wasm",
+      "bytes": 4040985,
+      "sha256": "7031d56d3be76fa6c65b3cf8386a06b5e230642489a455c8439d3430e3dba441"
     },
     {
       "path": "editor/_framework/Grpc.Core.Api.kr6zfbi4fx.wasm",
@@ -474,9 +474,9 @@
       "sha256": "7edf1bf34d3ab23694c7c9cecc28dc58845f2101a1562fd90c95c60a809ee4cf"
     },
     {
-      "path": "editor/_framework/RBush.9pwkdsca52.wasm",
+      "path": "editor/_framework/RBush.lcizdikmg4.wasm",
       "bytes": 24341,
-      "sha256": "73c0898ade1266d1b3113c9aacd122c1859cfddcdf5a2e6ec02cb89bd0b043df"
+      "sha256": "a5bcecd3e9e5851470848bdff50d27429e5cd9c4ab0798c6c65d9a105ee72179"
     },
     {
       "path": "editor/_framework/Radzen.Blazor.rlai7dwszp.wasm",
@@ -836,7 +836,7 @@
     {
       "path": "editor/_framework/dotnet.js",
       "bytes": 71210,
-      "sha256": "d78a84129b1413697213d29026a2aec98249b1aad1437d2db8cacdadf63dfdb6"
+      "sha256": "bde08de57e328cac3600ac9877d20521ec26202b12b7f90b445618ee552dc575"
     },
     {
       "path": "editor/_framework/dotnet.native.my46u6sjp8.js",
@@ -1046,7 +1046,7 @@
     {
       "path": "editor/static/files.json",
       "bytes": 910,
-      "sha256": "fc397195296d2cc839241f18535a2c0514802b01c84188c8fae6f0c681ce6a62"
+      "sha256": "04a3e2777415a09d832b9d0b272331a9403e2292f64be734eac0c0e6b53aae95"
     },
     {
       "path": "editor/static/font-catalog.json",
