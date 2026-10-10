@@ -24,8 +24,10 @@ export async function npmState(receipt, request = fetch) {
   assert.match(receipt.name, /^(?:@[a-z0-9][a-z0-9._-]*[/])?[a-z0-9][a-z0-9._-]*$/);
   compareReleaseVersions(receipt.version, receipt.version);
   assert.equal(receipt.tag, receipt.version.includes('-') ? 'alpha' : 'latest');
-  const options = { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30000), redirect: 'error' };
-  const response = await request(registry + encodeURIComponent(receipt.name) + '/' + receipt.version, options);
+  // Each metadata read owns its budget. Large archive transfers between them
+  // must not consume the following channel lookup's timeout.
+  const options = () => ({ headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30000), redirect: 'error' });
+  const response = await request(registry + encodeURIComponent(receipt.name) + '/' + receipt.version, options());
   let metadata, archiveAvailable = false;
   if (response.status !== 404) {
     assert.ok(response.ok, 'npm version lookup failed: HTTP ' + response.status);
@@ -41,7 +43,7 @@ export async function npmState(receipt, request = fetch) {
       archiveAvailable = true;
     } catch (error) { if (!(error instanceof ReleaseDownloadHttpError) || error.status !== 404) throw error; }
   }
-  const tagsResponse = await request(`${registry}-/package/${encodeURIComponent(receipt.name)}/dist-tags`, options);
+  const tagsResponse = await request(`${registry}-/package/${encodeURIComponent(receipt.name)}/dist-tags`, options());
   const tags = tagsResponse.status === 404 && !metadata ? {} : await (async () => {
     assert.ok(tagsResponse.ok, 'npm channel lookup failed: HTTP ' + tagsResponse.status);
     return tagsResponse.json();
