@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { downloadReleaseBytes, ReleaseDownloadHttpError } from './release-download.mjs';
 
 export const registry = 'https://registry.npmjs.org/';
 export const integrity = bytes => 'sha512-' + createHash('sha512').update(bytes).digest('base64');
@@ -33,14 +34,12 @@ export async function npmState(receipt, request = fetch) {
     assert.equal(metadata.version, receipt.version);
     assert.equal(metadata.dist?.integrity, receipt.integrity, 'Published npm archive conflicts with the retained artifact');
     assert.equal(metadata.dist?.tarball, `${registry}${receipt.name}/-/${receipt.name.split('/').at(-1)}-${receipt.version}.tgz`);
-    const archive = await request(metadata.dist.tarball, { ...options, signal: AbortSignal.timeout(60000) });
     // npm exposes metadata before the asynchronous archive promotion finishes.
     // A 404 is pending evidence, never permission to republish or advance.
-    if (archive.status !== 404) {
-      assert.ok(archive.ok, 'npm archive lookup failed: HTTP ' + archive.status);
-      assert.equal(integrity(Buffer.from(await archive.arrayBuffer())), receipt.integrity, 'Downloaded npm archive differs from retained bytes');
+    try {
+      await downloadReleaseBytes(metadata.dist.tarball, { expectedHash: receipt.integrity, request });
       archiveAvailable = true;
-    }
+    } catch (error) { if (!(error instanceof ReleaseDownloadHttpError) || error.status !== 404) throw error; }
   }
   const tagsResponse = await request(`${registry}-/package/${encodeURIComponent(receipt.name)}/dist-tags`, options);
   const tags = tagsResponse.status === 404 && !metadata ? {} : await (async () => {
