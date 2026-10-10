@@ -16,8 +16,23 @@ export function npmPublisherIdentity(name) {
     '@drawmotive/markdown-it-textgraph': { id: 'markdown', workflow: 'release.yml', productPrefix: '' },
   };
   const identity = identities[name]; assert.ok(identity, 'Unknown trusted publication product');
-  return { ...identity, workflow: '.github/workflows/' + identity.workflow, versionTag: identity.id + '-v', publisherTag: identity.id + '-publisher-v',
+  return { ...identity, workflow: '.github/workflows/' + identity.workflow, versionTag: identity.id + '-v', publisherSuffix: '-publisher-',
     helperPrefixes: identity.id === 'textgraph-fonts' ? ['language-packs/', ''] : [''] };
+}
+
+/** Correction tags retain the protected product version prefix. They describe
+ * a new publisher commit without moving the immutable original version tag. */
+export function npmPublisherTag(identity, version, commit) {
+  assert.match(commit, /^[a-f0-9]{40}$/);
+  return identity.versionTag + version + identity.publisherSuffix + commit.slice(0, 12);
+}
+
+/** Failed historical tags remain inspectable during migration; active remote
+ * publication accepts only the protected current tag format. */
+export function validateNpmPublisherRecord(identity, publisher, version) {
+  const current = npmPublisherTag(identity, version, publisher.commit);
+  const legacy = identity.id + '-publisher-v' + version + '-' + publisher.commit.slice(0, 12);
+  assert.ok(publisher.tag === current || publisher.tag === legacy, 'Publisher tag identity changed');
 }
 
 /** Corrections may add/update publisher transport only. Targets, product bytes,
@@ -41,7 +56,7 @@ export async function publishRetainedNpm({ directory, componentRoot, env = proce
   assert.equal(env.GITHUB_SHA, commit);
   if(evidence.publisher) {
     assert.equal(evidence.publisher.commit,commit);
-    assert.equal(evidence.publisher.tag, identity.publisherTag + pkg.version + '-' + commit.slice(0,12));
+    assert.equal(evidence.publisher.tag, npmPublisherTag(identity, pkg.version, commit));
     assert.equal(env.GITHUB_REF,'refs/tags/'+evidence.publisher.tag);
     assert.match(evidence.commits.component, /^[a-f0-9]{40}$/);
     const repositoryRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: componentRoot, encoding: 'utf8' }).trim();
