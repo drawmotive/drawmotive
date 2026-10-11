@@ -1,14 +1,35 @@
-import { initializeEditor, type EditorDocument } from '@drawmotive/editor';
-import { initializeEditor as browserEditor } from '@drawmotive/editor/browser';
+import { createEditor, EditorError, type EditorSnapshot, type EditorState } from '@drawmotive/editor';
+import { createEditor as browserEditor } from '@drawmotive/editor/browser';
 
 async function mount(container: HTMLElement) {
-  const editor = await initializeEditor({ container, assetBaseUrl: '/editor/', source: 'A -> B' });
-  const result: EditorDocument = await editor.exportDocument();
-  await editor.importDocument(result.raw);
-  await editor.importTextGraph('B -> C');
+  const editor = await createEditor({ container, assetBaseUrl: '/editor/', ui: {
+    buttons: { help: false }, actions: [{ id: 'host.save', label: 'Save', async onInvoke({ editor, signal }) {
+      await editor.exportSnapshot({ formats: ['png'], png: { embedDocument: true } });
+      signal.throwIfAborted();
+    } }],
+  } });
+  const state: EditorState = await editor.getState();
+  const unsubscribe = editor.onStateChanged(next => { void next.revision; });
+  const result: EditorSnapshot = await editor.exportSnapshot({ formats: ['raw', 'png', 'svg'], render: { scale: 2 } });
+  await editor.replaceDocument(result.raw!);
+  await editor.replacePngDocument(result.png!.base64);
+  await editor.replaceTextGraph('B -> C');
+  await editor.fitViewport({ padding: 60 });
+  await editor.setEditingEnabled(false);
+  await editor.setActionState('host.save', { enabled: false });
+  await editor.clearDocument();
+  await editor.undo();
+  await editor.redo();
+  unsubscribe();
   await editor.dispose();
+  void state;
 }
 void mount;
 void browserEditor;
+void EditorError;
 // @ts-expect-error A mount container is required.
-initializeEditor({ source: 'A -> B' });
+createEditor({});
+// @ts-expect-error Unknown buttons are not public capabilities.
+createEditor({ container: document.body, ui: { buttons: { save: true } } });
+// @ts-expect-error Product identity is not an editor option.
+createEditor({ container: document.body, product: 'vscode' });

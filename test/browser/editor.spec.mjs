@@ -51,22 +51,25 @@ test('real embedded editor loads WASM in parallel, imports, exports and reopens 
 test('public API preserves the document after invalid import and releases the frame', async ({ page }) => {
   await page.goto('/examples/browser/index.html');
   const result = await page.evaluate(async () => {
-    const { initializeEditor } = await import('/src/index.js');
+    const { createEditor } = await import('/src/index.js');
     const container = document.createElement('div');
     container.style.height = '600px';
     document.body.append(container);
-    const editor = await initializeEditor({ container, assetBaseUrl: '/generated/editor/', source: 'A -> B' });
-    const before = await editor.exportDocument();
+    const editor = await createEditor({ container, assetBaseUrl: '/generated/editor/' });
+    await editor.replaceTextGraph('A -> B');
+    await editor.fitViewport();
+    const before = await editor.exportSnapshot({ formats: ['raw', 'png'] });
     let rejected = false;
-    try { await editor.importDocument('not-valid-base64'); } catch { rejected = true; }
-    const after = await editor.exportDocument();
+    try { await editor.replaceDocument('not-valid-base64'); } catch { rejected = true; }
+    const after = await editor.exportSnapshot({ formats: ['raw', 'png'] });
     await editor.dispose();
-    return { rejected, before, after, frames: container.querySelectorAll('iframe').length, state: editor.state };
+    return { rejected, before, after, frames: container.querySelectorAll('iframe').length, state: editor.lifecycle };
   });
   expect(result.rejected).toBe(true);
-  expect(result.after.png).toBe(result.before.png);
+  expect(result.after.png).toEqual(result.before.png);
   expect(result.after.raw).toBe(result.before.raw);
-  expect(result.before.width).toBeGreaterThan(0);
+  expect(result.after.revision).toBe(result.before.revision);
+  expect(result.before.png.width).toBeGreaterThan(0);
   expect(result.frames).toBe(0);
   expect(result.state).toBe('disposed');
 });

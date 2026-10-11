@@ -1,4 +1,4 @@
-import { initializeEditor } from '@drawmotive/editor';
+import { createEditor } from '@drawmotive/editor';
 
 const source = document.querySelector('#source');
 const status = document.querySelector('#status');
@@ -35,33 +35,36 @@ function pngBlob(base64) {
 }
 
 document.querySelector('#generate').addEventListener('click', () => {
-  void run(() => editor.importTextGraph(source.value), 'Ready to edit');
+  void run(async () => { await editor.replaceTextGraph(source.value); await editor.fitViewport(); }, 'Ready to edit');
 });
 document.querySelector('#download').addEventListener('click', () => {
-  void run(async () => download(pngBlob((await editor.exportDocument()).png), 'diagram.png'), 'PNG downloaded');
+  void run(async () => download(pngBlob((await editor.exportSnapshot({ formats: ['png'] })).png.base64), 'diagram.png'), 'PNG downloaded');
 });
 document.querySelector('#save').addEventListener('click', () => {
-  void run(async () => download(new Blob([(await editor.exportDocument()).raw], { type: 'text/plain' }), 'diagram.drawmotive'), 'Document saved');
+  void run(async () => download(new Blob([(await editor.exportSnapshot({ formats: ['raw'] })).raw], { type: 'text/plain' }), 'diagram.drawmotive'), 'Document saved');
 });
 document.querySelector('#open').addEventListener('click', () => file.click());
 file.addEventListener('change', () => {
   const selected = file.files[0];
   file.value = '';
-  if (selected) void run(async () => editor.importDocument(await selected.text()), 'Document opened');
+  if (selected) void run(async () => { await editor.replaceDocument(await selected.text()); await editor.fitViewport(); }, 'Document opened');
 });
 window.addEventListener('pagehide', event => {
   if (event.persisted) return;
   leaving = true;
   startup.abort();
-  void editor?.dispose();
+  void editor?.dispose().catch(error => { status.textContent = error.message; });
 });
 
 await run(async () => {
-  editor = await initializeEditor({
+  editor = await createEditor({
     container: document.querySelector('#editor'),
     // With an unbundled module, package-owned assets resolve relative to it.
     assetBaseUrl: new URL('../../generated/editor/', import.meta.url),
-    source: source.value,
+    ui: { buttons: { help: false } },
+    modules: { analytics: false, authentication: false, remoteSync: false },
     signal: startup.signal,
   });
+  await editor.replaceTextGraph(source.value);
+  await editor.fitViewport();
 }, 'Ready to edit');

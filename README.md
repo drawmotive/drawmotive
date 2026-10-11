@@ -1,103 +1,138 @@
 # @drawmotive/editor
 
-Embed the DrawMotive visual diagram editor in a web page. Start with TextGraph, move and edit shapes on the canvas, then export a PNG and an editable document.
+Embed the DrawMotive visual editor and compose your own document, save and publish flows. Each instance owns an isolated browser runtime. The public SDK exposes editing operations and state; the host owns files, accounts and external persistence.
 
-[Try the browser example](https://textgraph.dev/examples/editor/) · [Documentation](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
-
-Use **@drawmotive/textgraph** to render text to a PNG. Use **@drawmotive/editor** when people need to edit the resulting diagram visually. The editor runs locally in the browser; no account or rendering service is required.
+[Browser example](examples/browser/index.html) · [Documentation](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
 
 ## Install
 
 ```bash
-npm install @drawmotive/editor@0.2.2-alpha.2
+npm install @drawmotive/editor@alpha
 npx drawmotive-copy-assets public/editor
 ```
 
-Copy the assets again after every package upgrade. Deploy the complete `public/editor` directory with your application. For Vite, add `drawmotive-copy-assets public/editor` to both `predev` and `prebuild`.
+Copy the complete runtime after every upgrade. For Vite, run `drawmotive-copy-assets public/editor` in `predev` and `prebuild`. Serve runtime assets through HTTP(S), including `.wasm` as `application/wasm`; bundled applications must set `assetBaseUrl` explicitly.
 
-## Supported environments
-
-| Layer | Supported environment | Verification boundary |
-| --- | --- | --- |
-| Package development and asset-copy CLI | Node.js 22; npm 10 | Applications using Vite require Node 22.12+ on the 22 line |
-| Desktop build and packaging | Linux, Windows, macOS | CI targets all three systems with Node 22 |
-| Visual editor | Current Chromium on HTTPS or localhost | The browser suite covers Chromium; Firefox, WebKit and mobile browsers are not currently verified |
-| Server rendering | Import during SSR is supported | Mounting, editing and export require a browser; there is no Node or Worker editor |
-
-The standalone package audit on 2026-10-01 ran Linux x64 with Node 22.23.2
-and npm 10.9.8. Declared OS/Node support and CI jobs do not imply that the
-other platforms or the browser suite ran in that audit. Browser hosts need
-WebAssembly, JavaScript modules, browser storage and correct HTML/WASM serving.
-
-## Mount an editor
-
-Give the container an explicit height:
+## Create and edit
 
 ```html
-<div id="diagram-editor" style="height: 600px"></div>
+<div id="editor" style="height: 600px"></div>
 ```
 
 ```javascript
-import { initializeEditor } from '@drawmotive/editor';
+import { createEditor } from "@drawmotive/editor";
 
-const editor = await initializeEditor({
-  container: document.querySelector('#diagram-editor'),
-  assetBaseUrl: '/editor/',
-  source: 'User -> Application -> Database',
+const editor = await createEditor({
+  container: document.querySelector("#editor"),
+  assetBaseUrl: "/editor/",
+  ui: { buttons: { help: false } },
+  modules: { analytics: false, authentication: false, remoteSync: false },
 });
-
-const { raw, png, width, height } = await editor.exportDocument();
-// Persist raw to reopen the editable diagram. png is a base64-encoded PNG.
-await editor.importDocument(raw);
-
-// When the component unmounts:
+await editor.replaceTextGraph("User -> Application -> Database");
+await editor.fitViewport();
+const unsubscribe = editor.onStateChanged(state => console.log(state.revision));
+const snapshot = await editor.exportSnapshot({ formats: ["raw", "png"] });
+await persistDocument(snapshot.raw, snapshot.revision);
+unsubscribe();
 await editor.dispose();
 ```
 
-Omit `source` for a blank canvas, or pass `document: savedRaw` to reopen a saved diagram. Do not pass both. Initialization resolves after the editor and its initial diagram are ready.
+Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. Runtime IndexedDB is temporary and deleted during disposal; it is not a durable document file.
 
-The [complete HTML/JavaScript example](examples/browser/index.html) includes TextGraph input, visual editing, PNG download, and document save/open. Serve the package directory over localhost to run it without a bundler. Its import map resolves the package's own JavaScript and runtime files.
+## Operations
 
-## API
-
-| Method | Result |
+| Operation | Result or effect |
 | --- | --- |
-| `initializeEditor({ container, assetBaseUrl, source?, document?, signal?, title?, timeoutMs? })` | Ready `EditorInstance` |
-| `editor.importTextGraph(source)` | Replaces the diagram with laid-out TextGraph |
-| `editor.importDocument(raw)` | Replaces the diagram with an exported document |
-| `editor.exportDocument()` | `{ raw, png, width, height }` |
-| `editor.dispose()` | Removes the frame and releases the runtime |
+| `createEditor(options)` | Ready isolated instance |
+| `replaceDocument(raw)` | Validates and replaces; resets selection/history |
+| `replacePngDocument(base64)` | Validates a PNG with an embedded editable document, then replaces |
+| `replaceTextGraph(source)` / `clearDocument()` | Establishes a new document |
+| `exportSnapshot({ formats, render?, png? })` | Requested formats from one revision |
+| `fitViewport({ padding?, minScale?, maxScale? })` | Display only; defaults: 60, 0.2, 1 |
+| `setEditingEnabled(enabled)` | Controls user edits and JS history; loading/export remain available |
+| `undo()` / `redo()` | Applies document history |
+| `getState()` / `onStateChanged(listener)` | Current state / subscription with immediate replay |
+| `setActionState(id, { label?, enabled?, visible? })` | Updates a declared host action |
+| `dispose()` | Releases the frame and temporary storage |
 
-All methods return promises. Catch errors to show feedback in your application. Invalid imports preserve the current diagram. `signal` cancels initialization, including the initial import. `timeoutMs` defaults to 120000 for initialization and requests. Disposing rejects pending work and is safe to repeat.
+State contains `revision`, `health` (`healthy` or `faulted`), `editingEnabled`, `busy`, `canUndo` and `canRedo`. Revisions are opaque and instance-local. Document changes advance the revision; selection, zoom and pan do not. External save success confirms only its snapshot revision, so a delayed acknowledgment must not clear later edits. Undo may conservatively produce a new dirty revision even when content matches an earlier save.
 
-`raw` is an opaque base64 DrawMotive document, not TextGraph source. Save it to your own storage; the embedded editor uses temporary browser storage, which is not durable document storage. PNG output is a preview and does not replace the editable document.
+Invalid imports preserve the document. An unfinished gesture or text edit reports `EditorBusy`; operations do not silently cancel input. A failed local transaction may report `faulted` with `revision: null`, blocking snapshots and further changes until an explicit successful replacement restores the instance. External save failures are host errors and do not fault the runtime.
 
-## Browser deployment
+## Snapshots and PNG documents
 
-Serve over HTTPS or localhost with JavaScript modules and `.wasm` files (`application/wasm`). `assetBaseUrl` is the directory containing `embed.html`; use a URL that includes your application's deployment prefix. Without it, an unbundled import resolves assets relative to the installed package. Bundled applications should always set it explicitly.
+```javascript
+const snapshot = await editor.exportSnapshot({
+  formats: ["png"],
+  render: { scale: 2, maxWidth: 1920, padding: 10 },
+  png: { embedDocument: true },
+});
+await writeFile(snapshot.png.base64, snapshot.revision);
+```
 
-Each instance uses an iframe to isolate its styles, .NET runtime and document. The frame has an accessible title and fills the supplied container. Loading multiple editors loads multiple runtimes, so dispose instances when no longer needed. The package can be imported during SSR, but mounting requires a browser. There is no Node.js or Worker visual editor entry.
+Choose distinct formats: `raw`, `png`, `svg`. Raw-only export does not render. Render defaults are `scale: 1` and `padding: 10`, with no product width limit. PNG contains `base64`, pixel `width/height`, `scale`, and logical `displayWidth/displayHeight`. SVG is a logical-coordinate string; `render.roundSvgNumbers` optionally rounds its numbers.
 
-The frame uses Blazor's built-in concurrent WASM loader, with its normal integrity checks and browser caching. It does not depend on the TextGraph SDK's startup loader; upgrading `@drawmotive/textgraph` does not change the editor runtime.
+`png.embedDocument` defaults to false. When true, WASM inserts the editable document into the PNG from the same snapshot; hosts write the complete image without implementing chunks or CRC. PNG options require the PNG format. `replacePngDocument` rejects ordinary PNGs without embedded documents and damaged images without clearing the current diagram.
 
-The host application owns saving, upload, and collaboration. This initial browser API does not expose account login, server synchronization, custom toolbar adapters or TextGraph export.
+## Buttons and host actions
 
-## Development and release
+`ui.buttons` overrides built-in visibility. IDs are `undo`, `redo`, `arrow`, `rectangle`, `ellipse`, `diamond`, `text`, `sketchyMode`, `zoomIn`, `zoomOut`, `resetZoom`, `settings`, and `help`. All default visible except `help`. Visibility does not revoke editing permission or disable JS operations.
+
+Declare product actions in order through `ui.actions`. IDs use the `host.` namespace, labels are text, and icons use existing icon names. Actions default visible and enabled; Save, Publish, accounts and product buttons are not built in.
+
+```javascript
+const editor = await createEditor({
+  container, assetBaseUrl: runtimeUrl,
+  ui: { actions: [{
+    id: "host.save", label: "Save", icon: "save",
+    async onInvoke({ editor, signal }) {
+      const snapshot = await editor.exportSnapshot({ formats: ["png"], png: { embedDocument: true } });
+      await saveAndConfirm(snapshot, signal);
+    },
+  }] },
+});
+```
+
+Handlers stay in the parent. Independent reverse RPC lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
+
+## Isolation, modules and lifecycle
+
+One iframe isolates CSS, DOM and .NET globals; it is not an additional security sandbox or guaranteed process. A one-time bootstrap verifies the exact HTTP(S) runtime origin and iframe source, binds the URL nonce, and transfers a private `MessagePort`. All operations/state/actions then use protocol v2 on the port. The parent origin is not parsed, allowing a VS Code webview to host the SDK directly. The SDK is one browser module; SSR import is supported, while creation needs browser DOM, cryptographic random IDs and `MessageChannel`.
+
+`modules.analytics`, `authentication` and `remoteSync` default false and freeze before Blazor starts. The public build omits optional implementations; enabling absent modules fails explicitly. Full website builds may enable included modules. Remote sync requires authentication; disabled sync preserves local document/history operations.
+
+Startup cancellation uses `signal`; `startupTimeoutMs` defaults to 120000. After creation, explicit disposal owns the instance. `requestTimeoutMs` also defaults to 120000. An operation deadline throws `EditorError` with `code: RequestTimeoutUnknown`, `requestId`, `method`, and a `completion` promise. The frame/document remain available; no retry occurs and the late result retains its ID.
+
+```javascript
+try {
+  await editor.replaceDocument(raw);
+} catch (error) {
+  if (error.code === "RequestTimeoutUnknown") {
+    const { result, error: eventualError } = await error.completion;
+    // Reconcile the eventual outcome; never automatically retry a mutation.
+  } else throw error;
+}
+```
+
+`completion` resolves to `{ result }` or `{ error }`, including disposal before a response. Runtime errors retain `{ code, message }` on `EditorError`. Idempotent dispose is bounded by `disposeTimeoutMs` (default 5000), rejects pending work, cancels actions and removes the iframe. Missing cleanup acknowledgment rejects `DisposeCleanupUnconfirmed`; removal still completes. Page exit cleanup is best effort.
+
+## Verification and release
+
+Tooling requires Node.js 22+. Current Chromium is the verified visual-runtime target. CI declares Linux/Windows/macOS packaging; actual platform, mobile, Firefox/WebKit, VS Code and Forge checks must be reported separately. There is no Node/Worker visual editor.
 
 ```bash
 npm ci
 npm test
 npm run build
 npm run assets:verify
+npm run audit:package
 npx playwright install chromium
 npm run test:browser
 npm pack
 ```
 
-The package contains compiled runtime assets with an integrity manifest. Release checks verify their version, producer commit and hashes before packaging. No .NET SDK or private source checkout is needed to consume the package. The publication audit rejects original C#/Razor source, debug symbols, source maps and embedded portable PDBs. Compiled .NET assemblies are shipped and can be decompiled; this is not source secrecy or copy protection.
+Assets carry package version, exact committed producer and hashes. Native assets are rebuilt for each release; source, symbols, maps and embedded debug metadata are excluded. Package, wire protocol and document format have separate version contracts.
 
 ## License
 
-Package code is MIT licensed. Bundled dependencies and fonts retain their own license notices.
-See [NOTICE](NOTICE), [Contributing](CONTRIBUTING.md) and [Changelog](CHANGELOG.md).
-Vulnerability reports follow [Security reporting](SECURITY.md).
+MIT. Bundled dependencies and fonts retain notices. See [NOTICE](NOTICE), [Contributing](CONTRIBUTING.md), [Changelog](CHANGELOG.md) and [Security reporting](SECURITY.md).
