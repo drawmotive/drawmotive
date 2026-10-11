@@ -234,6 +234,25 @@ test('bounded disposal rejects pending work, reports unconfirmed cleanup and sta
   await assert.rejects(editor.dispose(), { code: 'DisposeCleanupUnconfirmed' });
 });
 
+test('a rejected runtime dispose still removes the frame, closes its port and preserves the cause', async t => {
+  const h = host(t);
+  const editor = await h.mount();
+  h.operation(() => ({ error: { code: 'InteractionBusy', message: 'Finish the current interaction.' } }));
+  const runtimePort = h.connections[0].transferred[0];
+  const closed = new Promise(resolve => runtimePort.once('close', resolve));
+  const disposal = editor.dispose();
+  await assert.rejects(disposal, error => {
+    assert.equal(error.code, 'DisposeCleanupUnconfirmed');
+    assert.equal(error.cause.code, 'InteractionBusy');
+    return true;
+  });
+  await closed;
+  assert.equal(h.frame(), null);
+  assert.equal(editor.lifecycle, 'disposed');
+  assert.equal(editor.dispose(), disposal);
+  await assert.rejects(editor.getState(), { code: 'EditorDisposed' });
+});
+
 test('creation and operation validation reject unknown or ambiguous options before any request', async t => {
   const h = host(t);
   const invalid = [
