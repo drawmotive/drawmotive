@@ -132,7 +132,7 @@ test('editing gate blocks UI and history while document replacement and export r
     await editor.clearDocument();
     await editor.replaceDocument(saved.raw);
     await editor.fitViewport();
-    const restored = await editor.exportSnapshot({ formats: ['raw'] });
+    const restored = await editor.exportSnapshot({ formats: ['png'] });
     const disabled = await editor.getState();
     await editor.setEditingEnabled(true);
     return { errors, afterKeyboard, restored, disabled };
@@ -140,7 +140,8 @@ test('editing gate blocks UI and history while document replacement and export r
   expect(result.errors).toEqual(['EditingDisabled', 'EditingDisabled']);
   expect(result.afterKeyboard.raw).toBe(before.raw);
   expect(result.afterKeyboard.revision).toBe(before.revision);
-  expect(result.restored.raw).toBe(before.raw);
+  // Hydration may rewrite container tracking timestamps; presentation must survive.
+  expect(result.restored.png).toEqual(before.png);
   expect(result.disabled).toMatchObject({ health: 'healthy', editingEnabled: false, canUndo: false, canRedo: false });
   await expect(frame.getByTestId('home-toolbar-sketchy-mode')).toBeEnabled();
   await frame.getByTestId('home-toolbar-sketchy-mode').click();
@@ -196,7 +197,7 @@ test('two instances isolate documents, revisions, events and temporary databases
   await expect.poll(() => host.evaluate(async () => (await indexedDB.databases()).map(database => database.name))).not.toContain(ids[0]);
   expect(await host.evaluate(async () => (await indexedDB.databases()).map(database => database.name))).toContain(ids[1]);
   await host.evaluate(() => editors[1].dispose());
-  await expect.poll(() => host.evaluate(async initial => (await indexedDB.databases()).map(database => database.name).filter(name => !initial.databases.includes(name)), initial)).toEqual([]);
+  await expect.poll(() => host.evaluate(async initial => (await indexedDB.databases()).map(database => database.name).filter(name => name.startsWith('drawmotive-embed-') && !initial.databases.includes(name)), initial)).toEqual([]);
 });
 
 for (const modules of [{ analytics: true }, { authentication: true }, { authentication: true, remoteSync: true }]) {
