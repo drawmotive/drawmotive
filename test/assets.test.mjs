@@ -14,13 +14,16 @@ test('asset verifier rejects tampering, extra files and symbolic links before co
   const content = '<!doctype html><title>Editor</title>';
   const file = path.join(root, 'generated/editor/embed.html');
   const manifest = {
-    schemaVersion: 1, protocolVersion: 1, packageName: '@drawmotive/editor', packageVersion: '0.2.1',
+    schemaVersion: 1, protocolVersion: 2, packageName: '@drawmotive/editor', packageVersion: '0.2.1',
     privateSource: { commit: 'a'.repeat(40) },
     assets: [{ path: 'editor/embed.html', bytes: content.length, sha256: createHash('sha256').update(content).digest('hex') }],
   };
   await writeFile(path.join(root, 'generated/editor-manifest.json'), JSON.stringify(manifest));
   await writeFile(file, content);
   await verifyAssets(root);
+  await writeFile(path.join(root, 'generated/editor-manifest.json'), JSON.stringify({ ...manifest, protocolVersion: 1 }));
+  await assert.rejects(verifyAssets(root), /manifest does not match/);
+  await writeFile(path.join(root, 'generated/editor-manifest.json'), JSON.stringify(manifest));
   await writeFile(file, 'changed');
   await assert.rejects(verifyAssets(root), /integrity/);
   await writeFile(file, content);
