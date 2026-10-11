@@ -35,6 +35,18 @@ async function create(host, options = {}) {
   return host.frameLocator('iframe');
 }
 
+function normalizedSvg(svg) {
+  // Skia allocates clip IDs globally across exports. Preserve geometry and
+  // reference topology while removing only those generated identity values.
+  const ids = new Map();
+  let normalized = svg.replace(/(<clipPath\b[^>]*\bid=")([^"]+)(")/g, (_match, before, id, after) => {
+    if (!ids.has(id)) ids.set(id, `clip-${ids.size}`);
+    return before + ids.get(id) + after;
+  });
+  normalized = normalized.replace(/url\(#([^)]+)\)/g, (match, id) => ids.has(id) ? `url(#${ids.get(id)})` : match);
+  return normalized;
+}
+
 test('host action exports a coherent embedded PNG and replacement restores the complete document', async ({ host }) => {
   await host.evaluate(async () => {
     const { createEditor } = await import('/src/index.js');
@@ -71,7 +83,7 @@ test('host action exports a coherent embedded PNG and replacement restores the c
   expect([...Buffer.from(result.saved.png.base64, 'base64').subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   expect(result.reopened.raw).toBe(result.saved.raw);
   expect(result.reopened.png).toEqual(result.saved.png);
-  expect(result.reopened.svg).toBe(result.saved.svg);
+  expect(normalizedSvg(result.reopened.svg)).toBe(normalizedSvg(result.saved.svg));
   expect(result.reopened.revision).not.toBe(result.saved.revision);
   expect(result.reopenedState).toMatchObject({ health: 'healthy', canUndo: false, canRedo: false });
 });
