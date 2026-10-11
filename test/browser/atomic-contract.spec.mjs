@@ -47,6 +47,14 @@ function normalizedSvg(svg) {
   return normalized;
 }
 
+async function pressCanvasShortcut(frame, key) {
+  // The runtime accepts canvas shortcuts only when the event target is body.
+  // Body is not normally focusable; pressing it after a toolbar click otherwise
+  // leaves the button as the actual keyboard target in Chromium.
+  await frame.locator('body').evaluate(body => { body.tabIndex = -1; body.focus(); });
+  await frame.locator('body').press(key);
+}
+
 test('host action exports a coherent embedded PNG and replacement restores the complete document', async ({ host }) => {
   await host.evaluate(async () => {
     const { createEditor } = await import('/src/index.js');
@@ -108,13 +116,13 @@ test('editing gate blocks UI and history while document replacement and export r
   await expect(frame.getByTestId('home-toolbar-undo')).toBeEnabled();
   const before = await host.evaluate(async () => {
     await editor.setEditingEnabled(false);
-    return editor.exportSnapshot({ formats: ['raw', 'png'], png: { embedDocument: true } });
+    return editor.exportSnapshot({ formats: ['raw', 'png'] });
   });
   for (const id of ['undo', 'redo', 'rectangle', 'circle', 'arrow', 'text', 'diamond', 'sketchy-mode']) {
     await expect(frame.getByTestId(`home-toolbar-${id}`)).toBeDisabled();
   }
-  await frame.locator('body').press('Control+z');
-  await frame.locator('body').press('Delete');
+  await pressCanvasShortcut(frame, 'Control+z');
+  await pressCanvasShortcut(frame, 'Delete');
   const result = await host.evaluate(async saved => {
     const errors = [];
     for (const operation of ['undo', 'redo']) {
@@ -122,7 +130,7 @@ test('editing gate blocks UI and history while document replacement and export r
     }
     const afterKeyboard = await editor.exportSnapshot({ formats: ['raw'] });
     await editor.clearDocument();
-    await editor.replacePngDocument(saved.png.base64);
+    await editor.replaceDocument(saved.raw);
     await editor.fitViewport();
     const restored = await editor.exportSnapshot({ formats: ['raw'] });
     const disabled = await editor.getState();
@@ -137,9 +145,16 @@ test('editing gate blocks UI and history while document replacement and export r
   await expect(frame.getByTestId('home-toolbar-sketchy-mode')).toBeEnabled();
   await frame.getByTestId('home-toolbar-sketchy-mode').click();
   await expect(frame.getByTestId('home-toolbar-undo')).toBeEnabled();
-  expect(await host.evaluate(async () => (await editor.getState()).revision)).not.toBe(result.restored.revision);
-  await frame.locator('body').press('Control+z');
-  await expect.poll(() => host.evaluate(() => editor.exportSnapshot({ formats: ['raw'] }).then(snapshot => snapshot.raw))).toBe(before.raw);
+  const edited = await host.evaluate(() => editor.getState());
+  expect(edited.revision).not.toBe(result.restored.revision);
+  await pressCanvasShortcut(frame, 'Control+z');
+  await expect(frame.getByTestId('home-toolbar-redo')).toBeEnabled();
+  const undone = await host.evaluate(async () => ({ state: await editor.getState(), snapshot: await editor.exportSnapshot({ formats: ['png'] }) }));
+  expect(undone.state.revision).not.toBe(edited.revision);
+  expect(undone.state).toMatchObject({ editingEnabled: true, canUndo: false, canRedo: true });
+  // Undo writes fresh LWW timestamps, so raw bytes need not equal the original.
+  // A PNG without embedded document metadata compares the restored appearance.
+  expect(undone.snapshot.png).toEqual(before.png);
   await host.evaluate(() => editor.dispose());
 });
 
@@ -181,7 +196,7 @@ test('two instances isolate documents, revisions, events and temporary databases
   await expect.poll(() => host.evaluate(async () => (await indexedDB.databases()).map(database => database.name))).not.toContain(ids[0]);
   expect(await host.evaluate(async () => (await indexedDB.databases()).map(database => database.name))).toContain(ids[1]);
   await host.evaluate(() => editors[1].dispose());
-  await expect.poll(() => host.evaluate(async () => (await indexedDB.databases()).map(database => database.name).filter(name => !initial.databases.includes(name)), initial)).toEqual([]);
+  await expect.poll(() => host.evaluate(async initial => (await indexedDB.databases()).map(database => database.name).filter(name => !initial.databases.includes(name)), initial)).toEqual([]);
 });
 
 for (const modules of [{ analytics: true }, { authentication: true }, { authentication: true, remoteSync: true }]) {
