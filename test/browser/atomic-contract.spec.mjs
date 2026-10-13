@@ -47,6 +47,26 @@ function normalizedSvg(svg) {
   return normalized;
 }
 
+function splitPngDocument(base64) {
+  const png = Buffer.from(base64, 'base64');
+  const image = [png.subarray(0, 8)];
+  const documents = [];
+  const prefix = Buffer.from('drawmotive\0');
+  for (let offset = 8; offset < png.length;) {
+    const length = png.readUInt32BE(offset);
+    const end = offset + length + 12;
+    expect(end).toBeLessThanOrEqual(png.length);
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    if (png.toString('ascii', offset + 4, offset + 8) === 'tEXt'
+        && data.subarray(0, prefix.length).equals(prefix)) {
+      documents.push(data.subarray(prefix.length).toString('ascii'));
+    } else image.push(png.subarray(offset, end));
+    offset = end;
+  }
+  expect(documents).toHaveLength(1);
+  return { raw: documents[0], image: Buffer.concat(image).toString('base64') };
+}
+
 async function pressCanvasShortcut(frame, key) {
   // The runtime accepts canvas shortcuts only when the event target is body.
   // Body is not normally focusable; pressing it after a toolbar click otherwise
@@ -89,8 +109,14 @@ test('host action exports a coherent embedded PNG and replacement restores the c
   expect(result.actionAborted).toBe(false);
   expect(result.saved.svg).toContain('<svg');
   expect([...Buffer.from(result.saved.png.base64, 'base64').subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-  expect(result.reopened.raw).toBe(result.saved.raw);
-  expect(result.reopened.png).toEqual(result.saved.png);
+  const savedPng = splitPngDocument(result.saved.png.base64);
+  const reopenedPng = splitPngDocument(result.reopened.png.base64);
+  expect(savedPng.raw).toBe(result.saved.raw);
+  expect(reopenedPng.raw).toBe(result.reopened.raw);
+  // Import rebuilds unordered CRDT dictionaries; compare presentation separately
+  // from the opaque document bytes embedded coherently in each snapshot.
+  expect(reopenedPng.image).toBe(savedPng.image);
+  expect({ ...result.reopened.png, base64: null }).toEqual({ ...result.saved.png, base64: null });
   expect(normalizedSvg(result.reopened.svg)).toBe(normalizedSvg(result.saved.svg));
   expect(result.reopened.revision).not.toBe(result.saved.revision);
   expect(result.reopenedState).toMatchObject({ health: 'healthy', canUndo: false, canRedo: false });
