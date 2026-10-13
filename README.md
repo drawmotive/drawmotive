@@ -13,6 +13,12 @@ npx drawmotive-copy-assets public/editor
 
 Copy the complete runtime after every upgrade. For Vite, run `drawmotive-copy-assets public/editor` in `predev` and `prebuild`. Serve runtime assets through HTTP(S), including `.wasm` as `application/wasm`; bundled applications must set `assetBaseUrl` explicitly.
 
+Hosts with an authenticated resource transport can supply `frameDocument: { url, html }`.
+The bootstrap URL must be HTTP(S) on the host's own origin; the SDK loads it before
+writing trusted runtime HTML so its service worker remains available. The host
+owns that HTML's CSP and resource base. The SDK still authenticates the frame
+window and bootstrap origin before opening its private message port.
+
 ## Create and edit
 
 ```html

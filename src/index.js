@@ -41,7 +41,7 @@ function runtimeError(value) {
   return new EditorError(value.code, value.message);
 }
 function configuration(options) {
-  keys(options, ['container', 'assetBaseUrl', 'ui', 'modules', 'signal', 'title', 'startupTimeoutMs', 'requestTimeoutMs', 'disposeTimeoutMs'], 'editor');
+  keys(options, ['container', 'assetBaseUrl', 'frameDocument', 'ui', 'modules', 'signal', 'title', 'startupTimeoutMs', 'requestTimeoutMs', 'disposeTimeoutMs'], 'editor');
   const ui = options.ui ?? {};
   keys(ui, ['buttons', 'actions'], 'ui');
   const overrides = ui.buttons ?? {};
@@ -111,13 +111,37 @@ export async function createEditor(options = {}) {
   if (!assetBase.pathname.endsWith('/')) assetBase.pathname += '/';
   assetBase.search = '';
   assetBase.hash = '';
-  const frameUrl = new URL('embed.html', assetBase);
+  const documentOptions = options.frameDocument;
+  if (documentOptions !== undefined) {
+    keys(documentOptions, ['url', 'html'], 'frameDocument');
+    text(documentOptions.html, 'frameDocument.html');
+  }
+  const frameUrl = documentOptions === undefined ? new URL('embed.html', assetBase) : new URL(documentOptions.url, hostDocument.baseURI);
+  if (!['https:', 'http:'].includes(frameUrl.protocol) || frameUrl.username || frameUrl.password
+      || (documentOptions && frameUrl.origin !== hostWindow.location.origin)) {
+    throw new TypeError('frameDocument.url must be an HTTP(S) URL on the host origin');
+  }
   const nonce = hostWindow.crypto.randomUUID();
   frameUrl.hash = new URLSearchParams({ nonce }).toString();
   const frame = hostDocument.createElement('iframe');
   frame.title = title;
   frame.style.cssText = 'display:block;width:100%;height:100%;border:0;';
   frame.src = frameUrl.href;
+  if (documentOptions) {
+    // A host-provided bootstrap document retains its service worker controller.
+    // srcdoc/about:blank cannot reliably load authenticated VS Code resources.
+    frame.addEventListener('load', () => {
+      try {
+        const document = frame.contentDocument;
+        document.open();
+        // document.open inherits the parent's URL, including its hash. Restore
+        // the authenticated nonce before any runtime module executes.
+        frame.contentWindow.history.replaceState(null, '', frameUrl.href);
+        document.write(documentOptions.html);
+        document.close();
+      } catch (error) { close(error); }
+    }, { once: true });
+  }
   let lifecycle = 'loading';
   let latestState;
   let sequence = 0;

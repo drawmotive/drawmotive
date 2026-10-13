@@ -21,6 +21,9 @@ export interface EditorCreateOptions {
   container: HTMLElement;
   /** HTTP(S) directory containing embed.html and its complete runtime. */
   assetBaseUrl?: string | URL;
+  /** Trusted runtime HTML loaded into a same-origin HTTP(S) bootstrap document.
+   * The host owns the document's CSP and authenticated asset transport. */
+  frameDocument?: { url: string | URL; html: string };
   title?: string;
   ui?: { buttons?: Partial<Record<EditorButtonId, boolean>>; actions?: readonly EditorAction[] };
   /** Defaults are all false. Enabling a module absent from the build fails. */

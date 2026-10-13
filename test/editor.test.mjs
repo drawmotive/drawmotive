@@ -104,6 +104,24 @@ test('foreign windows/origins cannot connect and window responses cannot resolve
   await editor.dispose();
 });
 
+test('host documents authenticate the bootstrap origin independently of the runtime asset origin', async t => {
+  const h = host(t);
+  const html = '<!doctype html><div id=app></div>';
+  const promise = createEditor({ ...h.options, frameDocument: { url: 'https://app.example/bootstrap.html?session=1', html } });
+  assert.equal(new URL(h.frame().src).origin, 'https://app.example');
+  const nonce = new URL(h.frame().src).hash;
+  h.frame().dispatchEvent(new h.dom.window.Event('load'));
+  assert.equal(h.frame().contentDocument.querySelector('#app')?.id, 'app');
+  assert.equal(h.frame().contentWindow.location.hash, nonce);
+  h.listen();
+  h.hello();
+  assert.equal(h.connections.length, 0, 'The asset origin does not authenticate a host document.');
+  h.hello({ origin: 'https://app.example' });
+  assert.equal(h.connections[0].origin, 'https://app.example');
+  h.ready();
+  await (await promise).dispose();
+});
+
 test('a custom-scheme parent does not need HTTP origin parsing', async t => {
   const h = host(t, 'vscode-webview://instance-id/editor');
   const editor = await h.mount();
