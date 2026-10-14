@@ -13,7 +13,7 @@ const alpha={...release,version:"0.2.2-alpha.1",tag:"alpha",gitTag:"editor-v0.2.
 test("release policy binds exact stable and alpha versions to explicit npm channels",()=>{
  for(const [version,channel,tag] of [["0.2.2","stable","latest"],["0.2.2-alpha.1","alpha","alpha"]]) {
   const pkg={name:release.name,version,publishConfig:{access:"public",registry:"https://registry.npmjs.org/",tag}};
-  const target={version,releaseVersion:version,channel};
+  const target={schemaVersion:1,version,releaseVersion:version,channel};
   const identity=releasePolicy(pkg,target);
   assert.equal(identity.tag,tag);assert.equal(identity.gitTag,`editor-v${version}`);
   assert.throws(()=>releasePolicy(pkg,{...target,channel:channel==="alpha"?"stable":"alpha"}),/channel.version/);
@@ -22,7 +22,7 @@ test("release policy binds exact stable and alpha versions to explicit npm chann
   assert.throws(()=>releasePolicy({...pkg,publishConfig:{...pkg.publishConfig,tag:tag==="alpha"?"latest":"alpha"}},target));
  }
  for(const version of ["0.2.2-beta.1","0.2.2-alpha.01","0.2.2+build","v0.2.2"]) {
-  assert.throws(()=>releasePolicy({name:release.name,version},{version,releaseVersion:version,channel:"alpha"}),/stable or alpha/);
+  assert.throws(()=>releasePolicy({name:release.name,version},{schemaVersion:1,version,releaseVersion:version,channel:"alpha"}),/historical release version/);
  }
 });
 test("release identity binds branch dispatch, requested version and immutable Actions commit",()=>{
@@ -99,4 +99,21 @@ test("a first publication may acquire latest, while an existing package without 
   if(exists) await assert.rejects(result,/changed an existing latest/);
   else assert.equal(await result,"published");
  }
+});
+
+test("numeric release targets use patch zero for stable and every patch one through nine for previews",()=>{
+ for(let patch=0;patch<=9;patch++) {
+  const version='0.3.'+patch,tag=patch===0?'latest':'alpha',channel=patch===0?'stable':'alpha';
+  const pkg={name:release.name,version,publishConfig:{access:"public",registry:"https://registry.npmjs.org/",tag}};
+  const identity=releasePolicy(pkg,{schemaVersion:2,version,releaseVersion:version,channel});
+  assert.equal(identity.tag,tag);assert.equal(identity.releaseSchemaVersion,2);
+ }
+ for(const version of ['0.3.1-alpha.1','0.3.10','00.3.1']) {
+  assert.throws(()=>releasePolicy({name:release.name,version},{schemaVersion:2,version,releaseVersion:version,channel:'alpha'}),/suffixes are forbidden/);
+ }
+});
+test("numeric preview publication preserves latest and rejects a newer historical registry default",async()=>{
+ const preview={...alpha,version:'0.3.2'};let reads=0;
+ assert.equal(await publishArtifact(preview,'/release',{run:async()=>{},delay:async()=>{},readState:async()=>++reads===1?state(false,{latest:'0.3.0',alpha:'0.3.1'}):state(true,{latest:'0.3.0',alpha:preview.version})}),'published');
+ await assert.rejects(publishArtifact(preview,'/release',{run:async()=>assert.fail('must not downgrade'),readState:async()=>state(false,{latest:'0.3.12'})}),/Refusing an older/);
 });

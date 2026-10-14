@@ -8,24 +8,26 @@ import { promisify } from "node:util";
 import { checkComponent } from "../.release/check.cjs";
 import { auditPackageFiles } from "./audit-package.mjs";
 
+import { releaseChannel, releaseTag, compareReleaseVersions } from "../.release/release-version.cjs";
+
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
 const readJson = async file => JSON.parse(await readFile(file, "utf8"));
 const registry = "https://registry.npmjs.org/";
-const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-alpha\.(0|[1-9]\d*))?$/;
 
 /** Publish channels are derived from the coordinated version, never CLI defaults. */
 export function releasePolicy(pkg, target) {
   assert.equal(pkg.name, "@drawmotive/editor");
-  assert.match(pkg.version, versionPattern, "Expected a stable or alpha release version.");
+  assert.ok([1, 2].includes(target.schemaVersion), "Unknown release target schema.");
+  const options = { legacy: target.schemaVersion === 1 };
+  const channel = releaseChannel(pkg.version, options);
   assert.equal(target.version, pkg.version, "Package version must match the release target.");
   assert.equal(target.releaseVersion, pkg.version, "Coordinated release version must match the package.");
-  const alpha = pkg.version.includes("-");
-  assert.equal(target.channel, alpha ? "alpha" : "stable", "Release channel/version mismatch.");
-  const tag = alpha ? "alpha" : "latest";
+  assert.equal(target.channel, channel, "Release channel/version mismatch.");
+  const tag = releaseTag(pkg.version, options);
   assert.notEqual(pkg.private, true);
   assert.deepEqual(pkg.publishConfig, { access: "public", registry, tag });
-  return { name: pkg.name, version: pkg.version, tag, gitTag: `editor-v${pkg.version}`, filename: `drawmotive-editor-${pkg.version}.tgz` };
+  return { name: pkg.name, version: pkg.version, tag, gitTag: `editor-v${pkg.version}`, filename: `drawmotive-editor-${pkg.version}.tgz`, ...(options.legacy ? {} : { releaseSchemaVersion: 2 }) };
 }
 
 /** The generated target owns package identity and the verified native producer. */
@@ -54,6 +56,7 @@ async function npm(args) {
 export async function verifyArtifact(directory, expected, commit) {
   const receipt = await readJson(path.join(directory, "npm-release.json"));
   for (const key of ["name", "version", "tag", "gitTag", "filename"]) assert.equal(receipt[key], expected[key], `Artifact ${key} mismatch`);
+  assert.equal(receipt.releaseSchemaVersion, expected.releaseSchemaVersion, 'Artifact release schema mismatch');
   assert.equal(receipt.commit, commit, "Artifact source commit mismatch");
   const bytes = await readFile(path.join(directory, expected.filename));
   assert.equal(receipt.integrity, `sha512-${createHash("sha512").update(bytes).digest("base64")}`, "Artifact integrity mismatch");
@@ -99,22 +102,11 @@ export async function registryState(release, fetchRegistry = fetch) {
   return { published, exists: true, tagged: channels[release.tag] === release.version, tags: channels };
 }
 
-function compareVersions(left, right) {
-  const parse = version => {
-    assert.match(version, versionPattern, "Unsupported registry release version");
-    return version.split(/\.|-alpha\./).map(BigInt);
-  };
-  const a = parse(left), b = parse(right);
-  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
-  if (a.length !== b.length) return a.length === 3 ? 1 : -1;
-  return a[3] === b[3] ? 0 : a[3] > b[3] ? 1 : -1;
-}
-
 /** Refuse both channel rollback and an alpha older than the current stable release. */
 function assertRegistryPolicy(release, state) {
   for (const tag of new Set(["latest", release.tag])) {
     const current = state.tags[tag];
-    if (current !== undefined) assert.ok(compareVersions(release.version, current) >= 0, `Refusing an older ${tag} release.`);
+    if (current !== undefined) assert.ok(compareReleaseVersions(release.version, current) >= 0, `Refusing an older ${tag} release.`);
   }
 }
 

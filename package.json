@@ -31,7 +31,8 @@
     "prepack": "node .release/check.cjs --ready && npm test && npm run build && npm run audit:package",
     "release:check": "node .release/check.cjs --ready",
     "assets:verify": "node scripts/verify-assets.mjs",
-    "audit:package": "node scripts/audit-package.mjs"
+    "audit:package": "node scripts/audit-package.mjs",
+    "test:release": "node --test --test-concurrency=1 test/npm-release.test.mjs"
   },
   "repository": {
     "type": "git",
