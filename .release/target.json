@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.2-alpha.8",
+  "releaseVersion": "0.2.2-alpha.9",
   "channel": "alpha",
   "name": "@drawmotive/editor",
-  "version": "0.2.2-alpha.8",
+  "version": "0.2.2-alpha.9",
   "dependencies": {},
   "native": true,
   "publishable": true,
-  "nativeSourceCommit": "7a28af02b87d1ed65739bb898efa33a317829446"
+  "nativeSourceCommit": "b7f451caaa917bdcce8d151074a482eb0f2ffe4d"
 }
