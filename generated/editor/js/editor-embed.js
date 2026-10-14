@@ -5,6 +5,10 @@ const nonce = new URLSearchParams(location.hash.slice(1)).get("nonce");
 if (parent === window || !nonce || !/^[a-zA-Z0-9-]{16,128}$/.test(nonce))
   throw new Error("A valid DrawMotive embedding context is required.");
 const drawingId = "drawmotive-embed-" + crypto.randomUUID();
+// Resource URLs can belong to an authenticated host transport whose hostname
+// .NET cannot parse. Navigation belongs to the actual document, not that transport.
+const assetBaseUrl = document.baseURI;
+const navigationBaseUrl = new URL("./", location.href).href;
 let port;
 let options;
 let reference;
@@ -24,6 +28,7 @@ const freeze = value => {
 
 globalThis.drawmotiveEmbed = Object.freeze({
   getDrawingId: () => drawingId,
+  getAssetBaseUrl: () => assetBaseUrl,
   getOptions: () => JSON.stringify(options),
   failed: error => send({ type: "error", error: typeof error === "string" ? { code: "StartupFailed", message: error } : failure(error) }),
   ready: (dotnetReference, stateJson) => {
@@ -87,7 +92,13 @@ async function connect(event) {
   try {
     if (!message.options || typeof message.options !== "object") throw new TypeError("Missing creation options.");
     options = freeze(message.options);
-    await Blazor.start();
+    Blazor._internal.navigationManager.getBaseURI = () => navigationBaseUrl;
+    await Blazor.start({
+      loadBootResource: (type, _name, uri, integrity) => {
+        const url = new URL(uri, assetBaseUrl).href;
+        return type === "dotnetjs" ? url : fetch(url, { cache: "no-cache", integrity });
+      },
+    });
   } catch (error) {
     globalThis.drawmotiveEmbed.failed(error);
     document.getElementById("app").textContent = "The editor could not start.";
