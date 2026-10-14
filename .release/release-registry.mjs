@@ -3,27 +3,17 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { downloadReleaseBytes, ReleaseDownloadHttpError } from './release-download.mjs';
+import { releaseTag, compareReleaseVersions } from './release-version.cjs';
+export { compareReleaseVersions };
 
 export const registry = 'https://registry.npmjs.org/';
 export const integrity = bytes => 'sha512-' + createHash('sha512').update(bytes).digest('base64');
-
-/** Channel comparisons use integers and explicit stable graduation, never lexical order. */
-export function compareReleaseVersions(left, right) {
-  const parse = version => {
-    assert.match(version, /^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(?:-alpha[.](0|[1-9][0-9]*))?$/);
-    const [main, alpha] = version.split('-alpha.');
-    return [...main.split('.').map(BigInt), alpha === undefined ? 1n : 0n, BigInt(alpha ?? 0)];
-  };
-  const a = parse(left), b = parse(right);
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
-  return 0;
-}
 
 /** A registry receipt must describe the real archive; visible conflicts fail immediately. */
 export async function npmState(receipt, request = fetch) {
   assert.match(receipt.name, /^(?:@[a-z0-9][a-z0-9._-]*[/])?[a-z0-9][a-z0-9._-]*$/);
   compareReleaseVersions(receipt.version, receipt.version);
-  assert.equal(receipt.tag, receipt.version.includes('-') ? 'alpha' : 'latest');
+  assert.equal(receipt.tag, releaseTag(receipt.version, { legacy: receipt.releaseSchemaVersion !== 2 }));
   // Each metadata read owns its budget. Large archive transfers between them
   // must not consume the following channel lookup's timeout.
   const options = () => ({ headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30000), redirect: 'error' });

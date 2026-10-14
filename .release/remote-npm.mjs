@@ -38,7 +38,7 @@ export function validateNpmPublisherRecord(identity, publisher, version) {
 /** Corrections may add/update publisher transport only. Targets, product bytes,
  * helper deletion and renames cannot borrow an existing tested archive's approval. */
 export function validateNpmPublisherChanges(identity, rows) {
-  const allowed = new Set([identity.workflow, ...identity.helperPrefixes.flatMap(prefix => ['remote-npm', 'release-registry', 'release-download'].map(helper => prefix + '.release/' + helper + '.mjs'))]);
+  const allowed = new Set([identity.workflow, ...identity.helperPrefixes.flatMap(prefix => [...['remote-npm', 'release-registry', 'release-download'].map(helper => prefix + '.release/' + helper + '.mjs'), prefix + '.release/release-version.cjs'])]);
   assert.ok(rows.length && rows.every(row => { const [status, file, extra] = row.split('\t'); return ['A', 'M'].includes(status) && !extra && allowed.has(file); }), 'Publisher changed tested package inputs');
 }
 
@@ -72,6 +72,7 @@ export async function publishRetainedNpm({ directory, componentRoot, env = proce
   assert.equal(pkg.repository.url, 'https://github.com/' + env.GITHUB_REPOSITORY + '.git');
   assert.equal(evidence.receipt.name, pkg.name); assert.equal(evidence.receipt.version, pkg.version);
   assert.equal(target.version, pkg.version); assert.equal(target.publishable, true);
+  if (target.schemaVersion === 2) assert.equal(evidence.receipt.releaseSchemaVersion, 2, 'Retained receipt version policy differs from the candidate target');
   assert.equal(evidence.receipt.integrity, env.ARTIFACT_INTEGRITY, 'Dispatch archive hash differs');
   assert.equal(evidence.receipt.filename, env.ARCHIVE_FILE, 'Dispatch archive filename differs');
   const errors = createRequire(path.join(componentRoot, 'package.json'))(path.join(componentRoot, '.release/check.cjs')).checkComponent(componentRoot, { ready: true });
