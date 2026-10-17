@@ -4,6 +4,61 @@ Embed the DrawMotive visual editor and compose your own document, save and publi
 
 [Browser example](examples/browser/index.html) · [Documentation](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
 
+## Example output
+
+<!-- public-preview:start -->
+
+```textgraph
+shopping(info): Shopping {
+  browse -> checkout
+}
+
+processing(primary): Behind the scenes {
+  payment -> saved : Yes
+  payment ->(dashed warning) retry : No
+  retry ->(dashed warning) payment
+  saved -> email
+}
+
+delivery(success): Delivery {
+  pack -> ship -> arrived
+}
+
+checkout -> payment
+saved -> pack
+
+browse: Browse the shop
+checkout: Place an order
+payment(diamond fill primary): Payment\naccepted?
+retry(warning): Try another\npayment
+saved: Save the order
+email: Send confirmation\nemail
+pack: Prepare the package
+ship: Ship the package
+arrived(ellipse fill success): Package arrives
+```
+
+![Online order: shopping, a payment decision and retry, confirmation, and delivery.](examples/online-order.png)
+
+[Open the full diagram](examples/online-order.png) · [Copy the source](examples/online-order.textgraph) · [Try this diagram](https://textgraph.dev/playground?d=1.eJxtkcFqwzAQRO_6ij3ah_yADimEnksgvRRy2UqbaIm9EivHwZT-e5GlJAR6MlppZmeec4gpsZw7llPsLRzaGX4MwLfGWybYbMEFcpd4ncyvMUmjo5yLKCmPqEtvYUeBxcMUCLIjobwaJFxGkqk4ZJzJg4Uvyi8XncccyMMNVVjOPShNuoCFj2igHf551QwMNOPNFmhEHkpATwPPpEuXr64k7S28t1FL5S5rpMCpfFGVZ_JFeu9ZxvcVjwVFZ0yFYmFX4ayNQ0wPqYX9gI4ABaJ6UtN8Os84RvFw4mGAJ7l9vT4KOkdpIv9m1tbdvauFT10AJU6B9CgvsSwccK4h6rIVgoUDiQcX5cQ64sRRjlLxlA4W9koJterKBM9kCo3y_zm9jBucjoaBU6aa_gl2X581htn8AYyRzTM)
+
+<!-- public-preview:end -->
+
+For Chinese, Japanese, and color emoji, see the [packaged font examples](https://github.com/drawmotive/textgraph/tree/main/language-packs#language-coverage).
+
+## Running in a browser
+
+![The standalone DrawMotive demo inside Chromium, including browser tabs and address bar, TextGraph controls, and editable canvas.](examples/editor-browser.png)
+
+Serve the [browser example](examples/browser/index.html) over HTTP to generate the diagram and edit it visually.
+
+To refresh documentation captures from the parent workspace, run
+`npm run docs:capture -- editor`, then `npm run docs:previews -- sync` and
+`npm run docs:previews -- check`. This uses the unchanged browser example,
+headed Chromium, an isolated Xvfb display and a real display capture. Browser
+tabs and address bar must be visible. The adjacent capture record contains
+application/package versions, dimensions and source/pixel hashes.
+
 ## Install
 
 ```bash

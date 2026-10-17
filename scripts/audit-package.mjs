@@ -224,7 +224,11 @@ export function auditPackage(root = fileURLToPath(new URL("../", import.meta.url
   if (process.platform === "win32") args.unshift(process.env.npm_execpath ?? path.join(path.dirname(process.execPath), "node_modules/npm/bin/npm-cli.js"));
   const packed = JSON.parse(execFileSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }));
   if (packed.length !== 1 || !Array.isArray(packed[0].files)) throw new Error("Unexpected npm pack file list");
-  return auditPackageFiles(root, packed[0].files.map(file => file.path));
+  const files = packed[0].files.map(file => file.path);
+  for (const required of ["examples/online-order.png", "examples/online-order.textgraph", "examples/editor-browser.png"]) {
+    if (!files.includes(required)) throw new Error("Missing public README example: " + required);
+  }
+  return auditPackageFiles(root, files);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

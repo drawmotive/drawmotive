@@ -1,0 +1,13 @@
+{
+  "sha256": "91fa19ba4a9aa1b7e0f77a65c6d3cc3d1e410953a2f73fafee74781e54fd605b",
+  "sourceSha256": "a29f2ab9e5afe748c2af3eb24ae576ff73793280f02e3fd552ffd5f233a5c62a",
+  "application": "Chromium",
+  "version": "153.0.8010.12",
+  "editor": "0.2.2-alpha.9",
+  "width": 1600,
+  "height": 1200,
+  "source": "online-order.textgraph",
+  "outer": 1199,
+  "inner": 1112,
+  "title": "DrawMotive editor · Browser example"
+}
