@@ -62,7 +62,7 @@ application/package versions, dimensions and source/pixel hashes.
 ## Install
 
 ```bash
-npm install @drawmotive/editor@alpha
+npm install @drawmotive/editor@0.3.0
 npx drawmotive-copy-assets public/editor
 ```
 
