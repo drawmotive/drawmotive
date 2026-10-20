@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "releaseVersion": "0.3.0",
+  "channel": "stable",
+  "name": "@drawmotive/editor",
+  "version": "0.3.0",
+  "dependencies": {},
+  "native": true,
+  "publishable": true,
+  "nativeSourceCommit": "b601abb9aaa52d4d466eec7c70861d822fe06054"
+}
