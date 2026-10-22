@@ -1,6 +1,6 @@
 {
-  "sha256": "b9f205db94c450833a47043b667f9b7101287314e1a4e204db08dfb630f27714",
-  "sourceSha256": "a424964e34c88bb5f81feb46a3abd63b0ae55781eec78d1fcad6605d1f6a4bef",
+  "sha256": "ddfa186a228e3abc8b96d516bdb1526e48c01c40009d1b41cfcc903a3566b784",
+  "sourceSha256": "58a7f563a99975f36e94ac6d18c2a4d8ee5fbb5294791890a2204e707d4043fe",
   "application": "Chromium",
   "version": "153.0.8010.12",
   "editor": "0.3.0",

@@ -12,8 +12,8 @@ Embed the DrawMotive visual editor and compose your own document, save and publi
 (horizontal)
 
 checkout(primary): Checkout {
-  order -> payment
-  payment ->(dashed warning) order : No, retry
+  pay -> payment
+  payment ->(dashed warning) pay : No, retry
 }
 
 fulfillment(success): Fulfillment {
@@ -24,7 +24,7 @@ fulfillment(success): Fulfillment {
 payment -> ship : Yes
 payment -> email : Yes
 
-order: Place order
+pay: Pay for order
 payment(diamond fill primary): Paid?
 ship: Ship order
 email: Email receipt
@@ -33,7 +33,7 @@ delivered(ellipse fill success): Delivered
 
 ![Online order: checkout and fulfillment, with a payment decision, a dashed retry loop, and parallel shipping and email receipt branches.](examples/online-order.png)
 
-[Open the full diagram](examples/online-order.png) · [Copy the source](examples/online-order.textgraph) · [Try this diagram](https://textgraph.dev/playground?d=1.eJxNj71uwzAQg_d7Co4y0LyAhmToz1gE6NRRkC71obIkSHILp-i7F5KduNuB4H0k1RizXGOoxg9EdmT7GeeqUpbJ5GXQeNwk_BAQs-OMwxHJLBOHSrhdOByVM2Vkh2-Tg4SPYXNrvMYHZK55oV-iy-wv4n37UWW2lksZNF52tQeVUVLLcezlizM7Angy4htij1x9Gu9c_qvducnUW2icvbG8VrpZlRMzxeDQorFPPhtxJ2pojbcWsH51qsZzh2e2LKnSvaBi7yUVXmH7sqf7gj9nDXvi)
+[Open the full diagram](examples/online-order.png) · [Copy the source](examples/online-order.textgraph) · [Try this diagram](https://textgraph.dev/playground?d=1.eJxNj71uwzAMhHc9xY0y0LyAhnToz1gEyNRRkOiaqCwJlNzAKfruheQ07kTiw_GOp6ckfE2x2jAo5SZyn2mpOgvPVtbB4OmG8K2AbFccjm3MFOsG2obDUXtbJvK4WIkcP4auNXhLDxCqsqofpcYljBxCu9BlcY5KGQxed9pDysS5pXgK_EVCXgE0Ww7NYg_cdAbvVP7Trrzhxg1OdsWYBEk8yZ9Ue7Zzih4tGnvdk2X_qJq1wbkFbFfd1eClmws54lzV_UFNIXAutJntzZ7vDX4BE_J6GA)
 
 <!-- public-preview:end -->
 
