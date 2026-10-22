@@ -1,9 +1,9 @@
 {
-  "sha256": "91fa19ba4a9aa1b7e0f77a65c6d3cc3d1e410953a2f73fafee74781e54fd605b",
-  "sourceSha256": "a29f2ab9e5afe748c2af3eb24ae576ff73793280f02e3fd552ffd5f233a5c62a",
+  "sha256": "ddfa186a228e3abc8b96d516bdb1526e48c01c40009d1b41cfcc903a3566b784",
+  "sourceSha256": "58a7f563a99975f36e94ac6d18c2a4d8ee5fbb5294791890a2204e707d4043fe",
   "application": "Chromium",
   "version": "153.0.8010.12",
-  "editor": "0.2.2-alpha.9",
+  "editor": "0.3.0",
   "width": 1600,
   "height": 1200,
   "source": "online-order.textgraph",
