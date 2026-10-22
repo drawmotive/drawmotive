@@ -100,6 +100,8 @@ await editor.dispose();
 
 Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. Runtime IndexedDB is temporary and deleted during disposal; it is not a durable document file.
 
+TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to the saved document and do not rewrite TextGraph. Calling `replaceTextGraph()` again creates a replacement document; it does not merge source changes with earlier canvas edits.
+
 ## Operations
 
 | Operation | Result or effect |
