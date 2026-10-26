@@ -439,6 +439,13 @@ export function RegisterKeyCode(globalDocument, eventNames, id, elementRef, only
 
         const eventId = Math.random().toString(36).slice(2);
         let fired = false;
+        // Keyboard gestures need document-level releases, including outside the canvas.
+        let pointerButtons = 0;
+        const handlerPointer = e => { pointerButtons = e.buttons; };
+        const handlerBlur = () => { pointerButtons = 0; };
+        for (const name of ['pointerdown', 'pointerup', 'pointercancel'])
+            document.addEventListener(name, handlerPointer, true);
+        window.addEventListener('blur', handlerBlur);
 
         const handlerKeydown = function (e) {
             if (!fired || !preventMultipleKeydown) {
@@ -480,7 +487,9 @@ export function RegisterKeyCode(globalDocument, eventNames, id, elementRef, only
                     if (isStopPropagation) {
                         e.stopPropagation();
                     }
-                    dotNetHelper.invokeMethodAsync(netMethod, keyCode, e.key, e.ctrlKey, e.shiftKey, e.altKey, e.metaKey, e.location, e.repeat, targetId);
+                    const args = [netMethod, keyCode, e.key, e.ctrlKey, e.shiftKey, e.altKey, e.metaKey, e.location, e.repeat, targetId];
+                    if (netMethod === 'OnKeyDownRaisedAsync') args.push(pointerButtons);
+                    dotNetHelper.invokeMethodAsync(...args);
                     return;
                 }
             }
@@ -492,7 +501,7 @@ export function RegisterKeyCode(globalDocument, eventNames, id, elementRef, only
         if (preventMultipleKeydown || (!!eventNames && eventNames.includes("KeyUp"))) {
             element.addEventListener('keyup', handlerKeyup)
         }
-        document.fluentKeyCodeEvents[eventId] = { source: element, handlerKeydown, handlerKeyup };
+        document.fluentKeyCodeEvents[eventId] = { source: element, handlerKeydown, handlerKeyup, handlerPointer, handlerBlur };
 
         return eventId;
     }
@@ -516,6 +525,9 @@ export function UnregisterKeyCode(eventId) {
         if (!!keyEvent.handlerKeyup) {
             element.removeEventListener("keyup", keyEvent.handlerKeyup);
         }
+        for (const name of ['pointerdown', 'pointerup', 'pointercancel'])
+            document.removeEventListener(name, keyEvent.handlerPointer, true);
+        window.removeEventListener('blur', keyEvent.handlerBlur);
 
         delete document.fluentKeyCodeEvents[eventId];
     }

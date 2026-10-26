@@ -1,7 +1,3 @@
-body {
-  background: #EEEEEE !important;
-}
-
 /****************************************************************
  *
  * Fix to Radzen standard styles
@@ -103,7 +99,7 @@ i.rz-navigation-item-icon-children {
 }
 
 .dd-loading-animation {
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--rz-base-background-color);
   border-radius: 8px;
   padding: 30px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -124,7 +120,7 @@ i.rz-navigation-item-icon-children {
 
 .dd-loading-title {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--rz-text-color);
   font-weight: 600;
   font-size: 16px;
   font-family: system-ui, -apple-system, sans-serif;
@@ -132,7 +128,7 @@ i.rz-navigation-item-icon-children {
 
 .dd-loading-message {
   margin: 0;
-  color: #666;
+  color: var(--rz-text-secondary-color);
   font-size: 14px;
   font-family: system-ui, -apple-system, sans-serif;
 }
@@ -172,7 +168,7 @@ body {
   color: var(--rz-text-color);
   font-size: var(--rz-body-font-size);
   line-height: var(--rz-body-line-height);
-  background-color: var(--rz-body-background-color);
+  background-color: var(--color-background, var(--rz-body-background-color));
 }
 
 #app {
@@ -250,7 +246,7 @@ a:focus {
 .loading-progress-text {
   position: absolute;
   font-size: 1.2em;
-  color: #333;
+  color: var(--rz-text-color);
   text-align: center;
 }
 
@@ -333,7 +329,7 @@ a:focus {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: white; /* Match canvas background to prevent visible flash during resize */
+  background-color: var(--color-background); /* Match canvas background to prevent visible flash during resize */
 }
 
 .profile-popup {
@@ -349,7 +345,7 @@ a:focus {
 .profile-popup-container {
   width: 100%;
   height: 100%;
-  background-color: var(--rz-white);
+  background-color: var(--rz-base-background-color);
 }
 
 .application-menu-popup {
@@ -365,11 +361,10 @@ a:focus {
 .application-popup-container {
   width: 100%;
   height: 100%;
-  background-color: var(--rz-white);
+  background-color: var(--rz-base-background-color);
 }
 
 .site-toolbar {
-  background-color: var(--rz-white);
   z-index: var(--z-toolbar);
   padding: 2px;
   position: fixed;
@@ -405,7 +400,13 @@ a:focus {
 
 .d-toolbar-sub-panel {
   padding: 2px;
-  background: var(--rz-white)
+  background: var(--editor-surface-background);
+}
+
+.d-toolbar-sub-panel-title {
+  padding-inline: 2px;
+  background-color: var(--editor-surface-header-background);
+  color: var(--rz-text-color);
 }
 
 canvas {
@@ -568,4 +569,39 @@ canvas {
 .button-group .tooltip-container:last-child .rz-button {
   border-top-right-radius: var(--rz-border-radius, 4px) !important;
   border-bottom-right-radius: var(--rz-border-radius, 4px) !important;
+}
+
+/* Floating UI needs an explicit edge: black shadows alone disappear on a dark canvas. */
+:root {
+  --editor-surface-background: var(--rz-base-background-color);
+  --editor-surface-header-background: var(--rz-base-100);
+  --editor-surface-border: var(--rz-base-400);
+  --editor-surface-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+:root.dark {
+  --editor-surface-header-background: var(--rz-base-700);
+  --editor-surface-border: var(--rz-base-500);
+  --editor-surface-shadow: 0 2px 6px rgba(0, 0, 0, 0.32), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.editor-surface {
+  /* Keep existing Radzen shadow utilities on the same surface contract. */
+  --rz-shadow-3: var(--editor-surface-shadow);
+  background-color: var(--editor-surface-background);
+  border: 1px solid var(--editor-surface-border);
+  box-shadow: var(--editor-surface-shadow);
+}
+
+/* Radzen renders these menus outside the toolbar that opened them. */
+.rz-context-menu {
+  --rz-menu-background-color: var(--editor-surface-background);
+  --rz-menu-border: 1px solid var(--editor-surface-border);
+  --rz-context-menu-box-shadow: var(--editor-surface-shadow);
+}
+
+.rz-dropdown-panel,
+.rz-multiselect-panel {
+  --rz-dropdown-panel-border: 1px solid var(--editor-surface-border);
+  --rz-dropdown-panel-shadow: var(--editor-surface-shadow);
 }
