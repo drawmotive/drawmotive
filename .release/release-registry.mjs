@@ -13,7 +13,7 @@ export const integrity = bytes => 'sha512-' + createHash('sha512').update(bytes)
 export async function npmState(receipt, request = fetch) {
   assert.match(receipt.name, /^(?:@[a-z0-9][a-z0-9._-]*[/])?[a-z0-9][a-z0-9._-]*$/);
   compareReleaseVersions(receipt.version, receipt.version);
-  assert.equal(receipt.tag, releaseTag(receipt.version, { legacy: receipt.releaseSchemaVersion !== 2 }));
+  assert.equal(receipt.tag, releaseTag(receipt.version, { legacy: receipt.releaseSchemaVersion !== 2, channel: receipt.releaseChannel }));
   // Each metadata read owns its budget. Large archive transfers between them
   // must not consume the following channel lookup's timeout.
   const options = () => ({ headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30000), redirect: 'error' });

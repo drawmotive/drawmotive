@@ -10,6 +10,12 @@ const release={name:"@drawmotive/editor",version:"0.2.0",tag:"latest",gitTag:"ed
 const commit="a".repeat(40);
 const state=(published, tags={}, exists=true)=>({published,exists,tags,tagged:published});
 const alpha={...release,version:"0.2.2-alpha.1",tag:"alpha",gitTag:"editor-v0.2.2-alpha.1",filename:"drawmotive-editor-0.2.2-alpha.1.tgz"};
+test('a stable numeric patch retains its declared channel in the publication receipt', () => {
+ const version='0.3.1';
+ const pkg={name:release.name,version,publishConfig:{access:'public',registry:'https://registry.npmjs.org/',tag:'latest'}};
+ const identity=releasePolicy(pkg,{schemaVersion:2,version,releaseVersion:version,channel:'stable'});
+ assert.equal(identity.tag,'latest');assert.equal(identity.releaseChannel,'stable');
+});
 test("release policy binds exact stable and alpha versions to explicit npm channels",()=>{
  for(const [version,channel,tag] of [["0.2.2","stable","latest"],["0.2.2-alpha.1","alpha","alpha"]]) {
   const pkg={name:release.name,version,publishConfig:{access:"public",registry:"https://registry.npmjs.org/",tag}};
