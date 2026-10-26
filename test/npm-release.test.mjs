@@ -107,19 +107,19 @@ test("a first publication may acquire latest, while an existing package without 
  }
 });
 
-test("numeric release targets use patch zero for stable and every patch one through nine for previews",()=>{
- for(let patch=0;patch<=9;patch++) {
-  const version='0.3.'+patch,tag=patch===0?'latest':'alpha',channel=patch===0?'stable':'alpha';
+test("every numeric release target uses the stable npm channel",()=>{
+ for(let patch=0;patch<=12;patch++) {
+  const version='0.3.'+patch,tag='latest',channel='stable';
   const pkg={name:release.name,version,publishConfig:{access:"public",registry:"https://registry.npmjs.org/",tag}};
   const identity=releasePolicy(pkg,{schemaVersion:2,version,releaseVersion:version,channel});
   assert.equal(identity.tag,tag);assert.equal(identity.releaseSchemaVersion,2);
  }
- for(const version of ['0.3.1-alpha.1','0.3.10','00.3.1']) {
+ for(const version of ['0.3.1-alpha.1','00.3.1']) {
   assert.throws(()=>releasePolicy({name:release.name,version},{schemaVersion:2,version,releaseVersion:version,channel:'alpha'}),/suffixes are forbidden/);
  }
 });
-test("numeric preview publication preserves latest and rejects a newer historical registry default",async()=>{
- const preview={...alpha,version:'0.3.2'};let reads=0;
- assert.equal(await publishArtifact(preview,'/release',{run:async()=>{},delay:async()=>{},readState:async()=>++reads===1?state(false,{latest:'0.3.0',alpha:'0.3.1'}):state(true,{latest:'0.3.0',alpha:preview.version})}),'published');
+test("numeric stable publication advances latest and rejects a newer registry default",async()=>{
+ const preview={...release,version:'0.3.2'};let reads=0;
+ assert.equal(await publishArtifact(preview,'/release',{run:async()=>{},delay:async()=>{},readState:async()=>++reads===1?state(false,{latest:'0.3.0',alpha:'0.3.1'}):state(true,{latest:preview.version,alpha:'0.3.1'})}),'published');
  await assert.rejects(publishArtifact(preview,'/release',{run:async()=>assert.fail('must not downgrade'),readState:async()=>state(false,{latest:'0.3.12'})}),/Refusing an older/);
 });
