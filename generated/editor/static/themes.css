@@ -1,5 +1,5 @@
-/* Default appearance: compose palette.light and styling.default on the same target. */
-.palette.light {
+/* Each styling owns a light/dark palette pair; both share geometry and typography. */
+.default.light {
     /* Theme Colors: Foreground + Background + 5 Colors */
     --color-foreground: #1B1B1B;
     --color-background: #FFFFFF;
@@ -20,6 +20,31 @@
     --color-selection-stroke-reverse: rgba(255, 0, 0, 0.9);
     --color-selection-fill-reverse: rgba(255, 0, 0, 0.5);
     --color-bound-stroke: rgba(0, 255, 255, 0.8);
+    --color-grip-stroke: rgba(0, 0, 0, 0.8);
+    --color-grip-fill: rgba(0, 255, 255, 0.8);
+}
+
+.default.dark {
+    /* Preserve the light palette's blue, neutral, pink, green and yellow color families. */
+    --color-foreground: #E6EDF3;
+    --color-background: #202632;
+    --color-primary-stroke: #66B0FF;
+    --color-primary-fill: #243F61;
+    --color-secondary-stroke: #AAB4C0;
+    --color-secondary-fill: #39424F;
+    --color-accent-stroke: #FF80AB;
+    --color-accent-fill: #583047;
+    --color-success-stroke: #6DDD8A;
+    --color-success-fill: #294C38;
+    --color-warning-stroke: #FFD95E;
+    --color-warning-fill: #51472C;
+
+    --color-selection-stroke: rgba(109, 221, 138, 0.9);
+    --color-selection-fill: rgba(109, 221, 138, 0.2);
+    --color-selection-stroke-reverse: rgba(255, 128, 128, 0.9);
+    --color-selection-fill-reverse: rgba(255, 128, 128, 0.2);
+    --color-bound-stroke: rgba(102, 217, 239, 0.8);
+    /* Keep the same two-tone handles: the fill separates dark canvases, the outline light canvases. */
     --color-grip-stroke: rgba(0, 0, 0, 0.8);
     --color-grip-fill: rgba(0, 255, 255, 0.8);
 }

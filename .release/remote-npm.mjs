@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { publishNpmArchive } from './release-registry.mjs';
+import { releaseChannel } from './release-version.cjs';
 
 /** Trusted npm identities bind corrections to the existing product workflow.
  * This module is projected standalone, so the authority map travels with it. */
@@ -73,6 +74,7 @@ export async function publishRetainedNpm({ directory, componentRoot, env = proce
   assert.equal(evidence.receipt.name, pkg.name); assert.equal(evidence.receipt.version, pkg.version);
   assert.equal(target.version, pkg.version); assert.equal(target.publishable, true);
   if (target.schemaVersion === 2) assert.equal(evidence.receipt.releaseSchemaVersion, 2, 'Retained receipt version policy differs from the candidate target');
+  if (target.schemaVersion === 2) assert.equal(releaseChannel(pkg.version, { channel: evidence.receipt.releaseChannel }), target.channel, 'Retained receipt channel differs from the candidate target');
   assert.equal(evidence.receipt.integrity, env.ARTIFACT_INTEGRITY, 'Dispatch archive hash differs');
   assert.equal(evidence.receipt.filename, env.ARCHIVE_FILE, 'Dispatch archive filename differs');
   const errors = createRequire(path.join(componentRoot, 'package.json'))(path.join(componentRoot, '.release/check.cjs')).checkComponent(componentRoot, { ready: true });

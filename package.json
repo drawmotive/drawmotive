@@ -1,6 +1,6 @@
 {
   "name": "@drawmotive/editor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Embed the DrawMotive visual diagram editor in any browser application.",
   "type": "module",
   "types": "./src/index.d.ts",

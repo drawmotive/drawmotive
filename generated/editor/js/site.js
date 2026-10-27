@@ -1,3 +1,23 @@
+// Apply saved appearance before Blazor starts so loading UI and native controls use the same surface.
+window.ddSetDarkTheme = (darkTheme) => {
+  const root = document.documentElement;
+  root.classList.add('styling', 'default');
+  root.classList.toggle('dark', darkTheme);
+  root.classList.toggle('light', !darkTheme);
+  root.style.colorScheme = darkTheme ? 'dark' : 'light';
+  const link = document.querySelector('link[href*="Radzen.Blazor/css/standard-"]');
+  if (link) {
+    const url = new URL(link.href);
+    url.pathname = url.pathname.replace(/standard-(?:dark-)?base\.css$/, darkTheme ? 'standard-dark-base.css' : 'standard-base.css');
+    if (link.href !== url.href) link.href = url.href;
+  }
+};
+(() => {
+  let darkTheme = false;
+  try { darkTheme = localStorage.getItem('settings.darkTheme') === 'true'; } catch { /* Storage may be unavailable. */ }
+  window.ddSetDarkTheme(darkTheme);
+})();
+
 window.hasChildWithClass = (parentId, className) => {
   const parent = document.getElementById(parentId);
   if (!parent) return false;
