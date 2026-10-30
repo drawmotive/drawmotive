@@ -82,6 +82,16 @@ test('group controls stay inline and the title toolbar keeps its nested color pa
  expect(await page.evaluate(()=>instances[0].calls.at(-1).args[1])).toEqual({command:'StrokeColor',color:'WarningStroke',targetItemId:'title'});
  await expect(title).toBeVisible();
 });
+test('a toolbar mounted after a busy document boundary is positioned at the retained selection',async({page})=>{
+ await page.evaluate(()=>instances.push(mount()));
+ await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toBeVisible();
+ await page.evaluate(()=>{instances[0].setState({busy:true});instances[0].select();});
+ await expect(page.getByTestId('context-toolbar')).toHaveCount(0);
+ await page.evaluate(()=>instances[0].setState({busy:false}));
+ const toolbar=page.getByTestId('context-toolbar');await expect(toolbar).toBeVisible();
+ const position=await toolbar.evaluate(element=>({left:parseFloat(element.style.left),top:parseFloat(element.style.top)}));
+ expect(position.left).toBeGreaterThan(20);expect(position.top).toBeGreaterThan(20);
+});
 
 test('StrictMode cleanup and newer events own selection and preference initialization',async({page})=>{
  const fixture=await build({stdin:{contents:

@@ -79,7 +79,9 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     }
     measure();const observer=new win.ResizeObserver(measure);observer.observe(root);if(frame)observer.observe(frame);if(toolbar.current)observer.observe(toolbar.current);
     win.addEventListener('scroll',measure,true);return()=>{observer.disconnect();win.removeEventListener('scroll',measure,true);};
-  },[container,selection,closed,contextIds.join(',')]);
+  // Busy and enabled transitions can mount a new toolbar without changing the
+  // retained selection. Measure and observe that DOM node after it is mounted.
+  },[container,selection,closed,ui.enabled,state.busy,contextIds.join(',')]);
 
   if(closed||!ui.enabled)return null;
   const context={editor,ui,state:{...state,busy:state.busy||pending.has('document')},selection,panel,setPanel,run,property};
