@@ -3,12 +3,11 @@ import { createWorkerChannel } from '../platform/worker-channel.js';
 /** One editor/document owns one Worker. The main thread never imports Dexie. */
 export async function createDocumentWorkerClient({
   url = new URL('../../dist/workers/document.worker.js', import.meta.url),
-  instanceId, documentSessionId, databaseName,
+  databaseName,
   workerFactory, timeoutMs = 120000,
 } = {}) {
-  if (!documentSessionId) throw new TypeError('A document session identity is required.');
-  const handle = await createWorkerChannel({ url, instanceId, documentSessionId, workerFactory, timeoutMs,
-    name: 'drawmotive-document-' + instanceId, connectType: 'drawmotive:document-connect',
+  const handle = await createWorkerChannel({ url, workerFactory, timeoutMs,
+    name: 'drawmotive-document',
     connectData: { databaseName }, failureCode: 'StorageWorkerFailed' });
   const { channel } = handle;
   let disposal;

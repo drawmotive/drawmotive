@@ -8,15 +8,15 @@ for (const create of [createResourceWorkerClient, createDocumentWorkerClient]) {
   test(create.name + ': invalid construction never creates a Worker', async () => {
     let created = 0;
     const workerFactory = async () => { created++; return { worker: {}, dispose() {} }; };
-    await assert.rejects(create({ instanceId: 'i', documentSessionId: 's', timeoutMs: 0, workerFactory }), TypeError);
-    await assert.rejects(create({ instanceId: ' ', documentSessionId: 's', workerFactory }), TypeError);
+    await assert.rejects(create({ timeoutMs: 0, workerFactory }), TypeError);
+    await assert.rejects(create({ timeoutMs: NaN, workerFactory }), TypeError);
     assert.equal(created, 0);
   });
 
   test(create.name + ': a failed channel construction releases the Worker', async () => {
     let released = 0;
     const workerFactory = async () => ({ worker: { addEventListener() { throw new Error('Cannot subscribe'); } }, dispose() { released++; } });
-    await assert.rejects(create({ instanceId: 'i', documentSessionId: 's', workerFactory }), /Cannot subscribe/);
+    await assert.rejects(create({ workerFactory }), /Cannot subscribe/);
     assert.equal(released, 1);
   });
 }

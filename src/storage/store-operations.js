@@ -2,38 +2,36 @@ export const storageError = (code, message) => Object.assign(new Error(message),
 const id = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 1024;
 
 export function documentKey(options) {
-  if (!options || !['namespace', 'documentId', 'instanceId', 'documentSessionId'].every(key => id(options[key])) ||
+  if (!options || !['namespace', 'documentId'].every(key => id(options[key])) ||
       !['persistent', 'memory'].includes(options.persistence))
-    throw storageError('InvalidDocumentSession', 'A namespace, document and unique session identity are required.');
+    throw storageError('InvalidDocumentSession', 'A namespace, document and persistence mode are required.');
   return JSON.stringify([options.namespace, options.documentId]);
 }
-export function sessionRegistry() {
-  const sessions = new Map(), owners = new Map();
-  let disposed = false;
+/** A store owns one active document. A fresh lease rejects callbacks from a closed document. */
+export function createDocumentOwner() {
+  let owner, disposed = false;
   return {
     add(options, release = () => {}) {
       if (disposed) throw storageError('EditorDisposed', 'Document store is disposed.');
       const key = documentKey(options);
-      if (owners.has(key)) throw storageError('StorageConflict', 'The document already has an active writer.');
-      if (sessions.has(options.documentSessionId)) throw storageError('InvalidDocumentSession', 'Document session IDs cannot be reused.');
-      const session = Object.freeze({ ...options, leaseId: crypto.randomUUID() });
-      sessions.set(session.documentSessionId, { session, key, release }); owners.set(key, session.documentSessionId);
+      if (owner) throw storageError('StorageConflict', 'Document storage already has an active document.');
+      const session = Object.freeze({ namespace: options.namespace, documentId: options.documentId,
+        persistence: options.persistence, leaseId: crypto.randomUUID() });
+      owner = { session, key, release };
       return session;
     },
     get(session) {
-      const record = sessions.get(session?.documentSessionId);
-      if (disposed || !record || ['instanceId', 'namespace', 'documentId', 'documentSessionId', 'leaseId', 'persistence'].some(key => record.session[key] !== session[key]))
+      if (disposed || !owner || !session || ['namespace', 'documentId', 'leaseId', 'persistence'].some(key => owner.session[key] !== session[key]))
         throw storageError('StaleDocumentSession', 'This document session is no longer active.');
-      return record;
+      return owner;
     },
     close(session) {
       const record = this.get(session);
-      sessions.delete(session.documentSessionId); owners.delete(record.key); record.release();
+      owner = undefined; record.release();
     },
     dispose() {
       disposed = true;
-      for (const record of sessions.values()) record.release();
-      sessions.clear(); owners.clear();
+      const record = owner; owner = undefined; record?.release();
     },
   };
 }

@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { DocumentCheckpoint, DocumentOutboxEntry, DocumentSession, DocumentSessionOptions, DocumentStore, DocumentCommitBatch } from '../document-store.js';
-import { sessionRegistry, prepareBatch, storageError, equalOutbox, checkReceipt, documentKey, copyAcknowledgements } from '../store-operations.js';
+import { createDocumentOwner, prepareBatch, storageError, equalOutbox, checkReceipt, documentKey, copyAcknowledgements } from '../store-operations.js';
 
 interface DocumentRow { key: string; checkpoint: DocumentCheckpoint; nextOrdinal: number; }
 interface OutboxRow extends DocumentOutboxEntry { documentKey: string; ordinal: number; }
@@ -25,7 +25,7 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
   const documents: Table<DocumentRow, string> = db.table('documents');
   const outbox: Table<OutboxRow, [string, string]> = db.table('outbox');
   const receipts: Table<ReceiptRow, [string, string]> = db.table('receipts');
-  const registry = sessionRegistry();
+  const owner = createDocumentOwner();
   // Node's fake-indexeddb tests have no navigator. Production Workers must acquire a real Web Lock.
   const lock = options.acquireWriter ?? acquireWriter;
   let closing = false;
@@ -34,16 +34,21 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
       if (closing) throw storageError('EditorDisposed', 'Document storage is closing.');
       const key = documentKey(configuration);
       const release = await lock(key);
-      try { await db.open(); return registry.add(configuration, release); }
-      catch (error) { release(); throw error; }
+      try {
+        if (closing) throw storageError('EditorDisposed', 'Document storage is closing.');
+        await db.open();
+        if (closing) throw storageError('EditorDisposed', 'Document storage is closing.');
+        return owner.add(configuration, release);
+      }
+      catch (error) { release(); if (closing) db.close(); throw error; }
     },
     async readCheckpoint(session: DocumentSession) {
-      const { key } = registry.get(session);
+      const { key } = owner.get(session);
       return structuredClone((await documents.get(key))?.checkpoint ?? null);
     },
     async commitBatch(session: DocumentSession, value: DocumentCommitBatch) {
-      const { key } = registry.get(session), { batch, fingerprint } = await prepareBatch(value);
-      registry.get(session);
+      const { key } = owner.get(session), { batch, fingerprint } = await prepareBatch(value);
+      owner.get(session);
       return db.transaction('rw', documents, outbox, receipts, async () => {
         const receipt = await receipts.get([key, batch.batchId]);
         if (receipt) return checkReceipt(receipt, fingerprint);
@@ -62,23 +67,23 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
       });
     },
     async acknowledgeOutbox(session: DocumentSession, ids: readonly string[]) {
-      const { key } = registry.get(session);
+      const { key } = owner.get(session);
       const acknowledged = copyAcknowledgements(ids);
       await db.transaction('rw', outbox, () => outbox.bulkDelete(acknowledged.map(id => [key, id])));
     },
     async readOutbox(session: DocumentSession) {
-      const { key } = registry.get(session);
+      const { key } = owner.get(session);
       return (await outbox.where('documentKey').equals(key).sortBy('ordinal')).map(({ id, revision, payload }) => ({ id, revision, payload }));
     },
-    async closeSession(session: DocumentSession) { registry.close(session); },
+    async closeSession(session: DocumentSession) { owner.close(session); },
     async deleteDocument(session: DocumentSession) {
-      const { key } = registry.get(session);
+      const { key } = owner.get(session);
       await db.transaction('rw', documents, outbox, receipts, async () => {
         await documents.delete(key);
         await outbox.where('documentKey').equals(key).delete();
         await receipts.where('documentKey').equals(key).delete();
       });
     },
-    async dispose() { closing = true; registry.dispose(); db.close(); },
+    async dispose() { closing = true; owner.dispose(); db.close(); },
   });
 }

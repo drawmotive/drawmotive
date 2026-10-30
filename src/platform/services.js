@@ -8,32 +8,29 @@ export const PLATFORM_METHODS = Object.freeze(['storage.open', 'storage.read', '
   'storage.ack', 'storage.outbox', 'storage.delete', 'fonts.load', 'preferences.get', 'preferences.update']);
 const identifier = value => typeof value === 'string' && !!value.trim();
 
-/** Host configuration owns storage identity; the frame cannot select another account.
- * One instance owns one document session. Opening a different document creates a
- * new editor instance, keeping old callbacks and leases outside the new session. */
-export function createPlatformServices({ instanceId, documentSessionId, persistence,
+/** Host configuration owns the one active document and its account namespace. */
+export function createPlatformServices({ persistence,
   workerFactory, workerUrls = {}, createDocumentStore, createResourceLoader, preferenceStore = createPreferenceStore() } = {}) {
-  if (!identifier(instanceId) || !identifier(documentSessionId)) throw new TypeError('Editor identities are required.');
   const mode = persistence?.mode ?? 'memory';
   if (!['memory', 'persistent'].includes(mode) || persistence && Object.keys(persistence).some(key => !['mode', 'namespace', 'documentId'].includes(key))
       || mode === 'persistent' && (!identifier(persistence.namespace) || !identifier(persistence.documentId)))
     throw new TypeError('Persistent storage requires an opaque namespace and documentId.');
-  const options = Object.freeze({ instanceId, documentSessionId, persistence: mode,
-    namespace: persistence?.namespace ?? 'temporary', documentId: persistence?.documentId ?? documentSessionId });
+  const options = Object.freeze({ persistence: mode,
+    namespace: persistence?.namespace ?? 'temporary', documentId: persistence?.documentId ?? 'temporary' });
   let store, session, opening, resources, loadingResources, closing, disposed = false;
   const pending = new Set();
   async function open() {
     return opening ??= (async () => {
       store = createDocumentStore ? await createDocumentStore(options)
         : mode === 'memory' ? createMemoryDocumentStore()
-        : await createDocumentWorkerClient({ instanceId, documentSessionId, workerFactory, url: workerUrls.document });
+        : await createDocumentWorkerClient({ workerFactory, url: workerUrls.document });
       session = await store.openSession(options);
       return session;
     })();
   }
   async function loadResources() {
     return loadingResources ??= (async () => resources = createResourceLoader ? await createResourceLoader()
-      : await createResourceWorkerClient({ instanceId, workerFactory, url: workerUrls.resource }))();
+      : await createResourceWorkerClient({ workerFactory, url: workerUrls.resource }))();
   }
   async function execute(method, args = {}) {
     if (method === 'fonts.load') return (await loadResources()).load(args);

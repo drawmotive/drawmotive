@@ -1,20 +1,16 @@
 /** Logical document persistence only. Database names, tables and row operations are private. */
 export type DocumentPersistenceMode = 'memory' | 'persistent';
 export interface DocumentSession {
-  readonly instanceId: string;
   /** Opaque App/account namespace; never inferred from a document ID or a token. */
   readonly namespace: string;
   readonly documentId: string;
-  readonly documentSessionId: string;
   /** Worker-issued ownership token. Every operation must reject an expired lease. */
   readonly leaseId: string;
   readonly persistence: DocumentPersistenceMode;
 }
 export interface DocumentSessionOptions {
-  instanceId: string;
   namespace: string;
   documentId: string;
-  documentSessionId: string;
   persistence: DocumentPersistenceMode;
 }
 /** An opaque engine checkpoint contains object state, transactions, clock and history. */
@@ -44,9 +40,9 @@ export interface DocumentCommitReceipt {
   readonly revision: string;
 }
 /** A Dedicated Worker owns this boundary; no IndexedDB access occurs on the UI thread.
- * Storage identity is namespace + documentId. Exactly one writer lease may own that
- * pair at a time; opening a competing session must reject with StorageConflict.
- * Every operation verifies the namespace, document session and current lease. */
+ * Storage identity is namespace + documentId. Only one document may be open in a
+ * store; opening a competing document rejects with StorageConflict. Every
+ * operation verifies the namespace, document and current lease. */
 export interface DocumentStore {
   openSession(options: DocumentSessionOptions): Promise<DocumentSession>;
   readCheckpoint(session: DocumentSession): Promise<DocumentCheckpoint | null>;

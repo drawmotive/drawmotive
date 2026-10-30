@@ -8,16 +8,16 @@ test('all IndexedDB operations run in the Worker; dispose/reopen preserves check
     indexedDB.deleteDatabase = () => { throw new Error('SDK attempted main-thread database deletion'); };
     const { createDocumentWorkerClient } = await import('/src/storage/worker-client.js');
     const databaseName = 'browser-' + crypto.randomUUID();
-    const options = { instanceId: crypto.randomUUID(), documentSessionId: crypto.randomUUID(), namespace: 'account-a', documentId: 'diagram', persistence: 'persistent' };
+    const options = { namespace: 'account-a', documentId: 'diagram', persistence: 'persistent' };
     const open = async config => {
-      const store = await createDocumentWorkerClient({ ...config, databaseName });
+      const store = await createDocumentWorkerClient({ databaseName });
       return { store, session: await store.openSession(config) };
     };
     let { store, session } = await open(options);
     const batch = { batchId: 'batch-one', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([10, 20, 30]) }, outbox: [{ id: 'txn-one', revision: 'r1', payload: new Uint8Array([40]) }] };
     await store.commitBatch(session, batch);
     await store.dispose(); // does not delete the document
-    ({ store, session } = await open({ ...options, instanceId: crypto.randomUUID(), documentSessionId: crypto.randomUUID() }));
+    ({ store, session } = await open(options));
     const checkpoint = await store.readCheckpoint(session), outbox = await store.readOutbox(session);
     const repeated = await store.commitBatch(session, batch);
     await store.acknowledgeOutbox(session, ['txn-one']);
@@ -37,15 +37,14 @@ test('origin-wide writer leases reject a second Worker and allow a new writer af
   const result = await page.evaluate(async () => {
     const { createDocumentWorkerClient } = await import('/src/storage/worker-client.js');
     const databaseName = 'browser-' + crypto.randomUUID();
-    const options = { instanceId: crypto.randomUUID(), documentSessionId: crypto.randomUUID(), namespace: 'account-a', documentId: 'diagram', persistence: 'persistent' };
-    const options2 = { ...options, instanceId: crypto.randomUUID(), documentSessionId: crypto.randomUUID() };
-    const first = await createDocumentWorkerClient({ ...options, databaseName });
-    const second = await createDocumentWorkerClient({ ...options2, databaseName });
+    const options = { namespace: 'account-a', documentId: 'diagram', persistence: 'persistent' };
+    const first = await createDocumentWorkerClient({ databaseName });
+    const second = await createDocumentWorkerClient({ databaseName });
     const session = await first.openSession(options);
     let occupied;
-    try { await second.openSession(options2); } catch (error) { occupied = error.code; }
+    try { await second.openSession(options); } catch (error) { occupied = error.code; }
     await first.closeSession(session);
-    const next = await second.openSession(options2);
+    const next = await second.openSession(options);
     let expired;
     try { await second.readCheckpoint(session); } catch (error) { expired = error.code; }
     await first.dispose(); await second.dispose();

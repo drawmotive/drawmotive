@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const database = await import('../src/storage/worker/database.ts').catch(() => ({}));
 const memory = await import('../src/storage/memory-store.js').catch(() => ({}));
 const bytes = text => new TextEncoder().encode(text);
-const options = (namespace = 'account-a', documentId = 'drawing') => ({ instanceId: crypto.randomUUID(), namespace, documentId, documentSessionId: crypto.randomUUID(), persistence: 'persistent' });
+const options = (namespace = 'account-a', documentId = 'drawing') => ({ namespace, documentId, persistence: 'persistent' });
 const batch = (id, previous, revision, text = revision) => ({ batchId: id, expectedRevision: previous, checkpoint: { revision, payload: bytes(text) }, outbox: [{ id, revision, payload: bytes(text) }] });
 
 for (const kind of ['dexie', 'memory']) {
@@ -86,19 +86,33 @@ for (const kind of ['dexie', 'memory']) {
     const store = create({ databaseName: 'test-' + crypto.randomUUID(), acquireWriter: async () => () => {} });
     const session = await store.openSession(options());
     await assert.rejects(store.openSession(options()), { code: 'StorageConflict' });
-    const other = await store.openSession(options('account-b'));
+    await assert.rejects(store.openSession(options('account-b')), { code: 'StorageConflict' });
     await store.commitBatch(session, batch('one', null, 'r1'));
-    assert.equal(await store.readCheckpoint(other), null);
-    const { instanceId, ...forged } = session;
-    await assert.rejects(store.readCheckpoint({ ...forged, instanceId: 'wrong' }), { code: 'StaleDocumentSession' });
+    await assert.rejects(store.readCheckpoint({ ...session, namespace: 'wrong' }), { code: 'StaleDocumentSession' });
     await assert.rejects(store.readCheckpoint({ ...session, leaseId: 'expired' }), { code: 'StaleDocumentSession' });
     await store.closeSession(session);
     await assert.rejects(store.readCheckpoint(session), { code: 'StaleDocumentSession' });
+    const other = await store.openSession(options('account-b'));
+    assert.equal(await store.readCheckpoint(other), null);
+    await store.closeSession(other);
     const reopened = await store.openSession(options());
+    await assert.rejects(store.readCheckpoint(session), { code: 'StaleDocumentSession' });
     if (kind === 'dexie') assert.equal((await store.readCheckpoint(reopened)).revision, 'r1');
     await store.deleteDocument(reopened);
     assert.equal(await store.readCheckpoint(reopened), null);
-    await store.closeSession(reopened); await store.closeSession(other);
+    await store.closeSession(reopened);
     await store.dispose();
   });
 }
+
+
+test('disposing during database startup releases the pending writer lease', async () => {
+  let acquire, released = 0;
+  const store = database.createDocumentDatabase({ databaseName: 'test-' + crypto.randomUUID(),
+    acquireWriter: () => new Promise(resolve => { acquire = resolve; }) });
+  const opening = store.openSession(options());
+  await store.dispose();
+  acquire(() => { released++; });
+  await assert.rejects(opening, { code: 'EditorDisposed' });
+  assert.equal(released, 1);
+});
