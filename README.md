@@ -2,7 +2,9 @@
 
 Embed the DrawMotive visual editor and compose your own document, save and publish flows. Each instance owns an isolated browser runtime. The public SDK exposes editing operations and state; the host owns files, accounts and external persistence.
 
-[Browser example](examples/browser/index.html) · [Documentation](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
+[SDK guide and API reference](docs/editor-sdk.md) · [Browser example](examples/browser/index.html) · [Website](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
+
+**React separation draft:** The source API described here requires protocol v3. Matching generated runtime assets and full React/WASM acceptance remain pending; the committed generated runtime is still v2. See the [guide's draft status](docs/editor-sdk.md) before integrating this branch.
 
 ## Example output
 
@@ -55,7 +57,7 @@ application/package versions, dimensions and source/pixel hashes.
 ## Install
 
 ```bash
-npm install @drawmotive/editor@0.3.0
+npm install @drawmotive/editor
 npx drawmotive-copy-assets public/editor
 ```
 
@@ -75,6 +77,10 @@ business server, login session or collaboration connection for local editing.
 It has no authentication or SignalR dependency and exposes no public synchronization API.
 Internal applications own collaboration through separate private site packages and
 private runtime integration; those packages and interfaces are not public editor exports.
+
+Hosts use named functions such as `editor.setTool()` and `editor.setProperty()`;
+there is no public `sendCommand`. Internally, these operations use MessagePort
+request/response messages and a unified Blazor dispatcher. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [configuration](docs/editor-sdk.md#ui-configuration) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).
 
 ## Create and edit
 

@@ -26,6 +26,7 @@
   "files": [
     "src",
     "dist",
+    "docs/editor-sdk.md",
     "generated/editor",
     "generated/editor-manifest.json",
     "scripts/copy-assets.mjs",
