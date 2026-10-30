@@ -3,9 +3,10 @@ import test from 'node:test';
 import { MessageChannel } from 'node:worker_threads';
 import { JSDOM } from 'jsdom';
 import { createEditor, EditorError } from '../src/core.js';
+import { createEditorSession } from '../src/editor-session.js';
 import { createRuntimeChannel } from '../src/bridge/runtime-channel.js';
 const state = () => ({ revision: 'generation-1:0', health: 'healthy', editingEnabled: true, busy: false, canUndo: false, canRedo: false });
-const methods = ['replaceDocument','replacePngDocument','replaceTextGraph','clearDocument','exportSnapshot','fitViewport','setEditingEnabled','undo','redo','getState','dispose','copySelection','pasteSelection','retryPersistence','getPreferences','setPreferences'];
+const methods = ['replaceDocument','replacePngDocument','replaceTextGraph','clearDocument','exportSnapshot','fitViewport','setEditingEnabled','undo','redo','getState','dispose','copySelection','pasteSelection','retryPersistence','getPreferences','setPreferences','replica.establish','replica.read','replica.apply','replica.ack'];
 function host(t, url = 'https://app.example/demo/') {
   const dom = new JSDOM('<div id="editor"></div>', { url }); dom.window.MessageChannel = MessageChannel;
   const container = dom.window.document.querySelector('#editor'), channels = [], messages = [];
@@ -52,6 +53,34 @@ test('source, origin and version are authenticated before readiness', async t =>
   h.ready(); await (await pending).dispose();
   const mismatch = createEditor(h.options); h.listen(); h.hello({ data: { type: 'drawmotive:hello', protocolVersion: 2 } });
   await assert.rejects(mismatch, { code: 'ProtocolMismatch' }); assert.equal(h.frame(), null);
+});
+test('private source composition supplies a separate replication handle without extending the public editor', async t => {
+  const h = host(t);
+  const pending = createEditorSession(h.options, { replication: true });
+  h.listen(); h.hello(); h.ready();
+  const { editor, replication } = await pending;
+  assert.equal(editor.replication, undefined);
+  assert.equal(editor.sendCommand, undefined);
+  assert.equal(h.connection.message.options.initialEditingEnabled, false);
+  const value = { clock: { author: 1 }, outbox: [{ id: 'author:1', payload: new Uint8Array([1, 2]) }] };
+  h.operation(({ method }) => ({ result: method === 'replica.read' ? value : null }));
+  await replication.establish();
+  assert.deepEqual(await replication.read(), value);
+  await replication.apply(value.outbox);
+  await replication.acknowledge(['author:1']);
+  assert.deepEqual(h.messages.slice(-4).map(message => message.method), ['replica.establish','replica.read','replica.apply','replica.ack']);
+  assert.deepEqual(h.messages.at(-2).args, { transactions: value.outbox });
+  let changes = 0;
+  const off = replication.onChanged(() => { changes++; });
+  h.runtime.emit('stateChanged', { ...state(), revision: 'changed:1' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(changes >= 1);
+  off(); await editor.dispose();
+  await assert.rejects(replication.read(), { code: 'EditorDisposed' });
+  const publicEditor = await h.mount();
+  assert.equal(publicEditor.replication, undefined);
+  assert.equal(h.connection.message.options.initialEditingEnabled, undefined);
+  await publicEditor.dispose();
 });
 test('host document retains nonce and authenticates independently of asset origin', async t => {
   const h = host(t), pending = createEditor({ ...h.options, frameDocument: { url: 'https://app.example/bootstrap.html', html: '<div id="app"></div>' } });
