@@ -62,7 +62,6 @@ await run(async () => {
     // With an unbundled module, package-owned assets resolve relative to it.
     assetBaseUrl: new URL('../../generated/editor/', import.meta.url),
     ui: { buttons: { help: false } },
-    modules: { analytics: false, authentication: false, remoteSync: false },
     signal: startup.signal,
   });
   await editor.replaceTextGraph(source.value);

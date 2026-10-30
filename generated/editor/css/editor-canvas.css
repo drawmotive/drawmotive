@@ -1,0 +1,18 @@
+/* Native canvas styles stay within the SDK surface and never reset the host page. */
+.drawmotive-canvas-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  --z-text-edit: 1;
+}
+.drawmotive-canvas-host .canvas-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.drawmotive-canvas-host canvas { display: block; outline: none; }
+.drawmotive-canvas-host [contenteditable] { margin: 0; }
+.drawmotive-canvas-host .editor-loading { padding: 24px; font-family: system-ui, sans-serif; }

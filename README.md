@@ -73,8 +73,9 @@ Internal applications own collaboration through separate private site packages a
 private runtime integration; those packages and interfaces are not public editor exports.
 
 Hosts use named functions such as `editor.setTool()` and `editor.setProperty()`;
-there is no public `sendCommand`. Internally, these operations use MessagePort
-request/response messages and a unified Blazor dispatcher. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [configuration](docs/editor-sdk.md#ui-configuration) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).
+there is no public `sendCommand`. Internally, these operations call the current
+Blazor object directly through ordered Promise calls. One canvas is supported per
+page, mounted in the host document. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [configuration](docs/editor-sdk.md#ui-configuration) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).
 
 ## Create and edit
 
@@ -210,7 +211,7 @@ npm run test:browser
 npm pack
 ```
 
-Assets carry package version, exact committed producer and hashes. Native assets are rebuilt for each release; source, symbols, maps and embedded debug metadata are excluded. Package, wire protocol and document format have separate version contracts.
+Assets carry package version, exact committed producer and hashes. Native assets are rebuilt for each release; source, symbols, maps and embedded debug metadata are excluded. Package, native runtime and document format have separate version contracts.
 
 ## License
 

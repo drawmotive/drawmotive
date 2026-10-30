@@ -59,9 +59,13 @@ test('a crashed font Worker rejects pending requests instead of claiming ready',
     const { createResourceWorkerClient } = await import('/src/resources/resource-worker-client.js');
     const { createWorkerFactory } = await import('/src/platform/worker-factory.js');
     const factory = createWorkerFactory({ mode: 'blob', fetch: async () => new Response('throw new Error("crashed");') });
-    const client = await createResourceWorkerClient({ workerFactory: factory });
-    try { await client.load({ path: 'font.ttf', url: '/font.ttf', sha256: '0'.repeat(64) }); return null; }
+    let client;
+    try {
+      client = await createResourceWorkerClient({ workerFactory: factory });
+      await client.load({ path: 'font.ttf', url: '/font.ttf', sha256: '0'.repeat(64) });
+      return null;
+    }
     catch (error) { return error.code; }
-    finally { await client.dispose(); }
+    finally { await client?.dispose(); }
   })).toBe('ResourceWorkerFailed');
 });
