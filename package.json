@@ -98,8 +98,6 @@
   "dependencies": {
     "@mantine/core": "9.7.4",
     "@mantine/hooks": "9.7.4",
-    "@microsoft/signalr": "10.0.11",
-    "@microsoft/signalr-protocol-msgpack": "10.0.11",
     "dexie": "4.4.7"
   }
 }

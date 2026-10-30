@@ -67,6 +67,15 @@ writing trusted runtime HTML so its service worker remains available. The host
 owns that HTML's CSP and resource base. The SDK still authenticates the frame
 window and bootstrap origin before opening its private message port.
 
+## Standalone editor boundary
+
+The public package provides editing UI, the canvas runtime and local browser services.
+It requires editor assets served by a static host, without requiring a DrawMotive
+business server, login session or collaboration connection for local editing.
+It has no authentication or SignalR dependency and exposes no public synchronization API.
+Internal applications own collaboration through separate private site packages and
+private runtime integration; those packages and interfaces are not public editor exports.
+
 ## Create and edit
 
 The full entry requires `import "@drawmotive/editor/styles.css"` in a bundled host.

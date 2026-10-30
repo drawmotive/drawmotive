@@ -40,15 +40,14 @@ test('asset verifier rejects tampering, extra files and symbolic links before co
   await assert.rejects(verifyAssets(root), /symbolic links/);
 });
 
-test('public browser package has no private runtime-loader or sibling dependency requirement', async () => {
+test('public browser package has no private loader, auth or collaboration transport dependency', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.name, '@drawmotive/editor');
   assert.notEqual(pkg.private, true);
   assert.equal(pkg.exports['./node'], undefined);
   assert.equal(pkg.exports['./worker'], undefined);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), [
-    '@mantine/core', '@mantine/hooks', '@microsoft/signalr',
-    '@microsoft/signalr-protocol-msgpack', 'dexie',
+    '@mantine/core', '@mantine/hooks', 'dexie',
   ]);
   assert.equal(pkg.peerDependencies.react, '^19.0.0');
   assert.equal(pkg.peerDependencies['react-dom'], '^19.0.0');
