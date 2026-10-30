@@ -1,6 +1,6 @@
 # @drawmotive/editor
 
-Embed the DrawMotive visual editor and compose your own document, save and publish flows. Each instance owns an isolated browser runtime. The public SDK exposes editing operations and state; the host owns files, accounts and external persistence.
+Embed the DrawMotive visual editor and compose your own document, save and publish flows. A page owns one WASM runtime; each opened document has a fresh native scope. The public SDK exposes editing operations and state; the host owns files, accounts and external persistence.
 
 [SDK guide and API reference](docs/editor-sdk.md) · [Browser example](examples/browser/index.html) · [Website](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
 

@@ -4,6 +4,8 @@ This guide covers the public standalone `@drawmotive/editor` SDK: mounting, conf
 
 **Architecture:** one active canvas is supported per page. Blazor mounts directly in the host DOM and persists for the page lifetime. Each opened document has a fresh native scope. This branch is a staging candidate; npm publication remains separate.
 
+The generated scene APIs require the matching native runtime built from the companion source revision. The diagrams site builds that committed-source candidate without publishing npm packages. Previously committed generated release assets retain their own producer and are not validation evidence for these new APIs.
+
 The authoritative declarations are [core.d.ts](../src/core.d.ts), [UI options](../src/react/ui-options.ts) and [React props](../src/react/index.d.ts). Only package export paths listed below are supported imports.
 
 ## Contents
