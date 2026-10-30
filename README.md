@@ -69,18 +69,23 @@ window and bootstrap origin before opening its private message port.
 
 ## Create and edit
 
+The full entry requires `import "@drawmotive/editor/styles.css"` in a bundled host.
+A native ESM page must link the package’s `dist/editor-ui.css`, as the browser example does.
+All controls and popovers remain inside the editor container. Give that container a height.
+Use `@drawmotive/editor/core` for a React-free instance with no UI chrome; inline text editing remains enabled.
+
 ```html
 <div id="editor" style="height: 600px"></div>
 ```
 
 ```javascript
 import { createEditor } from "@drawmotive/editor";
+import "@drawmotive/editor/styles.css";
 
 const editor = await createEditor({
   container: document.querySelector("#editor"),
   assetBaseUrl: "/editor/",
   ui: { buttons: { help: false } },
-  modules: { analytics: false, authentication: false, remoteSync: false },
 });
 await editor.replaceTextGraph("User -> Application -> Database");
 await editor.fitViewport();
@@ -91,11 +96,30 @@ unsubscribe();
 await editor.dispose();
 ```
 
-Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. Runtime IndexedDB is temporary and deleted during disposal; it is not a durable document file.
+Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. The default memory policy is temporary. Persistent mode requires an explicit namespace and documentId; all IndexedDB access runs in a Dedicated Worker, and disposal preserves that document.
 
 TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to the saved document and do not rewrite TextGraph. Calling `replaceTextGraph()` again creates a replacement document; it does not merge source changes with earlier canvas edits.
 
 ## Operations
+
+The `@drawmotive/editor/react` entry exports `Editor` (owns its iframe) and `EditorUi` (observes an existing core instance).
+Import the same stylesheet, provide a sized parent, and memoize object options. Changing document identity disposes and recreates the instance.
+The full imperative entry bundles React; the React entry uses the host’s React 19 installation.
+
+```tsx
+import { Editor } from "@drawmotive/editor/react";
+import "@drawmotive/editor/styles.css";
+
+const ui = { regions: { topRight: false }, drawingToolbar: { tools: ["rectangle", "arrow"] } };
+export function Diagram() {
+  return <Editor assetBaseUrl="/editor/" ui={ui} style={{ height: 600 }} />;
+}
+```
+
+`ui.regions` independently configures each corner’s visibility, item order, `host.*` actions and `slot.*` React content.
+`drawingToolbar` controls visibility, position and tools. `contextToolbar` filters object types, tools and panels.
+`ui: false` disables chrome. `textEditing` independently selects `inline` (default), `external` or `disabled`.
+Tooltip visibility, four-way position and delay are configured through `ui.tooltip`.
 
 | Operation | Result or effect |
 | --- | --- |
@@ -109,7 +133,10 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 | `undo()` / `redo()` | Applies document history |
 | `getState()` / `onStateChanged(listener)` | Current state / subscription with immediate replay |
 | `setActionState(id, { label?, enabled?, visible? })` | Updates a declared host action |
-| `dispose()` | Releases the frame and temporary storage |
+| `dispose()` | Releases this instance and its writer lease; persistent documents remain |
+| `copyToClipboard(token, { system? })` | Copies an opaque graph; reports system success separately from the internal copy |
+| `pasteFromClipboard(position, { source? })` | Pastes through the engine; source is `auto`, `system` or `internal` |
+| `onDisposed(listener)` | Releases host UI on disposal or forced page closure |
 
 State contains `revision`, `health` (`healthy` or `faulted`), `editingEnabled`, `busy`, `canUndo` and `canRedo`. Revisions are opaque and instance-local. Document changes advance the revision; selection, zoom and pan do not. External save success confirms only its snapshot revision, so a delayed acknowledgment must not clear later edits. Undo may conservatively produce a new dirty revision even when content matches an earlier save.
 
@@ -151,11 +178,11 @@ const editor = await createEditor({
 
 Handlers stay in the parent. Independent reverse RPC lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
 
-## Isolation, modules and lifecycle
+## Isolation and lifecycle
 
-One iframe isolates CSS, DOM and .NET globals; it is not an additional security sandbox or guaranteed process. A one-time bootstrap verifies the exact HTTP(S) runtime origin and iframe source, binds the URL nonce, and transfers a private `MessagePort`. All operations/state/actions then use protocol v2 on the port. The parent origin is not parsed, allowing a VS Code webview to host the SDK directly. The SDK is one browser module; SSR import is supported, while creation needs browser DOM, cryptographic random IDs and `MessageChannel`.
+One iframe isolates CSS, DOM and .NET globals; it is not an additional security sandbox or guaranteed process. A one-time nonce binds a private MessagePort to the runtime source and origin. Protocol v3 separates document commands from storage/resource callbacks, using instance, document-session and request identities. Switching logical documents disposes and recreates the instance. React UI runs in the owning host container outside the iframe.
 
-`modules.analytics`, `authentication` and `remoteSync` default false and freeze before Blazor starts. The public build omits optional implementations; enabling absent modules fails explicitly. Full website builds may enable included modules. Remote sync requires authentication; disabled sync preserves local document/history operations.
+Authentication, analytics and business requests belong to the host application. The editor does not load Blazor site modules. The core entry has no React dependency; the full entry bundles its React/Mantine UI, and the React entry shares the host's React runtime.
 
 Startup cancellation uses `signal`; `startupTimeoutMs` defaults to 120000. After creation, explicit disposal owns the instance. `requestTimeoutMs` also defaults to 120000. An operation deadline throws `EditorError` with `code: RequestTimeoutUnknown`, `requestId`, `method`, and a `completion` promise. The frame/document remain available; no retry occurs and the late result retains its ID.
 

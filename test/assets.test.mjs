@@ -14,7 +14,7 @@ test('asset verifier rejects tampering, extra files and symbolic links before co
   const content = '<!doctype html><title>Editor</title>';
   const file = path.join(root, 'generated/editor/embed.html');
   const manifest = {
-    schemaVersion: 1, protocolVersion: 2, packageName: '@drawmotive/editor', packageVersion: '0.2.1',
+    schemaVersion: 1, protocolVersion: 3, packageName: '@drawmotive/editor', packageVersion: '0.2.1',
     privateSource: { commit: 'a'.repeat(40) },
     assets: [{ path: 'editor/embed.html', bytes: content.length, sha256: createHash('sha256').update(content).digest('hex') }],
   };
@@ -46,7 +46,14 @@ test('public browser package has no private runtime-loader or sibling dependency
   assert.notEqual(pkg.private, true);
   assert.equal(pkg.exports['./node'], undefined);
   assert.equal(pkg.exports['./worker'], undefined);
-  assert.equal(pkg.dependencies, undefined);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), [
+    '@mantine/core', '@mantine/hooks', '@microsoft/signalr',
+    '@microsoft/signalr-protocol-msgpack', 'dexie',
+  ]);
+  assert.equal(pkg.peerDependencies.react, '^19.0.0');
+  assert.equal(pkg.peerDependencies['react-dom'], '^19.0.0');
+  assert.equal(pkg.peerDependenciesMeta.react.optional, true);
+  assert.ok(pkg.files.includes('dist'));
   assert.ok(pkg.files.includes('generated/editor'));
   assert.ok(pkg.files.includes('examples'));
 });

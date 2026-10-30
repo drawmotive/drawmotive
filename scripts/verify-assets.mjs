@@ -12,7 +12,7 @@ export async function verifyAssets(root = packageRoot) {
   const generated = path.join(root, 'generated');
   const manifest = JSON.parse(await readFile(path.join(generated, 'editor-manifest.json'), 'utf8'));
   const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-  if (manifest.schemaVersion !== 1 || manifest.protocolVersion !== 2 ||
+  if (manifest.schemaVersion !== 1 || manifest.protocolVersion !== 3 ||
       manifest.packageName !== '@drawmotive/editor' || manifest.packageVersion !== pkg.version ||
       !/^[a-f0-9]{40}$/.test(manifest.privateSource?.commit ?? '') || !manifest.assets?.length) {
     throw new Error('Editor runtime manifest does not match this package');

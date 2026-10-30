@@ -8,7 +8,7 @@ const packagePattern = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const has = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const editorRequiredAssets = [
-  "embed.html", "js/editor-embed.js", "js/site.js", "js/interop.js",
+  "embed.html", "js/bridge/protocol.js", "js/bridge/runtime-channel.js", "js/editor-embed.js", "js/site.js", "js/interop.js",
   "css/site.css", "Editor.Client.styles.css", "_framework/blazor.webassembly.js",
   "_content/Radzen.Blazor/Radzen.Blazor.js", "_content/Radzen.Blazor/css/standard-base.css",
   "fonts/MaterialSymbolsRounded.woff2", "static/files.json", "static/themes.css",
@@ -25,7 +25,7 @@ function isEditorAssetPath(value) {
   if (["embed.html", "Editor.Client.styles.css"].includes(relative)) return true;
   if (!["_framework", "_content", "css", "fonts", "js", "static"].includes(parts[1])) return false;
   if (parts[1] === "_content" && ["Blazor-Analytics", "Microsoft.AspNetCore.Components.WebAssembly.Authentication"].includes(parts[2])) return false;
-  if (parts[1] === "js" && !["js/site.js", "js/interop.js", "js/editor-embed.js"].includes(relative)) return false;
+  if (parts[1] === "js" && !["js/site.js", "js/interop.js", "js/editor-embed.js", "js/bridge/protocol.js", "js/bridge/runtime-channel.js"].includes(relative)) return false;
   return /\.(?:js|mjs|json|css|wasm|dll|dat|bin|ico|svg|woff2?|ttf|eot|png|jpe?g|gif|webp|avif|txt)$/i.test(relative);
 }
 
@@ -224,7 +224,7 @@ function verifyEditor(root, expected, sourceCommit, readJson, report) {
   const generated = path.join(root, "generated");
   const manifest = readJson(path.join(generated, "editor-manifest.json"), `${name} native manifest`);
   if (!record(manifest)) { if (manifest !== undefined) report(`${name} native manifest must be an object.`); return; }
-  if (manifest.schemaVersion !== 1 || manifest.protocolVersion !== 2) report(`${name} editor schemaVersion must be 1 and protocolVersion must be 2.`);
+  if (manifest.schemaVersion !== 1 || manifest.protocolVersion !== 3) report(`${name} editor schemaVersion must be 1 and protocolVersion must be 3.`);
   if (manifest.packageName !== name || manifest.packageVersion !== expected) report(`${name} native manifest identity must match ${name}@${expected}.`);
   if (manifest.privateSource?.project !== "Editor.Client" || !/^[a-f0-9]{40}$/.test(manifest.privateSource?.commit ?? "")) report(`${name} native source provenance must name an exact Editor.Client commit.`);
   if (manifest.privateSource?.development === true) report(`${name} contains development native assets.`);

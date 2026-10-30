@@ -1,5 +1,6 @@
 .local/
 node_modules/
+dist/
 *.tgz
 
 # Tracked release policy; generated archives/receipts remain ignored.
