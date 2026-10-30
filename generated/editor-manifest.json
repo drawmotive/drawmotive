@@ -4,7 +4,7 @@
   "packageVersion": "0.3.1",
   "runtimeVersion": 1,
   "privateSource": {
-    "commit": "5ca0f2384a8e34f69d274d58c5f84d2b2fadf82e",
+    "commit": "e693ec2f908c29f87e2fb900f5ec3580a8fb5ace",
     "project": "Editor.Client"
   },
   "assets": [
@@ -39,9 +39,9 @@
       "sha256": "9d05ee0861e8b3b8b0a765b145481aaca99680960285a550a7635a8e0354dd5f"
     },
     {
-      "path": "editor/_framework/Editor.Client.vyk18r1hk9.wasm",
-      "bytes": 743701,
-      "sha256": "67c4a6bee855cc457017911727f86d36dfd573b2b224613c45ab37141f79a2fe"
+      "path": "editor/_framework/Editor.Client.sszhx8l4fv.wasm",
+      "bytes": 732949,
+      "sha256": "84ff3febdd407434b958347d556cd47aae8d239838013f64c958660b66c5ba38"
     },
     {
       "path": "editor/_framework/ExCSS.1jyjm4dx0m.wasm",
@@ -49,9 +49,9 @@
       "sha256": "7354d17ae4ca035d9f1af9fd76abe8b4d289c532e186ee50b22c18b7e6699982"
     },
     {
-      "path": "editor/_framework/Graphics.Core.kvjvzfs8oa.wasm",
-      "bytes": 4420889,
-      "sha256": "60d59e590583cb9c312be03f8307819de2eb5a9eefbfe28c8f02bc5ae707c761"
+      "path": "editor/_framework/Graphics.Core.n7gncy5ae8.wasm",
+      "bytes": 4422937,
+      "sha256": "2d2a7aea71dd3382fa96dc4d458d3cde868819b6ef96183df0ca5b370b414595"
     },
     {
       "path": "editor/_framework/Grpc.Core.Api.6fqhhsvws3.wasm",
@@ -219,9 +219,9 @@
       "sha256": "7edf1bf34d3ab23694c7c9cecc28dc58845f2101a1562fd90c95c60a809ee4cf"
     },
     {
-      "path": "editor/_framework/RBush.k959fj3h61.wasm",
+      "path": "editor/_framework/RBush.wn58jvrkp6.wasm",
       "bytes": 24341,
-      "sha256": "e88dfaaf2d0c2e5c1d024b5c82d38574c9ddb22adec80fc1b18e8ab48212b33d"
+      "sha256": "ac4d0beab8450b397b73e12e942e05acb216511b8f9059e0843afa7469d6d236"
     },
     {
       "path": "editor/_framework/Radzen.Blazor.rlai7dwszp.wasm",
@@ -546,7 +546,7 @@
     {
       "path": "editor/_framework/dotnet.js",
       "bytes": 66020,
-      "sha256": "e22ef689954d3a4a2c83582bacc2de8cf7ed87dd30e7de2f79f5615d11e6f39f"
+      "sha256": "49f47345fb253be47a7b759b73f55ba6bf6c044cdde601657befe14435270c1f"
     },
     {
       "path": "editor/_framework/dotnet.native.4tiw4kuqp6.js",
@@ -650,8 +650,8 @@
     },
     {
       "path": "editor/js/editor-canvas.js",
-      "bytes": 10274,
-      "sha256": "ba538af904d92717c424109fab8a5307f877c064ae7271675bf976d0bb6a3bbb"
+      "bytes": 9966,
+      "sha256": "997366d9da89654920150acfdbf82e8efe98a1ab2dcbec8d99b0ff4307407193"
     },
     {
       "path": "editor/js/interop.js",

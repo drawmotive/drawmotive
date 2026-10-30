@@ -77,8 +77,6 @@ globalThis.drawmotiveCanvas = Object.freeze({
   openDocument: () => platform('storage.open').then(() => null),
   readDocumentCheckpoint: () => platform('storage.read'),
   commitDocument: batch => platform('storage.commit', { batch }),
-  readDocumentOutbox: () => platform('storage.outbox'),
-  acknowledgeDocumentOutbox: ids => platform('storage.ack', { ids }),
   loadFont: async (path, url, sha256, browserFontSha256) => {
     const emoji = path === 'NotoColorEmoji.ttf' || path.endsWith('/NotoColorEmoji.ttf');
     if (emoji && (typeof browserFontSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(browserFontSha256)))
@@ -132,9 +130,6 @@ async function execute(owner, method, args) {
   const response = JSON.parse(await owner.reference.invokeMethodAsync('ExecuteEmbeddedAsync', method, json(args ?? {})));
   if (response.state && !owner.closing) owner.emit('stateChanged', response.state);
   if (response.error) throw error(response.error.code, response.error.message);
-  if (method === 'replica.read') {
-    for (const record of response.result.outbox) record.payload = Uint8Array.from(atob(record.payload), character => character.charCodeAt(0));
-  }
   return response.result;
 }
 /** Mounts the page's only canvas. Cleanup finishes before another document can open. */

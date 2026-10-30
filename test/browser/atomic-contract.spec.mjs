@@ -17,3 +17,45 @@ test('persistent close and reopen preserves bytes in a fresh document scope',asy
  const result=await page.evaluate(async persistence=>{const {createEditor}=await import('/src/core.js');await editor.replaceTextGraph('One -> Two');const before=await editor.exportSnapshot({formats:['raw']});await editor.dispose();editor=await createEditor({container:document.querySelector('.editor'),assetBaseUrl:'/generated/editor/',ui:false,persistence});const after=await editor.exportSnapshot({formats:['raw']});const state=await editor.getState();await editor.dispose();return {before,after,canUndo:state.canUndo};},persistence);
  expect(result.after.raw).toBe(result.before.raw);expect(result.canUndo).toBe(false);
 });
+
+test('standalone edits and persisted Undo/Redo advance durable clocks without delivery records', async ({ page }) => {
+  const persistence = { mode: 'persistent', namespace: 'offline-' + crypto.randomUUID(), documentId: 'one' };
+  await create(page, { persistence });
+  const result = await page.evaluate(async persistence => {
+    const { createEditor } = await import('/src/core.js');
+    const { createDocumentWorkerClient } = await import('/src/storage/worker-client.js');
+    async function readDurableState() {
+      const store = await createDocumentWorkerClient();
+      try {
+        const session = await store.openSession({ namespace: persistence.namespace, documentId: persistence.documentId, persistence: persistence.mode });
+        const checkpoint = await store.readCheckpoint(session);
+        const delivery = await store.readReplicationState(session);
+        await store.closeSession(session);
+        return { clock: checkpoint.clock, delivery, bytes: checkpoint.payload.length };
+      } finally { await store.dispose(); }
+    }
+    await editor.setSketchyMode(true);
+    await editor.undo();
+    const before = await editor.exportSnapshot({ formats: ['raw'] });
+    await editor.dispose();
+    const undone = await readDurableState();
+    editor = await createEditor({ container: document.querySelector('.editor'), assetBaseUrl: '/generated/editor/', ui: false, persistence });
+    const reopened = await editor.getState();
+    const after = await editor.exportSnapshot({ formats: ['raw'] });
+    await editor.redo();
+    const redone = await editor.getState();
+    await editor.dispose();
+    return { before, after, reopened, redone, undone, final: await readDurableState() };
+  }, persistence);
+  expect(result.after.raw).toBe(result.before.raw);
+  expect(result.reopened.sketchyMode).toBe(false);
+  expect(result.reopened.canRedo).toBe(true);
+  expect(result.redone.sketchyMode).toBe(true);
+  expect(Object.values(result.undone.clock)).toEqual([2]);
+  expect(Object.values(result.final.clock)).toEqual([3]);
+  for (const snapshot of [result.undone, result.final]) {
+    expect(snapshot.bytes).toBeGreaterThan(0);
+    expect(snapshot.delivery.clock).toEqual(snapshot.clock);
+    expect(snapshot.delivery.outbox).toEqual([]);
+  }
+});
