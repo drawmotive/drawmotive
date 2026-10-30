@@ -12,6 +12,7 @@ serveWorkerRequests(self, {
   'storage.commit': ({ session, batch }) => store.commitBatch(session, batch),
   'storage.ack': ({ session, ids }) => store.acknowledgeOutbox(session, ids),
   'storage.outbox': ({ session }) => store.readOutbox(session),
+  'storage.replication': ({ session }) => store.readReplicationState(session),
   'storage.closeSession': ({ session }) => store.closeSession(session),
   'storage.delete': ({ session }) => store.deleteDocument(session),
   'storage.dispose': () => store.dispose(),

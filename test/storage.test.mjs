@@ -6,9 +6,31 @@ const database = await import('../src/storage/worker/database.ts').catch(() => (
 const memory = await import('../src/storage/memory-store.js').catch(() => ({}));
 const bytes = text => new TextEncoder().encode(text);
 const options = (namespace = 'account-a', documentId = 'drawing') => ({ namespace, documentId, persistence: 'persistent' });
-const batch = (id, previous, revision, text = revision) => ({ batchId: id, expectedRevision: previous, checkpoint: { revision, payload: bytes(text) }, outbox: [{ id, revision, payload: bytes(text) }] });
+const batch = (id, previous, revision, text = revision) => ({ batchId: id, expectedRevision: previous, checkpoint: { revision, payload: bytes(text), clock: { author: 1 } }, outbox: [{ id, revision, payload: bytes(text) }] });
 
 for (const kind of ['dexie', 'memory']) {
+  test(kind + ': delivery reads one atomic checkpoint clock and outbox, including rollback and exact retries', async () => {
+    const create = kind === 'dexie' ? database.createDocumentDatabase : memory.createMemoryDocumentStore;
+    const store = create({ databaseName: 'test-' + crypto.randomUUID(), acquireWriter: async () => () => {} });
+    const session = await store.openSession(options());
+    assert.deepEqual(await store.readReplicationState(session), { clock: {}, outbox: [] });
+    const first = batch('one', null, 'r1');
+    await store.commitBatch(session, first);
+    const invalid = batch('two', 'r1', 'r2'); invalid.checkpoint.clock.author = 2;
+    invalid.outbox = [{ ...invalid.outbox[0], id: 'one' }];
+    await assert.rejects(store.commitBatch(session, invalid), { code: 'BatchConflict' });
+    assert.deepEqual(await store.readReplicationState(session), { clock: { author: 1 }, outbox: first.outbox.map(({ id, payload }) => ({ id, payload })) });
+    const changedClock = structuredClone(first); changedClock.checkpoint.clock.author = 2;
+    await assert.rejects(store.commitBatch(session, changedClock), { code: 'BatchConflict' });
+    const next = batch('two', 'r1', 'r2'); next.checkpoint.clock.author = 2;
+    await store.commitBatch(session, next);
+    const state = await store.readReplicationState(session); state.clock.author = 99; state.outbox[0].payload[0] = 0;
+    await store.acknowledgeOutbox(session, ['one']);
+    await store.commitBatch(session, first);
+    assert.deepEqual(await store.readReplicationState(session), { clock: { author: 2 }, outbox: next.outbox.map(({ id, payload }) => ({ id, payload })) });
+    await store.dispose();
+  });
+
   test(kind + ': ACK owns an immutable copy of the confirmed IDs before entering the queue', async () => {
     const create = kind === 'dexie' ? database.createDocumentDatabase : memory.createMemoryDocumentStore;
     const store = create({ databaseName: 'test-' + crypto.randomUUID(), acquireWriter: async () => () => {} });
@@ -52,7 +74,7 @@ for (const kind of ['dexie', 'memory']) {
     const original = batch('one', null, 'r1');
     assert.deepEqual(await store.commitBatch(session, original), { batchId: 'one', revision: 'r1' });
     original.checkpoint.payload[0] = 0;
-    assert.deepEqual(await store.readCheckpoint(session), { revision: 'r1', payload: bytes('r1') });
+    assert.deepEqual(await store.readCheckpoint(session), { revision: 'r1', payload: bytes('r1'), clock: { author: 1 } });
     assert.deepEqual(await store.commitBatch(session, batch('one', null, 'r1')), { batchId: 'one', revision: 'r1' });
     await assert.rejects(store.commitBatch(session, batch('one', null, 'r1', 'changed')), { code: 'BatchConflict' });
     await assert.rejects(store.commitBatch(session, batch('two', null, 'r2')), { code: 'StorageConflict' });

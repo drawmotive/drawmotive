@@ -76,7 +76,7 @@ export async function createEditorSession(options = {}, privateOptions) {
   signal?.throwIfAborted();
   const ownerKey = Symbol.for('drawmotive.canvasOwner');
   if (hostWindow[ownerKey]) throw new EditorError('EditorAlreadyMounted','Only one editor can be mounted per page. Dispose the current editor first.');
-  const platform = createPlatformServices({ persistence: options.persistence, workerFactory: options.workerFactory, workerUrls: options.workerUrls,
+  const platform = createPlatformServices({ persistence: options.persistence, replication: !!privateOptions?.replication, workerFactory: options.workerFactory, workerUrls: options.workerUrls,
     preferenceStore: createPreferenceStore({ storage: {
       getItem: key => hostWindow.localStorage.getItem(key),
       setItem: (key,value) => hostWindow.localStorage.setItem(key,value),
@@ -264,19 +264,10 @@ export async function createEditorSession(options = {}, privateOptions) {
     clearTimeout(startupTimer); signal?.removeEventListener('abort',abort);
     return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
-    read: () => request('replica.read'),
+    read: platform.replication.read,
     apply: transactions => request('replica.apply', { transactions }),
-    acknowledge: ids => request('replica.ack', { ids }),
-    onChanged(listener) {
-      let revision = latestState.revision, health = latestState.health;
-      // Private reads acquire the document boundary and publish busy state.
-      // Only durable document changes wake delivery, avoiding a read/wakeup loop.
-      return instance.onStateChanged(state => {
-        const changed = state.revision !== revision || state.health !== health;
-        revision = state.revision; health = state.health;
-        if (changed) listener();
-      });
-    },
+    acknowledge: platform.replication.acknowledge,
+    onChanged: platform.replication.onChanged,
   }) }) : instance; }
   catch (error) {
     clearTimeout(startupTimer); startup.abort(error);

@@ -28,8 +28,10 @@ test('platform callbacks remain independent while a document command awaits stor
 });
 test('private composition supplies replication without extending the public handle',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});assert.equal(editor.replication,undefined);assert.equal(editor.sendCommand,undefined);assert.equal(h.context.options.initialEditingEnabled,false);
- h.behavior(method=>method==='replica.read'?{outbox:[]}:null);await replication.establish();assert.deepEqual(await replication.read(),{outbox:[]});await replication.apply([]);await replication.acknowledge([]);
- let changes=0;replication.onChanged(()=>changes++);h.context.emit('stateChanged',state({busy:true}));h.context.emit('stateChanged',state());assert.equal(changes,0);h.context.emit('stateChanged',state({revision:'next'}));assert.equal(changes,1);await editor.dispose();
+ h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[]});await replication.apply([]);await replication.acknowledge([]);
+ let changes=0;replication.onChanged(()=>changes++);h.context.emit('stateChanged',state({revision:'next'}));assert.equal(changes,0);
+ await h.context.platform('storage.commit',{batch:{batchId:'one',expectedRevision:null,checkpoint:{revision:'r1',payload:new Uint8Array([1]),clock:{author:1}},outbox:[{id:'author:1',revision:'r1',payload:new Uint8Array([2])}]}});
+ assert.equal(changes,1);assert.deepEqual((await replication.read()).clock,{author:1});await replication.acknowledge(['author:1']);assert.deepEqual((await replication.read()).outbox,[]);await editor.dispose();
 });
 test('startup platform preferences and cache status are retained',async t=>{
  const h=host(t);h.dom.window.localStorage.setItem('drawmotive.editor.preferences.v1','{"darkTheme":true}');const editor=await h.mount();assert.deepEqual(await h.context.platform('preferences.get'),{darkTheme:true});

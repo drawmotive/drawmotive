@@ -17,6 +17,7 @@ export async function createDocumentWorkerClient({
     commitBatch: (session, batch) => channel.request('storage.commit', { session, batch }),
     acknowledgeOutbox: (session, ids) => channel.request('storage.ack', { session, ids }),
     readOutbox: session => channel.request('storage.outbox', { session }),
+    readReplicationState: session => channel.request('storage.replication', { session }),
     closeSession: session => channel.request('storage.closeSession', { session }),
     deleteDocument: session => channel.request('storage.delete', { session }),
     dispose() {

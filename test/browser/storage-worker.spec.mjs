@@ -14,11 +14,11 @@ test('all IndexedDB operations run in the Worker; dispose/reopen preserves check
       return { store, session: await store.openSession(config) };
     };
     let { store, session } = await open(options);
-    const batch = { batchId: 'batch-one', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([10, 20, 30]) }, outbox: [{ id: 'txn-one', revision: 'r1', payload: new Uint8Array([40]) }] };
+    const batch = { batchId: 'batch-one', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([10, 20, 30]), clock: { author: 1 } }, outbox: [{ id: 'txn-one', revision: 'r1', payload: new Uint8Array([40]) }] };
     await store.commitBatch(session, batch);
     await store.dispose(); // does not delete the document
     ({ store, session } = await open(options));
-    const checkpoint = await store.readCheckpoint(session), outbox = await store.readOutbox(session);
+    const checkpoint = await store.readCheckpoint(session), delivery = await store.readReplicationState(session), outbox = delivery.outbox;
     const repeated = await store.commitBatch(session, batch);
     await store.acknowledgeOutbox(session, ['txn-one']);
     await store.commitBatch(session, batch); // lost ACK/commit response cannot reinsert an acknowledged entry
@@ -26,9 +26,9 @@ test('all IndexedDB operations run in the Worker; dispose/reopen preserves check
     await store.deleteDocument(session);
     const deleted = await store.readCheckpoint(session);
     await store.dispose();
-    return { checkpoint: { revision: checkpoint.revision, bytes: [...checkpoint.payload] }, outbox: outbox.map(entry => entry.id), repeated, afterAck, deleted };
+    return { checkpoint: { revision: checkpoint.revision, bytes: [...checkpoint.payload] }, clock: delivery.clock, outbox: outbox.map(entry => entry.id), repeated, afterAck, deleted };
   });
-  expect(result).toEqual({ checkpoint: { revision: 'r1', bytes: [10, 20, 30] }, outbox: ['txn-one'], repeated: { batchId: 'batch-one', revision: 'r1' }, afterAck: [], deleted: null });
+  expect(result).toEqual({ checkpoint: { revision: 'r1', bytes: [10, 20, 30] }, clock: { author: 1 }, outbox: ['txn-one'], repeated: { batchId: 'batch-one', revision: 'r1' }, afterAck: [], deleted: null });
 });
 
 test('origin-wide writer leases reject a second Worker and allow a new writer after close', async ({ page }) => {

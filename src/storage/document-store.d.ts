@@ -17,6 +17,8 @@ export interface DocumentSessionOptions {
 export interface DocumentCheckpoint {
   readonly revision: string;
   readonly payload: Uint8Array;
+  /** Engine-supplied delivery metadata, committed atomically with the opaque payload. */
+  readonly clock: Readonly<Record<string, number>>;
 }
 export interface DocumentOutboxEntry {
   readonly id: string;
@@ -39,6 +41,10 @@ export interface DocumentCommitReceipt {
   readonly batchId: string;
   readonly revision: string;
 }
+export interface DocumentDeliveryState {
+  readonly clock: Readonly<Record<string, number>>;
+  readonly outbox: readonly { readonly id: string; readonly payload: Uint8Array }[];
+}
 /** A Dedicated Worker owns this boundary; no IndexedDB access occurs on the UI thread.
  * Storage identity is namespace + documentId. Only one document may be open in a
  * store; opening a competing document rejects with StorageConflict. Every
@@ -50,6 +56,8 @@ export interface DocumentStore {
   /** Atomically removes only the named entries; does not rewrite a checkpoint. */
   acknowledgeOutbox(session: DocumentSession, ids: readonly string[]): Promise<void>;
   readOutbox(session: DocumentSession): Promise<readonly DocumentOutboxEntry[]>;
+  /** One atomic read of the durable clock and pending records; never reads engine memory. */
+  readReplicationState(session: DocumentSession): Promise<DocumentDeliveryState>;
   /** Closes ownership. Persistent documents remain; memory sessions may release their data. */
   closeSession(session: DocumentSession): Promise<void>;
   /** Deletion is explicit and is never implied by editor disposal or closeSession. */

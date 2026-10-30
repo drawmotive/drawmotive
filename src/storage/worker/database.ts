@@ -75,6 +75,14 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
       const { key } = owner.get(session);
       return (await outbox.where('documentKey').equals(key).sortBy('ordinal')).map(({ id, revision, payload }) => ({ id, revision, payload }));
     },
+    async readReplicationState(session: DocumentSession) {
+      const { key } = owner.get(session);
+      // Transport must never combine an older clock with a newer outbox read.
+      return db.transaction('r', documents, outbox, async () => ({
+        clock: structuredClone((await documents.get(key))?.checkpoint.clock ?? {}),
+        outbox: (await outbox.where('documentKey').equals(key).sortBy('ordinal')).map(({ id, payload }) => ({ id, payload })),
+      }));
+    },
     async closeSession(session: DocumentSession) { owner.close(session); },
     async deleteDocument(session: DocumentSession) {
       const { key } = owner.get(session);

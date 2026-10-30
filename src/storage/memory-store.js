@@ -48,6 +48,10 @@ export function createMemoryDocumentStore() {
       });
     },
     async readOutbox(session) { await tail; owner.get(session); return structuredClone(document?.outbox ?? []); },
+    async readReplicationState(session) {
+      await tail; owner.get(session);
+      return structuredClone({ clock: document?.checkpoint?.clock ?? {}, outbox: (document?.outbox ?? []).map(({ id, payload }) => ({ id, payload })) });
+    },
     closeSession(session) { return serial(() => { owner.close(session); document = undefined; }); },
     deleteDocument(session) { return serial(() => { owner.get(session); document = undefined; }); },
     async dispose() { closing = true; await tail; owner.dispose(); document = undefined; },

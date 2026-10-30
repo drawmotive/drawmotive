@@ -2,7 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlatformServices } from '../src/platform/services.js';
 
-const checkpoint = { revision: 'v1', payload: new Uint8Array([1, 2, 3]) };
+const checkpoint = { revision: 'v1', payload: new Uint8Array([1, 2, 3]), clock: { author: 1 } };
+
+test('private replication wakes only after successful storage and reads/ACKs without an engine callback', async () => {
+  const services = createPlatformServices({ replication: true });
+  const seen = [];
+  const stop = services.replication.onChanged(() => { seen.push(services.replication.read()); throw new Error('Observer failure'); });
+  const batch = { batchId: 'batch-1', expectedRevision: null, checkpoint, outbox: [{ id: 'author:1', revision: 'v1', payload: new Uint8Array([9]) }] };
+  await services.request('storage.commit', { batch });
+  assert.equal(seen.length, 1);
+  assert.deepEqual((await seen[0]).clock, { author: 1 });
+  await assert.rejects(services.request('storage.commit', { batch: { ...batch, batchId: 'bad', expectedRevision: null } }), { code: 'StorageConflict' });
+  assert.equal(seen.length, 1);
+  await services.replication.acknowledge(['author:1']);
+  assert.deepEqual(await services.replication.read(), { clock: { author: 1 }, outbox: [] });
+  assert.deepEqual(await services.request('storage.read'), checkpoint);
+  stop(); await services.dispose();
+  await assert.rejects(services.replication.read(), { code: 'EditorDisposed' });
+});
+
+test('standalone storage has no registered replication capability and saves without outgoing records', async () => {
+  const services = createPlatformServices();
+  assert.equal(services.replication, undefined);
+  await services.request('storage.commit', { batch: { batchId: 'one', expectedRevision: null, checkpoint, outbox: [] } });
+  assert.deepEqual(await services.request('storage.read'), checkpoint);
+  await services.dispose();
+});
 
 test('temporary storage uses a single host-owned document and releases memory on disposal', async () => {
   const services = createPlatformServices();

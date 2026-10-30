@@ -539,6 +539,13 @@ There is no CacheStorage or IndexedDB font-cache fallback. Missing offline fonts
 
 All document IndexedDB operations run in the SDK's static Dexie Worker. Font I/O uses a separate OPFS Worker. Do not open their database or reproduce transactions in application code. Persistent mode requires IndexedDB, Workers and origin-wide Web Locks. Browser storage can be denied or evicted; external backups remain the host's responsibility.
 
+Standalone persistence does not require a synchronization module. Local edits,
+Undo/Redo and reopening retain complete history and clocks without generating
+outgoing delivery records. Checkpoint state and its engine-supplied clock metadata
+are committed atomically. Private application composition may register delivery;
+its offline outbox is distinct from standalone local history and is not a public
+editor API.
+
 The two build artifacts are `dist/workers/document.worker.js` and `dist/workers/resource.worker.js`. Both are self-contained classic Worker scripts. If the bundler/host does not preserve their module-relative URLs, copy these exact files from the same package version into your static asset pipeline and provide their served locations:
 
 ```javascript
