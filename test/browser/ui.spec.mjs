@@ -135,5 +135,10 @@ test('canvas pointer dismissal keeps native keyboard focus while Escape restores
  await expect(page.getByRole('dialog',{name:'Settings'})).toHaveCount(0);
  // Mantine schedules focus return after dismissal; observe that completed handoff.
  await page.waitForTimeout(100);await expect(page.locator('canvas')).toBeFocused();
- await settings.click();await page.keyboard.press('Escape');await expect(settings).toBeFocused();
+ await settings.click();
+ const dialog=page.getByRole('dialog',{name:'Settings'});
+ await expect(dialog).toBeVisible();
+ // Escape belongs to the mounted panel, after its focus trap has received focus.
+ await expect.poll(()=>dialog.evaluate(node=>node.contains(document.activeElement))).toBe(true);
+ await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(settings).toBeFocused();
 });
