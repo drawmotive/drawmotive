@@ -1,4 +1,4 @@
-import { EditorError } from '../bridge/protocol.js';
+import { EditorError } from '../errors.js';
 
 const keys = new Set(['darkTheme', 'showGrid', 'snapToGrid']);
 function validate(value) {

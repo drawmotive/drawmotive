@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createWorkerChannel, serveWorkerRequests } from '../src/platform/worker-channel.js';
-import { EditorError, fromErrorDescriptor, immutableSnapshot, toErrorDescriptor } from '../src/bridge/protocol.js';
+import { EditorError, fromErrorDescriptor, immutableSnapshot, toErrorDescriptor } from '../src/errors.js';
 
 class Endpoint extends EventTarget {
   sent = [];

@@ -1,4 +1,4 @@
-import { EditorError } from '../bridge/protocol.js';
+import { EditorError } from '../errors.js';
 import { createMemoryDocumentStore } from '../storage/memory-store.js';
 import { createDocumentWorkerClient } from '../storage/worker-client.js';
 import { createResourceWorkerClient } from '../resources/resource-worker-client.js';

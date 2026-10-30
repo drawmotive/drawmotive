@@ -1,4 +1,4 @@
-import { EditorError } from '../bridge/protocol.js';
+import { EditorError } from '../errors.js';
 const prefix = 'drawmotive/selection:1\n';
 const invalid = () => new EditorError('ClipboardFormatUnsupported', 'The clipboard does not contain a DrawMotive selection.');
 function selection(value) {

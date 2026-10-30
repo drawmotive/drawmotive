@@ -1,5 +1,5 @@
 import type { EditorUiOptions, NormalizedUiOptions, EditorUiActionState } from './react/ui-options.js';
-export { EditorError } from './bridge/protocol.js';
+export { EditorError } from './errors.js';
 export type { EditorUiOptions, EditorButtonId, EditorRegionId, EditorUiAction as EditorAction, EditorUiActionState as EditorActionState } from './react/ui-options.js';
 export interface EditorState {
   readonly revision: string | null;

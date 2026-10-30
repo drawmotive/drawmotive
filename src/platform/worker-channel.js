@@ -1,4 +1,4 @@
-import { EditorError, toErrorDescriptor } from '../bridge/protocol.js';
+import { EditorError, toErrorDescriptor } from '../errors.js';
 import { createWorkerFactory } from './worker-factory.js';
 
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);

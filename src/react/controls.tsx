@@ -43,7 +43,7 @@ export const ToolButton = forwardRef<HTMLButtonElement, ToolButtonProps>(functio
 export function PanelButton({id,button,children,label,nested=false}: {id:string;button:ReactElement<ButtonHTMLAttributes<HTMLButtonElement>>;children:ReactNode;label?:string;nested?:boolean}) {
   const {panel,setPanel} = useUi();
   const [local,setLocal]=useState(false),opened=nested?local:panel===id,change=(open:boolean)=>nested?setLocal(open):setPanel(open?id:null);
-  return <Popover opened={opened} onChange={change} position="top-start" offset={5} withinPortal={false} trapFocus returnFocus transitionProps={{duration:0}}
+  return <Popover opened={opened} onChange={change} position="top-start" offset={5} withinPortal={false} trapFocus returnFocus={typeof document==='undefined'||!document.activeElement?.matches('.drawmotive-canvas-host canvas')} transitionProps={{duration:0}}
     classNames={{dropdown:'dm-panel'}}>
     <Popover.Target>{cloneElement(button,{onClick:event=>{button.props.onClick?.(event);change(!opened);}})}</Popover.Target>
     <Popover.Dropdown role="dialog" aria-label={label??LABELS[id]??id}>{children}</Popover.Dropdown>

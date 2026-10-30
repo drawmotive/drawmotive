@@ -21,7 +21,10 @@ const idle:EditorState={revision:null,health:'healthy',editingEnabled:false,busy
 
 /** Local UI observes immutable snapshots; every edit uses the engine's semantic API. */
 export function EditorUi(props:EditorUiProps) {
-  return <EditorUiSession {...props}/>;
+  // A sequential document replacement must release all previous UI effects and state.
+  const lifetime=useRef({editor:props.editor,key:0});
+  if(lifetime.current.editor!==props.editor)lifetime.current={editor:props.editor,key:lifetime.current.key+1};
+  return <EditorUiSession key={lifetime.current.key} {...props}/>;
 }
 function EditorUiSession({editor,container,slots={},colorScheme,className='',style,onError}:EditorUiProps) {
   const [ui,setUi]=useState(editor.ui),[state,setState]=useState<EditorState>(idle),[selection,setSelection]=useState<EditorSelectionSnapshot|null>(null);

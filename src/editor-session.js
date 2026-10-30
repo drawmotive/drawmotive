@@ -1,4 +1,4 @@
-import { EditorError, fromErrorDescriptor, immutableSnapshot } from './bridge/protocol.js';
+import { EditorError, fromErrorDescriptor, immutableSnapshot } from './errors.js';
 import { normalizeUiOptions } from './react/ui-options-runtime.js';
 import { createPlatformServices } from './platform/services.js';
 import { createPreferenceStore, validatePreferences } from './platform/preferences.js';

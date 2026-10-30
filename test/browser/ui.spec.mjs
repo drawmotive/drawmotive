@@ -117,3 +117,23 @@ test('StrictMode cleanup and newer events own selection and preference initializ
  await page.evaluate(()=>strictRoot.unmount());
  expect(await page.evaluate(()=>Object.values(strictInstance.listeners).every(listeners=>listeners.size===0))).toBe(true);
 });
+
+test('reusing EditorUi for the next document resets closed state and configuration',async({page})=>{
+ const fixture=await build({stdin:{contents:
+ 'import {createElement} from "react";import {createRoot} from "react-dom/client";import {EditorUi} from "./src/react/editor-ui.tsx";'+
+ 'const root=createRoot(document.body.appendChild(document.createElement("div")));globalThis.showEditor=(editor,container)=>root.render(createElement(EditorUi,{editor,container}));',
+ resolveDir:fileURLToPath(new URL('../..',import.meta.url)),sourcefile:'reuse.js'},write:false,outfile:'reuse.js',bundle:true,format:'esm',platform:'browser',target:'es2022',jsx:'automatic'});
+ await page.route('**/reuse.js',route=>route.fulfill({contentType:'text/javascript',body:fixture.outputFiles.find(file=>file.path.endsWith('.js')).text}));
+ await page.evaluate(async()=>{await import('/reuse.js');const first=mount();first.view.dispose();globalThis.first=first;showEditor(first.editor,first.root);});
+ await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toBeVisible();await page.evaluate(()=>first.editor.dispose());await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toHaveCount(0);
+ await page.evaluate(()=>{const next=mount({buttons:{rectangle:false}});next.view.dispose();showEditor(next.editor,next.root);});await expect(page.getByRole('button',{name:'Ellipse',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toHaveCount(0);
+});
+
+test('canvas pointer dismissal keeps native keyboard focus while Escape restores the panel trigger',async({page})=>{
+ await page.evaluate(()=>{const current=mount();current.root.classList.add('drawmotive-canvas-host');const canvas=current.root.querySelector('canvas');canvas.tabIndex=0;canvas.addEventListener('pointerdown',()=>canvas.focus());instances.push(current);});
+ const settings=page.getByRole('button',{name:'Settings',exact:true});await settings.click();await expect(page.getByRole('dialog',{name:'Settings'})).toBeVisible();await page.locator('canvas').click({position:{x:400,y:300}});
+ await expect(page.getByRole('dialog',{name:'Settings'})).toHaveCount(0);
+ // Mantine schedules focus return after dismissal; observe that completed handoff.
+ await page.waitForTimeout(100);await expect(page.locator('canvas')).toBeFocused();
+ await settings.click();await page.keyboard.press('Escape');await expect(settings).toBeFocused();
+});
