@@ -291,7 +291,16 @@ export async function createEditorSession(options = {}, privateOptions) {
     read: () => request('replica.read'),
     apply: transactions => request('replica.apply', { transactions }),
     acknowledge: ids => request('replica.ack', { ids }),
-    onChanged(listener) { return instance.onStateChanged(listener); },
+    onChanged(listener) {
+      let revision = latestState.revision, health = latestState.health;
+      // Private reads acquire the document boundary and publish busy state.
+      // Only durable document changes wake delivery, avoiding a read/wakeup loop.
+      return instance.onStateChanged(state => {
+        const changed = state.revision !== revision || state.health !== health;
+        revision = state.revision; health = state.health;
+        if (changed) listener();
+      });
+    },
   }) }) : instance; }
   catch (error) {
     close(error);

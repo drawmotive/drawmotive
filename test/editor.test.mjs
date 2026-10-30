@@ -72,6 +72,10 @@ test('private source composition supplies a separate replication handle without 
   assert.deepEqual(h.messages.at(-2).args, { transactions: value.outbox });
   let changes = 0;
   const off = replication.onChanged(() => { changes++; });
+  h.runtime.emit('stateChanged', { ...state(), busy: true });
+  h.runtime.emit('stateChanged', { ...state(), busy: false });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(changes, 0, 'Private read/ack busy notifications must not schedule another reconciliation.');
   h.runtime.emit('stateChanged', { ...state(), revision: 'changed:1' });
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(changes >= 1);
