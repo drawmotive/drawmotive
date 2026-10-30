@@ -1,7 +1,6 @@
-import { PROTOCOL_VERSION, EditorError, fromErrorDescriptor } from './bridge/protocol.js';
-import { createRuntimeChannel } from './bridge/runtime-channel.js';
+import { EditorError, fromErrorDescriptor, immutableSnapshot } from './bridge/protocol.js';
 import { normalizeUiOptions } from './react/ui-options-runtime.js';
-import { createPlatformServices, PLATFORM_METHODS } from './platform/services.js';
+import { createPlatformServices } from './platform/services.js';
 import { createPreferenceStore, validatePreferences } from './platform/preferences.js';
 import { createEditorClipboard } from './platform/clipboard.js';
 export { EditorError };
@@ -58,48 +57,55 @@ function viewportOptions(options = {}) {
 }
 
 
-/** A frame owns one document session, its .NET globals and native editing DOM.
- * Open another logical document by disposing this instance and creating another. */
+/** One page owns one canvas. A document switch awaits full native/platform cleanup. */
 export async function createEditorSession(options = {}, privateOptions) {
-  keys(options, ['container','assetBaseUrl','frameDocument','ui','persistence','workerFactory','workerUrls','signal','title','startupTimeoutMs','requestTimeoutMs','disposeTimeoutMs'], 'editor');
+  keys(options, ['container','assetBaseUrl','ui','persistence','workerFactory','workerUrls','signal','title','startupTimeoutMs','disposeTimeoutMs'], 'editor');
   const normalized = normalizeUiOptions(options.ui);
   let ui = normalized.ui;
   const handlers = normalized.handlers;
   const { container, signal } = options;
   const hostDocument = container?.ownerDocument, hostWindow = hostDocument?.defaultView;
   if (!hostWindow || !(container instanceof hostWindow.HTMLElement)) throw new TypeError('container must be an HTML element in a browser document');
-  const deadlines = Object.fromEntries(['startup','request','dispose'].map(name => [name, positive(options[name + 'TimeoutMs'] ?? (name === 'dispose' ? 5000 : 120000), name + 'TimeoutMs')]));
+  const deadlines = Object.fromEntries(['startup','dispose'].map(name => [name, positive(options[name + 'TimeoutMs'] ?? (name === 'dispose' ? 5000 : 120000), name + 'TimeoutMs')]));
   const title = options.title === undefined ? 'DrawMotive diagram editor' : text(options.title, 'title');
-  if (typeof hostWindow.MessageChannel !== 'function') throw new TypeError('MessageChannel is required');
   if (options.workerFactory !== undefined && typeof options.workerFactory !== 'function') throw new TypeError('workerFactory must be a function');
   if (options.workerUrls !== undefined) keys(options.workerUrls, ['document','resource'], 'workerUrls');
   const assetBase = new URL(options.assetBaseUrl ?? new URL('../generated/editor/', import.meta.url), hostDocument.baseURI);
   if (!['https:','http:'].includes(assetBase.protocol) || assetBase.username || assetBase.password) throw new TypeError('assetBaseUrl must be an HTTP(S) URL');
   if (!assetBase.pathname.endsWith('/')) assetBase.pathname += '/'; assetBase.search = ''; assetBase.hash = '';
-  const documentOptions = options.frameDocument;
-  if (documentOptions !== undefined) { keys(documentOptions, ['url','html'], 'frameDocument'); text(documentOptions.html, 'frameDocument.html'); }
-  const frameUrl = documentOptions === undefined ? new URL('embed.html', assetBase) : new URL(documentOptions.url, hostDocument.baseURI);
-  if (!['https:','http:'].includes(frameUrl.protocol) || frameUrl.username || frameUrl.password || documentOptions && frameUrl.origin !== hostWindow.location.origin)
-    throw new TypeError('frameDocument.url must be an HTTP(S) URL on the host origin');
   signal?.throwIfAborted();
-  const instanceId = hostWindow.crypto.randomUUID(), documentSessionId = hostWindow.crypto.randomUUID();
-  const platform = createPlatformServices({ instanceId, documentSessionId, persistence: options.persistence, workerFactory: options.workerFactory, workerUrls: options.workerUrls,
+  const ownerKey = Symbol.for('drawmotive.canvasOwner');
+  if (hostWindow[ownerKey]) throw new EditorError('EditorAlreadyMounted','Only one editor can be mounted per page. Dispose the current editor first.');
+  const platform = createPlatformServices({ persistence: options.persistence, workerFactory: options.workerFactory, workerUrls: options.workerUrls,
     preferenceStore: createPreferenceStore({ storage: {
-      // Resolve lazily: denied localStorage must fail the preference operation,
-      // rather than leaking an unowned frame during createEditor.
       getItem: key => hostWindow.localStorage.getItem(key),
       setItem: (key,value) => hostWindow.localStorage.setItem(key,value),
     } }),
   });
-  const nonce = hostWindow.crypto.randomUUID(); frameUrl.hash = new URLSearchParams({ nonce }).toString();
-  const frame = hostDocument.createElement('iframe'); frame.title = title;
-  frame.style.cssText = 'display:block;width:100%;height:100%;border:0;'; frame.src = frameUrl.href;
-  let lifecycle = 'loading', latestState, latestPreferences, channel, connected = false, disposal, platformClosing, resolveReady, rejectReady, clipboard;
-  const stateListeners = new Set(), uiListeners = new Set(), preferenceListeners = new Set(), disposalListeners = new Set(), actionControllers = new Set(), actionResults = new Map();
+  const owner = {}; hostWindow[ownerKey] = owner;
+  const canvasRoot = hostDocument.createElement('div');
+  canvasRoot.className = 'dm-canvas-root'; canvasRoot.setAttribute('aria-label',title);
+  canvasRoot.style.cssText = 'position:absolute;inset:0;overflow:hidden;';
+  container.append(canvasRoot);
+  let lifecycle = 'loading', latestState, latestPreferences, native, disposal, clipboard, queue = Promise.resolve();
+  const stateListeners = new Set(), uiListeners = new Set(), preferenceListeners = new Set(), disposalListeners = new Set(), actionControllers = new Set(), eventListeners = new Map();
   const fontCacheStatus = new Map();
-  const ready = new Promise((resolve,reject) => { resolveReady = resolve; rejectReady = reject; });
+  const startup = new AbortController();
+  const abort = () => startup.abort(signal.reason ?? new DOMException('Initialization aborted','AbortError'));
+  signal?.addEventListener('abort',abort,{ once:true });
+  if (signal?.aborted) abort();
   const disposedError = () => new EditorError('EditorDisposed', 'Editor has been disposed');
-  const report = error => hostWindow.console.error('Editor bridge failed', error);
+  const report = error => hostWindow.console.error('Editor failed', error);
+  function emit(name,value) {
+    if (lifecycle === 'disposed' || lifecycle === 'disposing') return;
+    if (name === 'ready') updateState(value.state);
+    else if (name === 'stateChanged') updateState(value);
+    else if (name === 'preferencesChanged') updatePreferences(value);
+    else if (name === 'fontCacheStatus') fontCacheStatus.set(value.path,immutableSnapshot(value));
+    else if (name === 'failed') { const error = fromErrorDescriptor(value); if (lifecycle === 'loading') startup.abort(error); else report(error); }
+    for (const listener of eventListeners.get(name) ?? []) { try { listener(immutableSnapshot(value)); } catch(error) { report(error); } }
+  }
+  function releaseOwnership() { if (hostWindow[ownerKey] === owner) delete hostWindow[ownerKey]; }
   function updateState(value) {
     const next = stateValue(value);
     if (latestState && Object.keys(next).every(key => next[key] === latestState[key])) return;
@@ -112,25 +118,27 @@ export async function createEditorSession(options = {}, privateOptions) {
     latestPreferences = next;
     for (const listener of preferenceListeners) { try { listener(next); } catch (error) { report(error); } }
   }
-  function close(reason = disposedError()) {
-    if (lifecycle === 'disposed') return;
-    lifecycle = 'disposed'; clearTimeout(startupTimer);
-    hostWindow.removeEventListener('message', bootstrap); hostWindow.removeEventListener('pagehide', pagehide);
-    signal?.removeEventListener('abort', abort); rejectReady(reason);
-    for (const controller of actionControllers) controller.abort(reason);
-    actionControllers.clear(); actionResults.clear(); handlers.clear(); stateListeners.clear(); uiListeners.clear(); fontCacheStatus.clear();
-    channel?.dispose(reason); frame.remove();
-    clipboard?.dispose();
-    preferenceListeners.clear(); latestPreferences = undefined;
-    for (const listener of disposalListeners) { try { listener(); } catch (error) { report(error); } }
+  function close() {
+    lifecycle = 'disposed';
+    hostWindow.removeEventListener('pagehide',pagehide);
+    signal?.removeEventListener('abort',abort);
+    for (const controller of actionControllers) controller.abort(disposedError());
+    actionControllers.clear(); handlers.clear(); stateListeners.clear(); uiListeners.clear(); fontCacheStatus.clear(); eventListeners.clear();
+    clipboard?.dispose(); preferenceListeners.clear(); latestPreferences = undefined;
+    for (const listener of disposalListeners) { try { listener(); } catch(error) { report(error); } }
     disposalListeners.clear();
-    platformClosing=platform.dispose();
-    void platformClosing.catch(report);
   }
-  function request(method, args = {}, requestOptions) {
-    return lifecycle === 'ready' ? channel.request(method,args,requestOptions) : Promise.reject(disposedError());
+  function request(method,args = {}) {
+    if (lifecycle !== 'ready') return Promise.reject(disposedError());
+    const copy = immutableSnapshot(args);
+    const result = queue.then(() => native.request(method,copy)).then(immutableSnapshot).catch(error => {
+      if (error instanceof EditorError) throw error;
+      throw new EditorError(error?.code ?? 'RuntimeError',error?.message ?? String(error),{cause:error});
+    });
+    queue = result.catch(() => {});
+    return result;
   }
-  function invoke(method, prepare) { try { return request(method, prepare()); } catch (error) { return Promise.reject(error); } }
+  function invoke(method,prepare) { try { return request(method,prepare()); } catch(error) { return Promise.reject(error); } }
   async function invokeAction(id) {
     if (lifecycle !== 'ready') throw disposedError();
     const descriptor = ui.actions.find(action => action.id === id), handler = handlers.get(id);
@@ -145,53 +153,8 @@ export async function createEditorSession(options = {}, privateOptions) {
     finally { actionControllers.delete(controller); }
     return null;
   }
-  function bootstrap(event) {
-    if (connected || event.source !== frame.contentWindow || event.origin !== frameUrl.origin || event.data?.type !== 'drawmotive:hello') return;
-    if (event.data.protocolVersion !== PROTOCOL_VERSION) { close(new EditorError('ProtocolMismatch', 'Unsupported editor runtime protocol')); return; }
-    connected = true;
-    let ports;
-    try {
-      ports = new hostWindow.MessageChannel();
-      channel = createRuntimeChannel({ port: ports.port1, instanceId, documentSessionId, requestTimeoutMs: deadlines.request, onError: error => lifecycle === 'loading' ? close(error) : report(error) });
-      // Startup needs fonts and storage before the managed runtime can publish ready.
-      for (const method of PLATFORM_METHODS) channel.onRequest(method, args => platform.request(method,args), { lane: 'platform' });
-      channel.onRequest('host.action', (args, context) => {
-        let result = actionResults.get(context.requestId);
-        if (!result) {
-          result = invokeAction(args.id); actionResults.set(context.requestId,result); void result.catch(() => {});
-          if (actionResults.size > 128) actionResults.delete(actionResults.keys().next().value);
-        }
-        return result;
-      }, { lane: 'platform' });
-      channel.onEvent('ready', value => {
-        if (lifecycle !== 'loading') return;
-        try { updateState(value.state); lifecycle = 'ready'; clearTimeout(startupTimer); resolveReady(); } catch (error) { close(error); }
-      });
-      channel.onEvent('stateChanged', value => { try { updateState(value); } catch (error) { report(error); } });
-      channel.onEvent('preferencesChanged', value => { try { updatePreferences(value); } catch (error) { report(error); } });
-      channel.onEvent('fontCacheStatus', value => {
-        if (typeof value?.path !== 'string' || !['hit','stored','unavailable','write-failed'].includes(value.cache)
-            || value.detail !== undefined && typeof value.detail !== 'string') {
-          report(new EditorError('InvalidRuntimeResponse','Invalid font cache status')); return;
-        }
-        fontCacheStatus.set(value.path,Object.freeze({ path: value.path,cache: value.cache,...(value.detail === undefined ? {} : { detail: value.detail }) }));
-      });
-      channel.onEvent('failed', value => { const error = fromErrorDescriptor(value); if (lifecycle === 'loading') close(error); else report(error); });
-      frame.contentWindow.postMessage({ type: 'drawmotive:connect', protocolVersion: PROTOCOL_VERSION, nonce, instanceId, documentSessionId, options: { ui, ...(privateOptions?.replication ? { initialEditingEnabled: false } : {}) } }, frameUrl.origin, [ports.port2]);
-      hostWindow.removeEventListener('message', bootstrap);
-    } catch (error) { ports?.port2.close(); ports?.port1.close(); close(error); }
-  }
-  const abort = () => close(signal.reason ?? new DOMException('Initialization aborted', 'AbortError'));
-  const pagehide = event => { if (!event.persisted) close(); };
-  const startupTimer = setTimeout(() => close(new EditorError('StartupTimeout', 'Editor initialization timed out')), deadlines.startup);
-  hostWindow.addEventListener('message', bootstrap); hostWindow.addEventListener('pagehide', pagehide); signal?.addEventListener('abort', abort, { once: true });
-  if (signal?.aborted) abort();
-  if (documentOptions) frame.addEventListener('load', () => {
-    try {
-      const document = frame.contentDocument; document.open(); frame.contentWindow.history.replaceState(null,'',frameUrl.href);
-      document.write(documentOptions.html); document.close();
-    } catch (error) { close(error); }
-  }, { once: true });
+  const pagehide = event => { if (!event.persisted) void instance.dispose().catch(report); };
+  hostWindow.addEventListener('pagehide',pagehide);
   const subscribe = (listeners, listener, value) => {
     if (typeof listener !== 'function') throw new TypeError('Listener must be a function');
     if (lifecycle !== 'ready') throw disposedError();
@@ -199,7 +162,7 @@ export async function createEditorSession(options = {}, privateOptions) {
     return () => listeners.delete(listener);
   };
   const instance = Object.freeze({
-    get lifecycle() { return lifecycle; }, get instanceId() { return instanceId; }, get documentSessionId() { return documentSessionId; }, get ui() { return ui; },
+    get lifecycle() { return lifecycle; }, get ui() { return ui; },
     replaceDocument(raw) { return invoke('replaceDocument', () => ({ raw: text(raw,'Document') })); },
     replacePngDocument(base64) { return invoke('replacePngDocument', () => ({ base64: text(base64,'PNG document') })); },
     replaceTextGraph(source) { return invoke('replaceTextGraph', () => ({ source: text(source,'TextGraph source') })); },
@@ -222,7 +185,7 @@ export async function createEditorSession(options = {}, privateOptions) {
       if (lifecycle === 'disposed') { listener(); return () => {}; }
       disposalListeners.add(listener); return () => disposalListeners.delete(listener);
     },
-    onEvent(name, listener) { if (lifecycle !== 'ready') throw disposedError(); return channel.onEvent(name,listener); },
+    onEvent(name, listener) { if (lifecycle !== 'ready') throw disposedError(); if (typeof listener !== 'function') throw new TypeError('Listener must be a function'); let listeners = eventListeners.get(name); if (!listeners) eventListeners.set(name,listeners = new Set()); listeners.add(listener); return () => listeners.delete(listener); },
     getSelection() { return request('getSelection'); },
     setTool(tool) { return invoke('setTool', () => ({ tool: text(tool,'tool') })); },
     setProperty(token, change) { return request('setProperty',{ token, change }); },
@@ -261,22 +224,14 @@ export async function createEditorSession(options = {}, privateOptions) {
     dispose() {
       if (disposal) return disposal;
       if (lifecycle === 'disposed') return Promise.resolve();
-      // Establish ownership before abort dispatch invokes arbitrary host listeners.
       let complete, fail;
       disposal = new Promise((resolve,reject) => { complete = resolve; fail = reject; });
       lifecycle = 'disposing';
       for (const controller of actionControllers) controller.abort(disposedError());
-      const cleanup = channel.request('dispose',{}, { timeoutMs: deadlines.dispose });
-      void (async () => {
-        let timer;
-        try {
-          await Promise.race([
-            cleanup.then(() => platform.dispose()),
-            new Promise((_,reject) => { timer = setTimeout(() => reject(new EditorError('DisposeTimeout','Editor cleanup exceeded its deadline.')),deadlines.dispose); }),
-          ]);
-        } catch (error) { throw new EditorError('DisposeCleanupUnconfirmed','Editor removed; runtime or platform cleanup was not confirmed',{ cause: error }); }
-        finally { clearTimeout(timer); close(); }
-      })().then(complete,fail);
+      // A successor cannot share a runtime whose previous scope or writer may still be alive.
+      void bounded(async () => { await queue; await native.dispose(); await platform.dispose(); },deadlines.dispose).then(() => {
+        canvasRoot.remove(); releaseOwnership(); close(); complete();
+      },error => { close(); fail(new EditorError('DisposeCleanupUnconfirmed','Editor cleanup was not confirmed.',{cause:error})); });
       return disposal;
     },
   });
@@ -284,9 +239,20 @@ export async function createEditorSession(options = {}, privateOptions) {
   try { clipboardOptions.clipboard = hostWindow.navigator.clipboard; clipboardOptions.ClipboardItem = hostWindow.ClipboardItem; clipboardOptions.Blob = hostWindow.Blob; }
   catch { /* The internal clipboard remains usable when the host denies system access. */ }
   clipboard = createEditorClipboard(instance, clipboardOptions);
-  if (lifecycle === 'disposed') clipboard.dispose();
-  if (lifecycle !== 'disposed') container.append(frame);
-  try { await ready; signal?.throwIfAborted(); signal?.removeEventListener('abort',abort); return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
+  const startupTimer = setTimeout(() => startup.abort(new EditorError('StartupTimeout','Editor initialization timed out.')),deadlines.startup);
+  try {
+    const load = privateOptions?.runtimeLoader ?? (url => import(/* @vite-ignore */ url));
+    const runtime = await load(new URL('js/editor-canvas.js',assetBase).href);
+    startup.signal.throwIfAborted();
+    native = await runtime.mountCanvas({container:canvasRoot,assetBaseUrl:assetBase.href,
+      options:{ui,...(privateOptions?.replication ? {initialEditingEnabled:false} : {})},
+      drawingId:options.persistence?.documentId ?? hostWindow.crypto.randomUUID(),
+      platform:(method,args) => platform.request(method,args),emit,signal:startup.signal});
+    startup.signal.throwIfAborted();
+    if (!latestState) throw new EditorError('InvalidRuntimeResponse','The canvas did not publish its initial state.');
+    lifecycle = 'ready';
+    clearTimeout(startupTimer); signal?.removeEventListener('abort',abort);
+    return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
     read: () => request('replica.read'),
     apply: transactions => request('replica.apply', { transactions }),
@@ -303,15 +269,15 @@ export async function createEditorSession(options = {}, privateOptions) {
     },
   }) }) : instance; }
   catch (error) {
-    close(error);
-    // A failed startup can already own a persistent writer. Its rejection is
-    // also the handoff boundary for hosts that immediately create a successor.
-    let timer;
-    try {
-      await Promise.race([platformClosing,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Platform cleanup deadline exceeded.')),deadlines.dispose);})]);
-    } catch {
-      throw new EditorError('DisposeCleanupUnconfirmed','Editor startup failed; platform cleanup was not confirmed.',{cause:error});
-    } finally {clearTimeout(timer);}
-    throw error;
+    clearTimeout(startupTimer); startup.abort(error);
+    try { await bounded(async () => { await native?.dispose(); await platform.dispose(); },deadlines.dispose); canvasRoot.remove(); releaseOwnership(); }
+    catch (cleanup) { close(); throw new EditorError('DisposeCleanupUnconfirmed','Editor startup failed; cleanup was not confirmed.',{cause:cleanup}); }
+    close(); throw error;
   }
+}
+
+async function bounded(operation,timeoutMs) {
+  let timer;
+  try { return await Promise.race([operation(),new Promise((_,reject) => {timer = setTimeout(() => reject(new EditorError('DisposeTimeout','Editor cleanup exceeded its deadline.')),timeoutMs);})]); }
+  finally {clearTimeout(timer);}
 }

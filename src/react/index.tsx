@@ -12,7 +12,7 @@ export interface EditorProps extends Omit<EditorCreateOptions,'container'> {
   onReady?: (editor:EditorInstance)=>void; onError?: (error:unknown)=>void;
 }
 
-/** React owns the host; Blazor owns only its iframe and native inline-editing DOM. */
+/** React owns the host; Blazor owns only its canvas and native inline-editing DOM. */
 export function Editor({className,style,slots,colorScheme,onReady,onError,...options}:EditorProps) {
   const runtime=useRef<HTMLDivElement>(null),callbacks=useRef({onReady,onError});callbacks.current={onReady,onError};
   const releasing=useRef<Promise<void>>(Promise.resolve());
@@ -39,7 +39,7 @@ export function Editor({className,style,slots,colorScheme,onReady,onError,...opt
       })).then(async()=>{if(instance)await instance.dispose();});
       void releasing.current.catch(error=>callbacks.current.onError?.(error));
     };
-  },[options.assetBaseUrl,options.frameDocument,options.ui,options.persistence,options.workerFactory,options.workerUrls,options.signal,options.title,options.startupTimeoutMs,options.requestTimeoutMs,options.disposeTimeoutMs]);
+  },[options.assetBaseUrl,options.ui,options.persistence,options.workerFactory,options.workerUrls,options.signal,options.title,options.startupTimeoutMs,options.disposeTimeoutMs]);
   return <div className={className} style={{position:'relative',width:'100%',height:'100%',...style}}>
     <div ref={runtime} style={{position:'absolute',inset:0}} />
     {editor&&<EditorUi editor={editor} container={runtime.current!} slots={slots} colorScheme={colorScheme} onError={onError}/>}
@@ -52,7 +52,7 @@ export function mountEditorUi({editor,container,...props}:EditorUiProps): {dispo
   const win=container.ownerDocument.defaultView!,previous=container.style.position;
   const changed=win.getComputedStyle(container).position==='static';if(changed)container.style.position='relative';
   const element=container.ownerDocument.createElement('div');element.style.cssText='position:absolute;inset:0;pointer-events:none;';container.append(element);
-  const root=createRoot(element,{identifierPrefix:editor.instanceId+'-'});let disposed=false,unsubscribe:undefined|(()=>void);
+  const root=createRoot(element);let disposed=false,unsubscribe:undefined|(()=>void);
   const dispose=()=>{if(disposed)return;disposed=true;unsubscribe?.();root.unmount();element.remove();if(changed&&container.style.position==='relative')container.style.position=previous;};
   root.render(<EditorUi editor={editor} container={container} {...props}/>);
   unsubscribe=editor.onDisposed(dispose);

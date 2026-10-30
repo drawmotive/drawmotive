@@ -41,12 +41,7 @@ test('tooltip arrow is separate, focus-accessible and confined to the instance',
  expect(await tip.evaluate(el=>!!el.closest('.dm-editor-ui'))).toBe(true);
 });
 
-test('two instances isolate selection, host action state, errors and disposal',async({page})=>{
- await page.evaluate(()=>{instances.push(mount({actions:[{id:'host.save',label:'Save',onInvoke(){}}]}),mount({actions:[{id:'host.save',label:'Save',onInvoke(){}}]}));instances[0].select('Line');instances[1].select('IndependentText');});
- const roots=page.locator('.dm-editor-ui');await expect(roots.nth(0).getByTestId('context-toolbar-line-start-style')).toBeVisible();await expect(roots.nth(1).getByTestId('context-toolbar-bold')).toBeVisible();
- await page.evaluate(()=>instances[0].updateAction('host.save',{enabled:false,label:'Saved'}));await expect(roots.nth(0).getByRole('button',{name:'Saved',exact:true})).toBeDisabled();await expect(roots.nth(1).getByRole('button',{name:'Save',exact:true})).toBeEnabled();
- await page.evaluate(()=>instances[0].editor.dispose());await expect(roots).toHaveCount(1);expect(await page.evaluate(()=>Object.values(instances[0].listeners).every(set=>set.size===0))).toBe(true);
-});
+
 test('property and viewport refreshes retain an open panel, while a new selection closes it',async({page})=>{
  await page.evaluate(()=>{instances.push(mount());instances[0].select();});
  await page.getByTestId('context-toolbar-fill-color').click();await expect(page.getByRole('dialog',{name:'Border and Fill Color'})).toBeVisible();

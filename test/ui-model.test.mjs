@@ -30,7 +30,7 @@ test('floating chrome clamps to small viewports and moves below the item when ne
   assert.deepEqual(placeFloating({left:-20,top:100,right:30,bottom:120},{width:400,height:300},{width:320,height:200}), {left:4,top:4});
 });
 
-test('anchor mapping accounts for iframe offset and CSS scaling of the editor container', () => {
+test('anchor mapping accounts for canvas offset and CSS scaling of the editor container', () => {
   assert.deepEqual(mapCanvasBounds({left:10,top:20,right:30,bottom:40}, {left:140,top:260,width:400,height:200}, {width:200,height:100}, {left:100,top:200,width:800,height:600}, {width:400,height:300}), {left:30,top:50,right:50,bottom:70});
 });
 test('owner plus its selected bound label keeps the text focus toolbar', () => {

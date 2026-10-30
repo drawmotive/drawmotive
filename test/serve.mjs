@@ -17,7 +17,7 @@ export async function serveExample(port = 4186, { runtimeUrl } = {}) {
       let relative = decodeURIComponent(requestUrl.pathname).slice(1);
       // Local WASM DevServer has no cross-origin font CORS headers. A same-origin
       // asset path matches the package's copy-assets deployment and exercises the
-      // exact runtime bytes without synthetic iframe documents or browser flags.
+      // exact runtime bytes without synthetic runtime documents or browser flags.
       if (runtimeBase && relative.startsWith('runtime/')) {
         if (relative.split('/').includes('..') || !['GET', 'HEAD'].includes(request.method)) throw new Error('Invalid runtime request');
         const upstreamUrl = new URL(relative.slice('runtime/'.length), runtimeBase); upstreamUrl.search = requestUrl.search;

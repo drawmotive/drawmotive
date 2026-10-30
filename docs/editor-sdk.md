@@ -125,7 +125,7 @@ export function Diagram({ documentId }: { documentId: string }) {
 
 `slot.documentName` reads `slots.documentName`; React elements remain in the host and never cross the runtime port. The component owns creation and disposal. `onReady(editor)` supplies the instance for application commands. Handle asynchronous work started in `onReady` yourself; the callback is not an awaited initialization hook.
 
-Memoize object/function creation options. Changes to `assetBaseUrl`, `frameDocument`, `ui`, `persistence`, `workerFactory`, `workerUrls`, `signal`, `title` or deadline props recreate the runtime, including reference changes to object values. Changing `slots`, `colorScheme`, `className`, `style` or callbacks updates the React layer. Cleanup waits for the previous writer to be released before starting a successor.
+Memoize object/function creation options. Changes to `assetBaseUrl`, `ui`, `persistence`, `workerFactory`, `workerUrls`, `signal`, `title` or deadline props recreate the runtime, including reference changes to object values. Changing `slots`, `colorScheme`, `className`, `style` or callbacks updates the React layer. Cleanup waits for the previous writer to be released before starting a successor.
 
 ### Minimal canvas, custom controls or read-only preview
 
@@ -143,7 +143,7 @@ await editor.fitViewport();
 
 Here `container` and `raw` are host-provided values. This configuration removes toolbars and inline text input while retaining canvas manipulation, selection feedback and grips. To retain DContentEditable, use `ui: false` or `textEditing: 'inline'` instead. For a read-only preview, also call `await editor.setEditingEnabled(false)` after loading. Hiding UI does not disable editing. Editing-disabled mode blocks user mutations and Undo/Redo; host loading, document replacement and export remain available. It is not an authorization boundary.
 
-The core entry can retain enabled UI descriptors for a later `EditorUi` mount. It never mounts controls by itself. A React host can render `<EditorUi editor={editor} container={container} />` for that existing instance. The container must own its iframe and provide the overlay positioning context. The host still owns disposal of the core instance.
+The core entry can retain enabled UI descriptors for a later `EditorUi` mount. It never mounts controls by itself. A React host can render `<EditorUi editor={editor} container={container} />` for that existing instance. The container must own its canvas and provide the overlay positioning context. The host still owns disposal of the core instance.
 
 `mountEditorUi({ editor, container, slots?, colorScheme?, className?, style?, onError? })` is the imperative equivalent and returns `{ dispose(): void }`. Its disposer removes only that UI mount. Mount one UI owner per instance; the full entry already mounts one. `EditorUi` takes the same props and observes the instance without creating another runtime.
 
@@ -161,22 +161,18 @@ All three creation styles use `EditorCreateOptions`; `Editor` supplies `containe
 
 | Option | Value / default | Purpose |
 | --- | --- | --- |
-| `container` | Required `HTMLElement` for imperative creation | Owns the iframe and UI |
+| `container` | Required `HTMLElement` for imperative creation | Owns the canvas and UI |
 | `assetBaseUrl` | HTTP(S) string or URL; defaults relative to the SDK's generated assets | Runtime and font resource base; supply explicitly in bundles |
-| `frameDocument` | Optional `{ url, html }` | Trusted host-supplied runtime HTML; see below |
-| `title` | `DrawMotive diagram editor` | Accessible iframe title |
+| `title` | `DrawMotive diagram editor` | Accessible canvas label |
 | `ui` | `EditorUiOptions` or `false`; enabled by default | UI and text-input policy |
 | `persistence` | Defaults to `{ mode: 'memory' }` | Temporary document or persistent identity |
 | `workerFactory` | Optional `(url, options?) => Promise<{ worker, dispose() }>` | Host-specific Worker construction and cleanup |
 | `workerUrls` | Optional `{ document?: string \| URL, resource?: string \| URL }` | Relocate the two self-contained packaged Workers |
 | `signal` | Optional `AbortSignal` | Cancel creation; does not cancel later editor commands |
 | `startupTimeoutMs` | `120000`, finite and positive | Runtime initialization deadline |
-| `requestTimeoutMs` | `120000`, finite and positive | Editor request waiting deadline |
 | `disposeTimeoutMs` | `5000`, finite and positive | Explicit disposal cleanup deadline |
 
 Persistence configuration is either `{ mode: 'memory', namespace?, documentId? }` or `{ mode: 'persistent', namespace, documentId }`. Persistent identities must be nonempty strings. Memory mode keeps the document temporary, but fonts may still use OPFS and preferences still use localStorage.
-
-`frameDocument.url` must be an HTTP(S) bootstrap URL on the host's origin. The SDK loads that page before writing `frameDocument.html`; the host owns trusted HTML, CSP and its resource base. This is an advanced resource-hosting mechanism, not a custom C# invocation hook. Normal static hosting needs only `assetBaseUrl`.
 
 ## UI configuration
 
@@ -383,7 +379,7 @@ Endpoint styles map to `0` none, `1` simple arrow, `2` filled arrow, `3` open ar
 
 ### Coordinates
 
-Paste positions are **drawing/model coordinates**, with X right and Y down. `screenBounds`, selection `anchor` and text-edit-intent bounds are **iframe-local CSS screen coordinates**, also Y down. They are not page coordinates and are not directly usable as paste positions. A custom overlay must account for iframe/host offsets and CSS transforms. The SDK currently has no exported page-to-model conversion helper; do not pass raw `clientX/clientY` to paste.
+Paste positions are **drawing/model coordinates**, with X right and Y down. `screenBounds`, selection `anchor` and text-edit-intent bounds are **canvas-local CSS screen coordinates**, also Y down. They are not page coordinates and are not directly usable as paste positions. A custom overlay must account for canvas/host offsets and CSS transforms. The SDK currently has no exported page-to-model conversion helper; do not pass raw `clientX/clientY` to paste.
 
 ## Text editing
 
@@ -457,8 +453,6 @@ Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helpe
 | Member | Contract |
 | --- | --- |
 | `lifecycle` | Read-only `ready`, `disposing`, `disposed` |
-| `instanceId` | Unique opaque instance identity |
-| `documentSessionId` | Unique open-document lifetime; not the configured persistent `documentId` |
 | `ui` | Current normalized UI descriptor |
 | `getState()` | Promise of current `EditorState` |
 | `onStateChanged(listener)` | Immediate replay of known state, then changes |
@@ -559,18 +553,18 @@ const editor = await createEditor({
 });
 ```
 
-For a host needing a custom loader, `workerFactory` receives a URL and optional `{ name }`. Return the Worker and an idempotent disposer that terminates it and releases any Blob URL you created. Do not import internal SDK factory files. The SDK owns when to invoke the disposer. Keep Worker loading and `worker-src`/`connect-src`/frame/WASM CSP permissions consistent with the host's actual asset origins. VS Code's final host migration is still pending; these hooks are not a claim that the migrated integration is complete.
+For a host needing a custom loader, `workerFactory` receives a URL and optional `{ name }`. Return the Worker and an idempotent disposer that terminates it and releases any Blob URL you created. Do not import internal SDK factory files. The SDK owns when to invoke the disposer. Keep Worker loading and `worker-src`/`connect-src`/WASM CSP permissions consistent with the host's actual asset origins. VS Code's final host migration is still pending; these hooks are not a claim that the migrated integration is complete.
 
 ## Errors and lifecycle
 
-Public methods validate basic shapes in JS and semantic constraints in C#. Invalid local options can reject with `TypeError`. Runtime/transport failures use exported `EditorError` with `code`, `message` and, where applicable, `requestId`, `method`, `instanceId`, `documentSessionId`, `cause` and `completion`. Error codes are extensible strings; do not infer exhaustive coverage from a single list.
+Public methods validate basic shapes in JS and semantic constraints in C#. Invalid local options reject with TypeError. Native and Worker failures carry code, message and optional cause. Error codes are extensible strings.
 
 | Code / condition | Host response |
 | --- | --- |
-| `ProtocolMismatch`, `StartupTimeout` | Verify matching runtime/package, asset URLs, CSP and startup diagnostics |
+| `EditorAlreadyMounted`, `StartupTimeout` | Verify matching runtime/package, asset URLs, CSP and startup diagnostics |
 | `EditorBusy`, `InteractionBusy` | Finish the current gesture/text operation; do not silently cancel it |
 | `EditingDisabled`, `UnsupportedCommand`, `EmptySelection` | Update controls from current permissions/capabilities/selection |
-| `StaleSelection`, `InvalidTarget`, `StaleDocumentSession` | Refresh the relevant UI or reopen the intended document; reject stale intent |
+| `StaleSelection`, `InvalidTarget` | Refresh the relevant UI or reopen the intended document; reject stale intent |
 | `InvalidArgument`, `InvalidDocument`, `MissingEmbeddedDocument` | Report invalid input; preserve the current document |
 | `StorageConflict` | Resolve the existing writer or changed checkpoint; do not add another writer |
 | `StorageUnavailable`, `StorageWorkerFailed` | Report persistence failure; do not silently downgrade an existing persistent document |
@@ -580,55 +574,20 @@ Public methods validate basic shapes in JS and semantic constraints in C#. Inval
 | `ResourceUnavailable`, `ResourceHashMismatch`, `ResourceWorkerFailed` | Restore valid matching resources/connectivity; do not use corrupt cache bytes |
 | `ClipboardEmpty`, `ClipboardUnavailable`, `ClipboardPermissionDenied`, `ClipboardFormatUnsupported` | Ask for a supported source/access or use an explicit internal operation |
 | `UnknownAction`, `ActionUnavailable`, `HostActionFailed` | Resolve the host action/state/error |
-| `RequestTimeoutUnknown` | Observe `completion`; do not automatically repeat a mutation |
 | `EditorDisposed` | Stop using this instance |
-| `DisposeCleanupUnconfirmed` | Frame removed, but runtime/platform cleanup was not confirmed; surface the failure before opening a successor writer |
+| `DisposeCleanupUnconfirmed` | Cleanup was not confirmed; reload the page before opening a successor |
 
-A local transaction failure may set `health: 'faulted'` and `revision: null`. This is not a normal dirty state. `retryPersistence()` is reserved for an identical retained batch with uncertain storage completion. Generic editor request timeouts have a different reconciliation path:
+A local transaction failure may set health to faulted and revision to null. retryPersistence is reserved for an identical retained storage batch with uncertain completion. Direct editor operations have no transport timeout or automatic retry.
 
-```javascript
-import { EditorError } from '@drawmotive/editor';
-
-try {
-  await editor.replaceDocument(raw);
-} catch (error) {
-  if (error instanceof EditorError && error.code === 'RequestTimeoutUnknown' && error.completion) {
-    const eventual = await error.completion;
-    if (eventual.error) throw eventual.error;
-    // The original request completed. Refresh state; do not issue another replacement.
-    await editor.getState();
-  } else {
-    throw error;
-  }
-}
-```
-
-The deadline stops waiting, not the underlying transaction. The completion promise resolves to `{ result }` or `{ error }`, including closure/session expiry. Public editing functions do not take a per-command abort signal; creation `signal` is only for startup.
-
-`await editor.dispose()` is idempotent and bounded. It cancels host action signals, closes channels/Workers, releases the writer lease and removes the iframe/UI. Persistent documents remain; the internal copy buffer is discarded. `onDisposed` also covers forced page closure. Page-exit cleanup is best effort, so orderly navigation should await explicit disposal. Multiple instances isolate runtime globals, DOM and CSS in separate iframes; browser storage rules and origin-level preferences/cache still apply. The iframe is not a security sandbox or a guaranteed process.
+Await editor.dispose() before switching documents. It cancels host action signals, waits for document operations, disposes the native root and document scope, releases Workers/writer ownership and removes UI. Persistent documents remain; the internal copy buffer is discarded. Blazor and browser fonts stay loaded for the page. Only one active canvas is supported. Unconfirmed cleanup blocks a successor until page reload.
 
 ## How JS interoperates with the engine
 
-**The public API uses named asynchronous functions. Internally, engine operations use structured request/response messages and a unified Blazor dispatcher.** This is an implementation boundary, not a second public command API.
+**The public API uses named asynchronous functions. Internally, JS calls a single managed semantic dispatcher directly.**
 
-```mermaid
-sequenceDiagram
-    participant Host as Host / React UI
-    participant SDK as Public JS SDK
-    participant Frame as Iframe JS bridge
-    participant Engine as C# operations
-    Host->>SDK: await editor.setProperty(token, change)
-    SDK->>Frame: MessagePort request(method, args, requestId)
-    Frame->>Engine: invokeMethodAsync(ExecuteEmbeddedAsync, method, JSON)
-    Engine->>Engine: Validate, transact, persist, update scene
-    Engine-->>Frame: Result / structured error and state
-    Frame-->>SDK: Correlated response and state/selection events
-    SDK-->>Host: Resolve / reject Promise; notify listeners
-```
+The SDK serializes native operations, invokes ExecuteEmbeddedAsync(method, arguments) on the current .NET object reference and resolves the returned Promise. C# validates intent, applies transactions and publishes immutable state/selection events. There is no frame, window-message handshake or runtime MessagePort.
 
-The SDK binds a private MessagePort to the iframe after validating its source/origin, a one-time bootstrap nonce and protocol version. Each request carries the instance, document-session and request identities. The internal document lane orders engine operations; a separate platform lane allows storage/font responses while a document operation awaits them. The iframe bridge invokes `ExecuteEmbeddedAsync(method, arguments)` on its own .NET object reference, and C# dispatches to semantic editing services.
-
-Not every public method sends a C# command. Subscription registration, `getFontCacheStatus`, host-action state and callbacks are host-side. Clipboard helpers access the browser in JS and call semantic graph capture/paste functions as needed. C# can request storage/resources back through the independent platform lane. These callbacks are not an application-facing database or synchronization API.
+Storage, font and preference callbacks are direct JS functions independent of the operation queue, so C# can await them without deadlock. Dedicated Workers own IndexedDB and OPFS I/O using request IDs. Subscription registration, host actions and clipboard helpers remain in JS. Private synchronization is owned by the site.
 
 Use `editor.setTool('rectangle')`, `editor.setProperty(token, change)` and the other documented functions. There is no supported `editor.sendCommand(...)`, raw-port accessor or direct call to internal Blazor globals. Do not deep-import protocol/Worker implementation files. React controls use the same semantic API as custom host controls. Private synchronization integration remains separate site work and is not documented as a public SDK facility.
 
@@ -639,7 +598,7 @@ Use `editor.setTool('rectangle')`, `editor.setProperty(token, change)` and the o
 - Configure corner/drawing/context controls and text policy independently.
 - Choose a temporary document or an explicit persistent identity; await disposal before switching.
 - Read capabilities/state and retain the selection token for the user's displayed intent.
-- Keep model and iframe screen coordinates distinct, both Y down.
+- Keep model and canvas screen coordinates distinct, both Y down.
 - Save opaque snapshots with their revision and keep older acknowledgments from clearing newer edits.
 - Start OS clipboard access in a user gesture and expose internal copy/paste explicitly.
 - Handle resource/storage failures, uncertain request completion and cleanup errors.

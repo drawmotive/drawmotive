@@ -4,7 +4,7 @@ Embed the DrawMotive visual editor and compose your own document, save and publi
 
 [SDK guide and API reference](docs/editor-sdk.md) · [Browser example](examples/browser/index.html) · [Website](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
 
-**React separation draft:** The source API described here requires protocol v3. Matching generated runtime assets and full React/WASM acceptance remain pending; the committed generated runtime is still v2. See the [guide's draft status](docs/editor-sdk.md) before integrating this branch.
+**Single-canvas architecture:** one editor can be active per page. The canvas mounts directly into the host document; dispose it before opening another document.
 
 ## Example output
 
@@ -63,12 +63,6 @@ npx drawmotive-copy-assets public/editor
 
 Copy the complete runtime after every upgrade. For Vite, run `drawmotive-copy-assets public/editor` in `predev` and `prebuild`. Serve runtime assets through HTTP(S), including `.wasm` as `application/wasm`; bundled applications must set `assetBaseUrl` explicitly.
 
-Hosts with an authenticated resource transport can supply `frameDocument: { url, html }`.
-The bootstrap URL must be HTTP(S) on the host's own origin; the SDK loads it before
-writing trusted runtime HTML so its service worker remains available. The host
-owns that HTML's CSP and resource base. The SDK still authenticates the frame
-window and bootstrap origin before opening its private message port.
-
 ## Standalone editor boundary
 
 The public package provides editing UI, the canvas runtime and local browser services.
@@ -117,7 +111,7 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 
 ## Operations
 
-The `@drawmotive/editor/react` entry exports `Editor` (owns its iframe) and `EditorUi` (observes an existing core instance).
+The `@drawmotive/editor/react` entry exports `Editor` (owns its canvas) and `EditorUi` (observes an existing core instance).
 Import the same stylesheet, provide a sized parent, and memoize object options. Changing document identity disposes and recreates the instance.
 The full imperative entry bundles React; the React entry uses the host’s React 19 installation.
 
@@ -191,28 +185,15 @@ const editor = await createEditor({
 });
 ```
 
-Handlers stay in the parent. Independent reverse RPC lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
+Handlers stay in the host. Direct callbacks lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
 
-## Isolation and lifecycle
+## Canvas lifecycle
 
-One iframe isolates CSS, DOM and .NET globals; it is not an additional security sandbox or guaranteed process. A one-time nonce binds a private MessagePort to the runtime source and origin. Protocol v3 separates document commands from storage/resource callbacks, using instance, document-session and request identities. Switching logical documents disposes and recreates the instance. React UI runs in the owning host container outside the iframe.
+One Blazor runtime and its browser fonts live for the page lifetime. Each document mounts a native canvas directly into the host container with a fresh document scope. Dispose the editor before creating its successor. A second active editor rejects with EditorAlreadyMounted. React UI and canvas share ordinary DOM events and focus.
 
-Authentication, analytics and business requests belong to the host application. The editor does not load Blazor site modules. The core entry has no React dependency; the full entry bundles its React/Mantine UI, and the React entry shares the host's React runtime.
+Authentication, analytics and business requests belong to the host application. The core entry has no React dependency; the full entry bundles its React/Mantine UI, and the React entry shares the host React runtime.
 
-Startup cancellation uses `signal`; `startupTimeoutMs` defaults to 120000. After creation, explicit disposal owns the instance. `requestTimeoutMs` also defaults to 120000. An operation deadline throws `EditorError` with `code: RequestTimeoutUnknown`, `requestId`, `method`, and a `completion` promise. The frame/document remain available; no retry occurs and the late result retains its ID.
-
-```javascript
-try {
-  await editor.replaceDocument(raw);
-} catch (error) {
-  if (error.code === "RequestTimeoutUnknown") {
-    const { result, error: eventualError } = await error.completion;
-    // Reconcile the eventual outcome; never automatically retry a mutation.
-  } else throw error;
-}
-```
-
-`completion` resolves to `{ result }` or `{ error }`, including disposal before a response. Runtime errors retain `{ code, message }` on `EditorError`. Idempotent dispose is bounded by `disposeTimeoutMs` (default 5000), rejects pending work, cancels actions and removes the iframe. Missing cleanup acknowledgment rejects `DisposeCleanupUnconfirmed`; removal still completes. Page exit cleanup is best effort.
+Startup cancellation uses signal; startupTimeoutMs defaults to 120000. Document operations return direct Promises and run in order; storage/resource callbacks remain independent while C# awaits persistence or fonts. Runtime errors retain code and message. Disposal cancels host actions, waits for pending operations, removes the native root and releases Workers/storage. disposeTimeoutMs defaults to 5000. Unconfirmed cleanup rejects with DisposeCleanupUnconfirmed and blocks another editor until page reload. Page exit cleanup is best effort.
 
 ## Verification and release
 

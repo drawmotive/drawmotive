@@ -17,7 +17,6 @@ export type EditorWorkerFactory = (url: string | URL, options?: { name?: string 
 export interface EditorCreateOptions {
   container: HTMLElement;
   assetBaseUrl?: string | URL;
-  frameDocument?: { url: string | URL; html: string };
   title?: string;
   ui?: EditorUiOptions | false;
   /** One instance owns one logical document. Switching documents recreates the instance. */
@@ -26,7 +25,6 @@ export interface EditorCreateOptions {
   workerUrls?: { document?: string | URL; resource?: string | URL };
   signal?: AbortSignal;
   startupTimeoutMs?: number;
-  requestTimeoutMs?: number;
   disposeTimeoutMs?: number;
 }
 export interface SnapshotOptions {
@@ -106,8 +104,6 @@ export interface EditorPreferences { darkTheme?: boolean; showGrid?: boolean; sn
 export interface EditorFontCacheStatus { readonly path: string; readonly cache: 'hit' | 'stored' | 'unavailable' | 'write-failed'; readonly detail?: string; }
 export interface EditorInstance {
   readonly lifecycle: 'ready' | 'disposing' | 'disposed';
-  readonly instanceId: string;
-  readonly documentSessionId: string;
   readonly ui: NormalizedUiOptions;
   replaceDocument(raw: string): Promise<void>;
   replacePngDocument(base64: string): Promise<void>;

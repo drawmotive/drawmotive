@@ -9,7 +9,7 @@ import { AlignPanel, AttachmentPanel, Colors, EndpointPanel, GroupPanel, MorePan
 
 export interface EditorUiProps {
   editor: EditorInstance;
-  /** The container owning this editor's iframe. Portals remain inside this element. */
+  /** The container owning the native canvas. Portals remain inside this element. */
   container: HTMLElement;
   slots?: Readonly<Record<string,ReactNode>>;
   colorScheme?: 'light'|'dark';
@@ -21,7 +21,7 @@ const idle:EditorState={revision:null,health:'healthy',editingEnabled:false,busy
 
 /** Local UI observes immutable snapshots; every edit uses the engine's semantic API. */
 export function EditorUi(props:EditorUiProps) {
-  return <EditorUiSession key={props.editor.instanceId+':'+props.editor.documentSessionId} {...props}/>;
+  return <EditorUiSession {...props}/>;
 }
 function EditorUiSession({editor,container,slots={},colorScheme,className='',style,onError}:EditorUiProps) {
   const [ui,setUi]=useState(editor.ui),[state,setState]=useState<EditorState>(idle),[selection,setSelection]=useState<EditorSelectionSnapshot|null>(null);
@@ -53,12 +53,6 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     try {await action();return true;}
     catch(reason){
       report(reason);
-      // Unknown completion is observed, never retried as another edit.
-      const unknown=reason as {code?:string;completion?:Promise<{error?:unknown}>};
-      if(unknown?.code==='RequestTimeoutUnknown'&&unknown.completion){
-        try{const completion=await unknown.completion;if(completion.error){report(completion.error);return false;}if(alive.current)setError(null);return true;}
-        catch(late){report(late);}
-      }
       return false;
     } finally {pendingRef.current.delete(key);if(alive.current)setPending(new Set(pendingRef.current));}
   },[report]);
@@ -70,14 +64,14 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
 
   useLayoutEffect(()=>{
     if(closed||!overlay.current)return;
-    const root=overlay.current,frame=container.querySelector('iframe'),win=container.ownerDocument.defaultView!;
+    const root=overlay.current,canvas=container.querySelector('canvas'),win=container.ownerDocument.defaultView!;
     function measure(){
-      if(!root||!frame||!toolbar.current||!selection?.anchor)return;
-      const mapped=mapCanvasBounds(selection.anchor,frame.getBoundingClientRect(),{width:frame.clientWidth,height:frame.clientHeight},root.getBoundingClientRect(),{width:root.clientWidth,height:root.clientHeight});
+      if(!root||!canvas||!toolbar.current||!selection?.anchor)return;
+      const mapped=mapCanvasBounds(selection.anchor,canvas.getBoundingClientRect(),{width:canvas.clientWidth,height:canvas.clientHeight},root.getBoundingClientRect(),{width:root.clientWidth,height:root.clientHeight});
       const next=placeFloating(mapped,{width:toolbar.current.offsetWidth,height:toolbar.current.offsetHeight},{width:root.clientWidth,height:root.clientHeight});
       setPosition(old=>old.left===next.left&&old.top===next.top?old:next);
     }
-    measure();const observer=new win.ResizeObserver(measure);observer.observe(root);if(frame)observer.observe(frame);if(toolbar.current)observer.observe(toolbar.current);
+    measure();const observer=new win.ResizeObserver(measure);observer.observe(root);if(canvas)observer.observe(canvas);if(toolbar.current)observer.observe(toolbar.current);
     win.addEventListener('scroll',measure,true);return()=>{observer.disconnect();win.removeEventListener('scroll',measure,true);};
   // Busy and enabled transitions can mount a new toolbar without changing the
   // retained selection. Measure and observe that DOM node after it is mounted.
@@ -133,8 +127,8 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     const panels:Record<string,ReactNode>={strokeFillColor:<Colors fill/>,strokeColor:<Colors/>,strokeStyle:<StrokePanel/>,textAlign:<AlignPanel/>,lineStartStyle:<EndpointPanel start/>,lineEndStyle:<EndpointPanel start={false}/>,lineRouting:<RoutingPanel/>,lineAttachment:<AttachmentPanel/>,groupTheme:<GroupPanel/>,groupTitleStyle:<TitlePanel/>,moreOptions:<MorePanel copy={copy}/>};
     return <PanelButton key={id} id={id} button={button}>{panels[id]}</PanelButton>;
   }
-  return <div ref={overlay} className={'dm-editor-ui '+className} style={style} data-editor-instance={editor.instanceId} data-mantine-color-scheme={colorScheme??(preferences.darkTheme?'dark':'light')}>
-    <MantineProvider forceColorScheme={colorScheme??(preferences.darkTheme?'dark':'light')} cssVariablesSelector={'[data-editor-instance="'+editor.instanceId+'"]'} getRootElement={()=>overlay.current??undefined}>
+  return <div ref={overlay} className={'dm-editor-ui '+className} style={style} data-mantine-color-scheme={colorScheme??(preferences.darkTheme?'dark':'light')}>
+    <MantineProvider forceColorScheme={colorScheme??(preferences.darkTheme?'dark':'light')} cssVariablesSelector=".dm-editor-ui" getRootElement={()=>overlay.current??undefined}>
       <UiContext.Provider value={context}>
         {Object.entries(ui.regions).map(([id,region])=>{const children=region.items.map(regionItem).filter(Boolean);return region.visible&&children.length>0?<div key={id} className={'dm-toolbar dm-corner dm-'+id} role="toolbar" aria-label={id+' toolbar'} data-region={id}>{children}</div>:null;})}
         {ui.drawingToolbar.visible&&ui.drawingToolbar.tools.some(id=>ui.buttons[id])&&<fieldset className={'dm-toolbar dm-drawing dm-'+ui.drawingToolbar.position} disabled={editingBlocked} aria-label="Drawing tools" data-testid="drawing-toolbar">{ui.drawingToolbar.tools.map(builtin)}</fieldset>}

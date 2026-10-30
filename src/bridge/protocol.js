@@ -1,16 +1,12 @@
-/** v3 replaces the previous bridge; every message belongs to one editor session. */
-export const PROTOCOL_VERSION = 3;
-
 export const ERROR_CODES = Object.freeze(Object.fromEntries([
-  'ProtocolMismatch', 'InvalidMessage', 'InvalidRuntimeResponse', 'EditorDisposed',
-  'RequestTimeoutUnknown', 'RequestAborted', 'RequestAbortedUnknown', 'StaleDocumentSession', 'UnknownMethod',
-  'ReverseCallDuringDocumentCommand',
+  'EditorAlreadyMounted', 'InvalidRuntimeResponse', 'EditorDisposed',
+  'UnknownMethod',
   'RuntimeError', 'RuntimeUnavailable', 'HostActionFailed', 'UnknownAction', 'ActionUnavailable',
   'InvalidDocument', 'InteractionBusy', 'StorageConflict', 'StorageUnavailable',
   'ResourceUnavailable', 'ModuleUnavailable', 'StartupTimeout', 'DisposeCleanupUnconfirmed',
 ].map(code => [code, code])));
 
-/** Deadlines preserve completion ownership because a mutation may already have committed. */
+/** Structured failures shared by the direct native boundary and Worker I/O. */
 export class EditorError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -65,46 +61,3 @@ export function fromErrorDescriptor(value) {
     : new EditorError(ERROR_CODES.InvalidRuntimeResponse, 'Invalid structured editor error');
 }
 
-/** Validate before dispatch: accepting unscoped v2 envelopes would break isolation. */
-export function assertProtocolMessage(value) {
-  if (!record(value)) throw new EditorError(ERROR_CODES.InvalidMessage, 'Editor message must be an object');
-  if (value.protocolVersion !== PROTOCOL_VERSION) throw new EditorError(ERROR_CODES.ProtocolMismatch, 'Unsupported editor runtime protocol');
-  if (!identifier(value.instanceId) || !(value.documentSessionId === null || identifier(value.documentSessionId))
-      || !['document', 'platform'].includes(value.lane) || !['request', 'response', 'event'].includes(value.type)) {
-    throw new EditorError(ERROR_CODES.InvalidMessage, 'Invalid editor message scope');
-  }
-  if (value.type === 'event') {
-    if (!identifier(value.name) || own(value, 'requestId')) throw new EditorError(ERROR_CODES.InvalidMessage, 'Invalid editor event');
-  } else {
-    if (!identifier(value.requestId)) throw new EditorError(ERROR_CODES.InvalidMessage, 'Editor request ID is required');
-    if (value.type === 'request' && !identifier(value.method)) throw new EditorError(ERROR_CODES.InvalidMessage, 'Editor request method is required');
-    if (value.type === 'response' && (own(value, 'result') === own(value, 'error') || (own(value, 'error') && !validError(value.error)))) {
-      throw new EditorError(ERROR_CODES.InvalidMessage, 'Editor response requires one result or structured error');
-    }
-  }
-  return value;
-}
-
-export function isProtocolMessage(value) {
-  try { assertProtocolMessage(value); return true; } catch { return false; }
-}
-
-export function createRequest({ instanceId, documentSessionId, requestId, method, args = {}, lane = 'document' }) {
-  return immutableSnapshot(assertProtocolMessage({ protocolVersion: PROTOCOL_VERSION, type: 'request', lane, instanceId, documentSessionId, requestId, method, args }));
-}
-
-export function createResponse(request, outcome) {
-  assertProtocolMessage(request);
-  if (request.type !== 'request' || !record(outcome)) throw new EditorError(ERROR_CODES.InvalidMessage, 'A response requires a request and outcome');
-  const message = {
-    protocolVersion: PROTOCOL_VERSION, type: 'response', lane: request.lane,
-    instanceId: request.instanceId, documentSessionId: request.documentSessionId, requestId: request.requestId,
-  };
-  if (own(outcome, 'result')) message.result = outcome.result;
-  if (own(outcome, 'error')) message.error = toErrorDescriptor(outcome.error);
-  return immutableSnapshot(assertProtocolMessage(message));
-}
-
-export function createEvent({ instanceId, documentSessionId, name, data, lane = 'document' }) {
-  return immutableSnapshot(assertProtocolMessage({ protocolVersion: PROTOCOL_VERSION, type: 'event', lane, instanceId, documentSessionId, name, data }));
-}

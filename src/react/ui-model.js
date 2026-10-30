@@ -42,9 +42,9 @@ export function placeFloating(anchor, size, viewport) {
   };
 }
 
-/** Convert iframe CSS pixels through both DOM transforms into overlay CSS pixels. */
-export function mapCanvasBounds(bounds, frame, frameSize, host, hostSize) {
-  const x = value => ((frame.left - host.left) + value * frame.width / (frameSize.width || 1)) * (hostSize.width || 1) / (host.width || 1);
-  const y = value => ((frame.top - host.top) + value * frame.height / (frameSize.height || 1)) * (hostSize.height || 1) / (host.height || 1);
+/** Convert canvas CSS pixels through both DOM transforms into overlay CSS pixels. */
+export function mapCanvasBounds(bounds, canvas, canvasSize, host, hostSize) {
+  const x = value => ((canvas.left - host.left) + value * canvas.width / (canvasSize.width || 1)) * (hostSize.width || 1) / (host.width || 1);
+  const y = value => ((canvas.top - host.top) + value * canvas.height / (canvasSize.height || 1)) * (hostSize.height || 1) / (host.height || 1);
   return { left: x(bounds.left), top: y(bounds.top), right: x(bounds.right), bottom: y(bounds.bottom) };
 }
