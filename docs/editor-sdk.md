@@ -572,7 +572,7 @@ Public methods validate basic shapes in JS and semantic constraints in C#. Inval
 | `EditorBusy`, `InteractionBusy` | Finish the current gesture/text operation; do not silently cancel it |
 | `EditingDisabled`, `UnsupportedCommand`, `EmptySelection` | Update controls from current permissions/capabilities/selection |
 | `StaleSelection`, `InvalidTarget` | Refresh the relevant UI or reopen the intended document; reject stale intent |
-| `InvalidArgument`, `InvalidDocument`, `MissingEmbeddedDocument` | Report invalid input; preserve the current document |
+| `InvalidArgument`, `InvalidDocument`, `MissingDocument` | Report invalid input; preserve the current document |
 | `StorageConflict` | Resolve the existing writer or changed checkpoint; do not add another writer |
 | `StorageUnavailable`, `StorageWorkerFailed` | Report persistence failure; do not silently downgrade an existing persistent document |
 | `EditorFaulted` | Stop edits/exports; explicitly recover the pending storage batch or load a known-good document |
@@ -592,7 +592,7 @@ Await editor.dispose() before switching documents. It cancels host action signal
 
 **The public API uses named asynchronous functions. Internally, JS calls a single managed semantic dispatcher directly.**
 
-The SDK serializes native operations, invokes ExecuteEmbeddedAsync(method, arguments) on the current .NET object reference and resolves the returned Promise. C# validates intent, applies transactions and publishes immutable state/selection events. There is no frame, window-message handshake or runtime MessagePort.
+The SDK serializes native operations, invokes ExecuteAsync(method, arguments) on the current .NET object reference and resolves the returned Promise. C# validates intent, applies transactions and publishes immutable state/selection events. There is no frame, window-message handshake or runtime MessagePort.
 
 Storage, font and preference callbacks are direct JS functions independent of the operation queue, so C# can await them without deadlock. Dedicated Workers own IndexedDB and OPFS I/O using request IDs. Subscription registration, host actions and clipboard helpers remain in JS. Private synchronization is owned by the site.
 
