@@ -60,4 +60,3 @@ export function fromErrorDescriptor(value) {
     ? new EditorError(value.code, value.message)
     : new EditorError(ERROR_CODES.InvalidRuntimeResponse, 'Invalid structured editor error');
 }
-

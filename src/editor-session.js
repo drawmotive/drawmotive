@@ -83,6 +83,9 @@ export async function createEditorSession(options = {}, privateOptions) {
     } }),
   });
   const owner = {}; hostWindow[ownerKey] = owner;
+  const previousPosition = container.style.position;
+  const positioned = ['', 'static'].includes(hostWindow.getComputedStyle(container).position);
+  if (positioned) container.style.position = 'relative';
   const canvasRoot = hostDocument.createElement('div');
   canvasRoot.className = 'dm-canvas-root'; canvasRoot.setAttribute('aria-label',title);
   canvasRoot.style.cssText = 'position:absolute;inset:0;overflow:hidden;';
@@ -105,7 +108,10 @@ export async function createEditorSession(options = {}, privateOptions) {
     else if (name === 'failed') { const error = fromErrorDescriptor(value); if (lifecycle === 'loading') startup.abort(error); else report(error); }
     for (const listener of eventListeners.get(name) ?? []) { try { listener(immutableSnapshot(value)); } catch(error) { report(error); } }
   }
-  function releaseOwnership() { if (hostWindow[ownerKey] === owner) delete hostWindow[ownerKey]; }
+  function releaseOwnership() {
+    if (hostWindow[ownerKey] === owner) delete hostWindow[ownerKey];
+    if (positioned && container.style.position === 'relative') container.style.position = previousPosition;
+  }
   function updateState(value) {
     const next = stateValue(value);
     if (latestState && Object.keys(next).every(key => next[key] === latestState[key])) return;
@@ -240,7 +246,9 @@ export async function createEditorSession(options = {}, privateOptions) {
   catch { /* The internal clipboard remains usable when the host denies system access. */ }
   clipboard = createEditorClipboard(instance, clipboardOptions);
   const startupTimer = setTimeout(() => startup.abort(new EditorError('StartupTimeout','Editor initialization timed out.')),deadlines.startup);
+  let starting;
   try {
+    starting = (async () => {
     const load = privateOptions?.runtimeLoader ?? (url => import(/* @vite-ignore */ url));
     const runtime = await load(new URL('js/editor-canvas.js',assetBase).href);
     startup.signal.throwIfAborted();
@@ -249,6 +257,8 @@ export async function createEditorSession(options = {}, privateOptions) {
       drawingId:options.persistence?.documentId ?? hostWindow.crypto.randomUUID(),
       platform:(method,args) => platform.request(method,args),emit,signal:startup.signal});
     startup.signal.throwIfAborted();
+    })();
+    await abortable(starting,startup.signal);
     if (!latestState) throw new EditorError('InvalidRuntimeResponse','The canvas did not publish its initial state.');
     lifecycle = 'ready';
     clearTimeout(startupTimer); signal?.removeEventListener('abort',abort);
@@ -270,7 +280,7 @@ export async function createEditorSession(options = {}, privateOptions) {
   }) }) : instance; }
   catch (error) {
     clearTimeout(startupTimer); startup.abort(error);
-    try { await bounded(async () => { await native?.dispose(); await platform.dispose(); },deadlines.dispose); canvasRoot.remove(); releaseOwnership(); }
+    try { await bounded(async () => { await starting?.catch(failure => { if (failure?.code === 'DisposeCleanupUnconfirmed') throw failure; }); await native?.dispose(); await platform.dispose(); },deadlines.dispose); canvasRoot.remove(); releaseOwnership(); }
     catch (cleanup) { close(); throw new EditorError('DisposeCleanupUnconfirmed','Editor startup failed; cleanup was not confirmed.',{cause:cleanup}); }
     close(); throw error;
   }
@@ -280,4 +290,13 @@ async function bounded(operation,timeoutMs) {
   let timer;
   try { return await Promise.race([operation(),new Promise((_,reject) => {timer = setTimeout(() => reject(new EditorError('DisposeTimeout','Editor cleanup exceeded its deadline.')),timeoutMs);})]); }
   finally {clearTimeout(timer);}
+}
+
+function abortable(operation,signal) {
+  return new Promise((resolve,reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort',abort,{once:true});
+    if (signal.aborted) abort();
+    operation.then(resolve,reject).finally(() => signal.removeEventListener('abort',abort));
+  });
 }

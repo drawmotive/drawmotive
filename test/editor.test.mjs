@@ -60,3 +60,10 @@ test('native semantic errors use the exported structured error class without los
  const {EditorError}=await import('../src/editor-session.js');const h=host(t),editor=await h.mount();h.behavior(()=>{throw Object.assign(new Error('Invalid diagram'),{code:'InvalidDocument'});});
  await assert.rejects(editor.replaceDocument('bad'),error=>error instanceof EditorError&&error.code==='InvalidDocument');h.behavior(()=>state());assert.equal((await editor.getState()).health,'healthy');await editor.dispose();
 });
+test('core canvas positions a static container and restores it after confirmed disposal',async t=>{
+ const h=host(t);h.container.style.position='static';const editor=await h.mount();assert.equal(h.container.style.position,'relative');await editor.dispose();assert.equal(h.container.style.position,'static');
+});
+test('stalled native startup rejects within lifecycle deadlines and blocks uncertain reuse',async t=>{
+ const h=host(t);const starting=h.mount({startupTimeoutMs:5,disposeTimeoutMs:5},{runtimeLoader:async()=>({mountCanvas:()=>new Promise(()=>{})})});
+ const result=await Promise.race([starting.then(()=>null,error=>error),new Promise(resolve=>setTimeout(()=>resolve({code:'StillPending'}),80))]);assert.equal(result?.code,'DisposeCleanupUnconfirmed');await assert.rejects(h.mount(),{code:'EditorAlreadyMounted'});
+});

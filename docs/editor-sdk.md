@@ -2,7 +2,7 @@
 
 This guide covers the public standalone `@drawmotive/editor` SDK: mounting, configurable UI, local documents, semantic editing functions, events, browser services and lifecycle. Authentication, analytics, business requests and private site synchronization belong to the embedding application. There is no public synchronization API or `sendCommand` API.
 
-**Draft status:** This document describes the protocol-v3 source in the React separation branch. The committed generated runtime is still protocol v2; a matching v3 runtime, integrated React/WASM acceptance and release validation remain pending. The examples require matching v3 SDK/runtime assets and must not be used with the older generated runtime. This guide does not establish that the draft is released or that final App E2E has passed.
+**Architecture:** one active canvas is supported per page. Blazor mounts directly in the host DOM and persists for the page lifetime. Each opened document has a fresh native scope. This branch is a staging candidate; npm publication remains separate.
 
 The authoritative declarations are [core.d.ts](../src/core.d.ts), [UI options](../src/react/ui-options.ts) and [React props](../src/react/index.d.ts). Only package export paths listed below are supported imports.
 
