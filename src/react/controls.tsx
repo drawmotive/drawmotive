@@ -1,19 +1,20 @@
 import { cloneElement, createContext, forwardRef, useContext, useEffect, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { Popover, Tooltip, UnstyledButton } from '@mantine/core';
-import type { EditorInstance, EditorPropertyChange, EditorSelectionSnapshot, EditorState, EditorValue } from '../core.js';
+import type { EditorInstance, EditorState } from '../core.js';
+import type { SelectionEdit, UiSelection, UiValue } from './selection-model.js';
 import type { NormalizedUiOptions } from './ui-options.js';
 import { Icon } from './icons.js';
 
 export interface UiContextValue {
   editor: EditorInstance; ui: NormalizedUiOptions; state: EditorState;
-  selection: EditorSelectionSnapshot | null;
+  selection: UiSelection | null;
   panel: string | null; setPanel(panel: string | null): void;
   run(action: () => Promise<unknown>, key?: string): Promise<boolean>;
-  property(change: EditorPropertyChange): Promise<boolean>;
+  edit: SelectionEdit;
 }
 export const UiContext = createContext<UiContextValue | null>(null);
 export function useUi() { const value = useContext(UiContext); if (!value) throw new Error('Editor controls need EditorUi'); return value; }
-export const uniform = <T,>(value: EditorValue<T> | undefined): T | undefined => value?.state === 'Uniform' ? value.value : undefined;
+export const uniform = <T,>(value: UiValue<T> | undefined): T | undefined => value?.state === 'Uniform' ? value.value : undefined;
 
 export const LABELS: Record<string, string> = {
   undo:'Undo',redo:'Redo',arrow:'Arrow',rectangle:'Rectangle',ellipse:'Ellipse',diamond:'Diamond',text:'Text',sketchyMode:'Sketchy mode',

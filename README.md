@@ -72,7 +72,7 @@ It has no authentication or SignalR dependency and exposes no public synchroniza
 Internal applications own collaboration through separate private site packages and
 private runtime integration; those packages and interfaces are not public editor exports.
 
-Hosts use named functions such as `editor.setTool()` and `editor.setProperty()`;
+Hosts use named functions such as `editor.setTool()` and `editor.editScene()`;
 there is no public `sendCommand`. Internally, these operations call the current
 Blazor object directly through ordered Promise calls. One canvas is supported per
 page, mounted in the host document. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [configuration](docs/editor-sdk.md#ui-configuration) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).

@@ -69,3 +69,29 @@ test('stalled native startup rejects within lifecycle deadlines and blocks uncer
  const h=host(t);const starting=h.mount({startupTimeoutMs:5,disposeTimeoutMs:5},{runtimeLoader:async()=>({mountCanvas:()=>new Promise(()=>{})})});
  const result=await Promise.race([starting.then(()=>null,error=>error),new Promise(resolve=>setTimeout(()=>resolve({code:'StillPending'}),80))]);assert.equal(result?.code,'DisposeCleanupUnconfirmed');await assert.rejects(h.mount(),{code:'EditorAlreadyMounted'});
 });
+
+test('generated scene snapshots expose unknown model properties as immutable values',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ const scene={revision:'scene:7',metadata:{type:'DSceneMetadata',model:{title:'Example',style:0},schema:{type:'DSceneMetadata',properties:[],operations:[]}},items:[{id:'one',type:'FutureShape',model:{special:{futureSetting:37}},schema:{type:'FutureShape',properties:[],operations:[]}}]};
+ h.behavior(method=>{assert.equal(method,'getScene');return scene;});
+ assert.equal(typeof editor.getScene,'function');
+ const result=await editor.getScene();
+ assert.equal(result.items[0].model.special.futureSetting,37);
+ assert.ok(Object.isFrozen(result.items[0].model.special));
+ scene.items[0].model.special.futureSetting=41;assert.equal(result.items[0].model.special.futureSetting,37);
+});
+
+test('one scene edit forwards a detached batch without a property command vocabulary',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ assert.equal(typeof editor.editScene,'function');assert.equal(editor.setProperty,undefined);
+ const edit={revision:'scene:7',description:'Edit several objects',token:{session:'selection',version:3},changes:[
+  {itemId:'one',path:['special','futureSetting'],value:37},
+  {path:['title'],value:'Updated'},
+  {itemId:'two',op:'remove',path:['xData','custom:label']},
+  {itemId:'two',op:'call',path:['futureOperation'],arguments:[false,{label:'Example'}]},
+ ]};
+ const pending=editor.editScene(edit);edit.changes[0].value=99;edit.changes[3].arguments[1].label='Mutated';await pending;
+ assert.equal(h.calls.length,1);assert.equal(h.calls[0].method,'editScene');
+ assert.equal(h.calls[0].args.changes[0].value,37);assert.equal(h.calls[0].args.changes[3].arguments[1].label,'Example');
+ assert.ok(Object.isFrozen(h.calls[0].args.changes));
+});

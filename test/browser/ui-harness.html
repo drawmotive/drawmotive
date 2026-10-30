@@ -4,14 +4,14 @@
 import { mountEditorUi } from '/dist/editor-ui.js';
 import { normalizeUiOptions } from '/src/react/ui-options-runtime.js';
 const caps={stroke:true,fill:true,cornerRadius:true,editText:true,text:false,line:false,group:false,groupTitle:false,verticalTextAlignment:false,connectorRouting:false};
-const uniform=value=>({state:'Uniform',value});
-const props={strokeColor:uniform({role:'PrimaryStroke',argb:null}),fillColor:uniform({role:'PrimaryFill',argb:null}),strokeWidth:uniform('Normal'),strokeStyle:uniform('Solid'),cornerRadius:uniform(0),textSize:uniform('Medium'),bold:uniform(false),italic:uniform(false),horizontalAlignment:uniform('Center'),verticalAlignment:uniform('Center'),lineStartStyle:uniform(0),lineEndStyle:uniform(1),lineRouting:uniform('Straight'),groupColorRole:uniform(null),groupHeaderVisible:uniform(true)};
+const model={data:{paintStyle:{color:{colorClass:'PrimaryStroke',colorValue:null},fillColor:{colorClass:'PrimaryFill',colorValue:null},strokeWidth:{widthClass:'Normal',widthValue:null},strokeClass:'Solid'},cornerRadius:0},fontStyle:{size:{sizeClass:'Medium',sizeValue:null},color:{colorClass:'PrimaryStroke',colorValue:null},weight:400,slant:'Upright',textAlign:'Center',verticalTextAlign:'Center'},startStyle:0,endStyle:1,routing:'Straight'};
+const resolved={cornerRadius:0,fontStyle:{size:{sizeValue:16},weight:400,slant:'Upright',textAlign:'Center',verticalTextAlign:'Center'},groupColorRole:null,groupHeaderVisible:true};
 globalThis.mount = (options={})=>{
  const root=document.createElement('div');root.className='editor';const canvas=document.createElement('canvas');root.append(canvas);document.body.append(root);
  const state={revision:'r0',health:'healthy',editingEnabled:true,busy:false,canUndo:false,canRedo:false,tool:'select',zoom:1,sketchyMode:false};
  const listeners={state:new Set(),ui:new Set(),selection:new Set(),preferences:new Set(),dispose:new Set()};const calls=[];
  const preferences={darkTheme:false,showGrid:true,snapToGrid:true};
- let selection={token:{session:crypto.randomUUID(),version:1},items:[],properties:props,anchor:{left:100,top:140,right:220,bottom:220}}, ui=normalizeUiOptions(options).ui, failure;
+ let selection={revision:'r0',token:{session:crypto.randomUUID(),version:1},items:[],anchor:{left:100,top:140,right:220,bottom:220}}, ui=normalizeUiOptions(options).ui, failure;
  const editor={lifecycle:'ready',get ui(){return ui},
   onStateChanged(fn){listeners.state.add(fn);fn({...state});return()=>listeners.state.delete(fn)},
   onUiChanged(fn){listeners.ui.add(fn);fn(ui);return()=>listeners.ui.delete(fn)},
@@ -21,10 +21,10 @@ globalThis.mount = (options={})=>{
   async getSelection(){return selection},async getPreferences(){return {...preferences}},
   async dispose(){editor.lifecycle='disposed';listeners.dispose.forEach(fn=>fn());root.remove()},
  };
- for(const method of ['undo','redo','setTool','setProperty','deleteSelection','beginTextEditing','copySelection','copyToClipboard','pasteSelection','setSketchyMode','zoom','invokeAction','setPreferences']) editor[method]=async(...args)=>{calls.push({method,args});if(failure)throw Object.assign(new Error(failure.message),{code:failure.code});if(method==='copySelection')return {version:1,data:'AQID'};if(method==='copyToClipboard')return {internal:true,system:'skipped'};if(method==='setPreferences'){Object.assign(preferences,args[0]);listeners.preferences.forEach(fn=>fn({...preferences}));}};
+ for(const method of ['undo','redo','setTool','editScene','deleteSelection','beginTextEditing','copySelection','copyToClipboard','pasteSelection','setSketchyMode','zoom','invokeAction','setPreferences']) editor[method]=async(...args)=>{calls.push({method,args});if(failure)throw Object.assign(new Error(failure.message),{code:failure.code});if(method==='copySelection')return {version:1,data:'AQID'};if(method==='copyToClipboard')return {internal:true,system:'skipped'};if(method==='setPreferences'){Object.assign(preferences,args[0]);listeners.preferences.forEach(fn=>fn({...preferences}));}};
  const view=mountEditorUi({editor,container:root});
  const api={editor,root,calls,view,listeners,
-  select(kind='Shape',overrides={}){const typeCaps=kind==='Line'?{line:true,fill:false,cornerRadius:false}:kind.includes('Text')?{text:true,stroke:false,fill:false,cornerRadius:false}:kind==='Group'?{group:true,groupTitle:true}:{};const item={id:kind,kind,bindingItemId:null,textId:null,capabilities:{...caps,...typeCaps},properties:props,screenBounds:selection.anchor,...overrides};if(kind==='Group')item.boundText={id:'title',kind:'BoundText',capabilities:{...caps,text:true,stroke:false,fill:false,verticalTextAlignment:true},properties:props};selection={...selection,token:{...selection.token,version:selection.token.version+1},items:[item]};listeners.selection.forEach(fn=>fn(selection));},
+  select(kind='Shape',overrides={}){const typeCaps=kind==='Line'?{line:true,fill:false,cornerRadius:false}:kind.includes('Text')?{text:true,stroke:false,fill:false,cornerRadius:false}:kind==='Group'?{group:true,groupTitle:true}:{};const item={id:kind,kind,bindingItemId:null,textId:null,capabilities:{...caps,...typeCaps},model:structuredClone(model),resolved:structuredClone(resolved),screenBounds:selection.anchor,...overrides};if(kind==='Group')item.boundText={id:'title',kind:'BoundText',capabilities:{...caps,text:true,stroke:false,fill:false,verticalTextAlignment:true},model:structuredClone(model),resolved:structuredClone(resolved)};selection={...selection,token:{...selection.token,version:selection.token.version+1},items:[item]};listeners.selection.forEach(fn=>fn(selection));},
   setState(value){Object.assign(state,value);listeners.state.forEach(fn=>fn({...state}));},
   refreshSelection(){selection={...selection,anchor:{...selection.anchor,left:selection.anchor.left+20}};listeners.selection.forEach(fn=>fn(selection));},
   setFailure(value){failure=value},

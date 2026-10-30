@@ -14,6 +14,11 @@ async function mount(container: HTMLElement) {
   await editor.replaceDocument(result.raw!);
   await editor.replacePngDocument(result.png!.base64);
   await editor.replaceTextGraph('B -> C');
+  const scene = await editor.getScene();
+  await editor.editScene({revision:scene.revision,description:'Update document',changes:[{path:['title'],value:'Example'},
+    ...scene.items.map(item => ({itemId:item.id,path:['xData','custom:label'],value:'Host annotation'}))]});
+  // @ts-expect-error Property-specific commands are not part of the SDK.
+  editor.setProperty({}, {});
   await editor.fitViewport({ padding: 60 });
   await editor.setEditingEnabled(false);
   await editor.setActionState('host.save', { enabled: false });

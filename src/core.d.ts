@@ -41,25 +41,27 @@ export interface EditorSnapshot {
 export interface ViewportOptions { padding?: number; minScale?: number; maxScale?: number; }
 export interface EditorSelectionToken { readonly session: string; readonly version: number; }
 export interface EditorScreenBounds { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number; }
-export type EditorValue<T> = { readonly state: 'Unavailable' | 'Mixed'; readonly value?: T | null } | { readonly state: 'Uniform'; readonly value: T };
-export interface EditorColorValue { readonly role: string; readonly argb: number | null; }
-export interface EditorPropertyValues {
-  readonly strokeColor: EditorValue<EditorColorValue>;
-  readonly fillColor: EditorValue<EditorColorValue>;
-  readonly strokeWidth: EditorValue<string>;
-  readonly strokeStyle: EditorValue<string>;
-  readonly cornerRadius: EditorValue<number>;
-  readonly textSize: EditorValue<string>;
-  readonly resolvedTextSize: EditorValue<number>;
-  readonly bold: EditorValue<boolean>;
-  readonly italic: EditorValue<boolean>;
-  readonly horizontalAlignment: EditorValue<string>;
-  readonly verticalAlignment: EditorValue<string>;
-  readonly lineStartStyle: EditorValue<number>;
-  readonly lineEndStyle: EditorValue<number>;
-  readonly lineRouting: EditorValue<string>;
-  readonly groupColorRole: EditorValue<string | null>;
-  readonly groupHeaderVisible: EditorValue<boolean>;
+/** Detached generated model values; a new native property needs no SDK DTO. */
+export type EditorModelValue = null | boolean | number | string | EditorModelObject | readonly EditorModelValue[];
+export interface EditorModelObject { readonly [name: string]: EditorModelValue; }
+export interface EditorModelProperty {
+  readonly name: string; readonly kind: string; readonly writable: boolean; readonly nullable: boolean;
+  readonly values?: readonly string[] | null; readonly properties?: readonly EditorModelProperty[] | null;
+}
+export interface EditorModelOperation { readonly name: string; readonly parameters: readonly string[]; }
+export interface EditorModelSchema {
+  readonly type: string; readonly properties: readonly EditorModelProperty[]; readonly operations: readonly EditorModelOperation[];
+}
+export interface EditorModelSnapshot { readonly type: string; readonly model: EditorModelObject; readonly schema: EditorModelSchema; }
+export interface EditorSceneObject extends EditorModelSnapshot { readonly id: string; }
+export interface EditorSceneSnapshot { readonly revision: string; readonly metadata: EditorModelSnapshot; readonly items: readonly EditorSceneObject[]; }
+export type EditorSceneChange = { readonly itemId?: string | null; readonly path: readonly string[] } & (
+  { readonly op?: 'set'; readonly value: EditorModelValue } |
+  { readonly op: 'remove' } |
+  { readonly op: 'call'; readonly arguments: readonly EditorModelValue[] }
+);
+export interface EditorSceneEdit {
+  readonly revision: string; readonly description: string; readonly changes: readonly EditorSceneChange[]; readonly token?: EditorSelectionToken;
 }
 export interface EditorCapabilities {
   readonly stroke: boolean; readonly fill: boolean; readonly cornerRadius: boolean; readonly editText: boolean;
@@ -75,24 +77,15 @@ export interface EditorSelectedObject {
   readonly id: string;
   readonly kind: 'Shape' | 'Line' | 'Group' | 'IndependentText' | 'BoundText';
   readonly bindingItemId: string | null; readonly textId: string | null;
-  readonly capabilities: EditorCapabilities; readonly properties: EditorPropertyValues; readonly screenBounds: EditorScreenBounds;
+  readonly capabilities: EditorCapabilities; readonly model: EditorModelObject; readonly resolved: EditorModelObject; readonly screenBounds: EditorScreenBounds;
   readonly text?: string | null; readonly boundText?: EditorSelectedObject | null;
   readonly startAttachment?: EditorAttachment | null; readonly endAttachment?: EditorAttachment | null; readonly routingUnavailable: boolean;
 }
 export interface EditorSelectionSnapshot {
+  readonly revision: string;
   readonly token: EditorSelectionToken;
   readonly items: readonly EditorSelectedObject[];
-  readonly properties: EditorPropertyValues;
   readonly anchor: EditorScreenBounds | null;
-}
-export type EditorPropertyCommand = 'StrokeColor' | 'FillColor' | 'StrokeWidth' | 'StrokeStyle' | 'ToggleCornerRadius' |
-  'TextSize' | 'ToggleBold' | 'ToggleItalic' | 'HorizontalAlignment' | 'VerticalAlignment' | 'LineStartStyle' | 'LineEndStyle' |
-  'SwapLineEndpointStyles' | 'LineRouting' | 'ToggleLineElbow' | 'StartAttachment' | 'EndAttachment' | 'GroupColorRole' |
-  'GroupHeaderVisible' | 'ResetGroupStyle' | 'ResetGroupTitleStyle';
-export interface EditorPropertyChange {
-  command: EditorPropertyCommand; targetItemId?: string; color?: string | null; width?: string; stroke?: string;
-  fontSize?: string; horizontalAlignment?: string; verticalAlignment?: string; endpointStyle?: number;
-  routing?: string; boundaryId?: string | null; enabled?: boolean | null; groupReset?: string; titleReset?: string;
 }
 /** Opaque immutable MemoryPack graph; JS never mutates the graph or remaps IDs. */
 export interface EditorSelectionPayload { readonly version: 1; readonly data: string; }
@@ -124,7 +117,9 @@ export interface EditorInstance {
   onEvent(name: 'fontCacheStatus', listener: (status: EditorFontCacheStatus) => void): () => void;
   getSelection(): Promise<EditorSelectionSnapshot>;
   setTool(tool: 'select' | 'arrow' | 'rectangle' | 'ellipse' | 'diamond' | 'text'): Promise<void>;
-  setProperty(token: EditorSelectionToken, change: EditorPropertyChange): Promise<void>;
+  getScene(): Promise<EditorSceneSnapshot>;
+  /** Validates and commits every change as one native document transaction. */
+  editScene(edit: EditorSceneEdit): Promise<void>;
   deleteSelection(token: EditorSelectionToken): Promise<void>;
   beginTextEditing(targetItemId?: string): Promise<void>;
   applyText(token: EditorSelectionToken, targetItemId: string, content: string): Promise<void>;

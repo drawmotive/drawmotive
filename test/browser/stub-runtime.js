@@ -6,7 +6,7 @@ export async function mountCanvas({container,emit,platform}) {
   emit('ready',{state});
   return {async request(method,args){
     if(method==='getState')return state;
-    if(method==='getSelection')return {token:{session:'selection',version:1},items:[],properties:{},anchor:null};
+    if(method==='getSelection')return {revision:state.revision,token:{session:'selection',version:1},items:[],anchor:null};
     if(method==='getPreferences')return {...preferences};
     if(method==='setPreferences'){Object.assign(preferences,args);emit('preferencesChanged',{...preferences});}
     if(method==='setTool'){state.tool=args.tool;emit('stateChanged',{...state});}

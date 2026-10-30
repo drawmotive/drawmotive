@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { MantineProvider } from '@mantine/core';
-import type { EditorInstance, EditorPreferences, EditorPropertyChange, EditorSelectionSnapshot, EditorState } from '../core.js';
+import type { EditorInstance, EditorPreferences, EditorSelectionSnapshot, EditorState } from '../core.js';
+import { callModel, projectSelection, selectionEdit, setModel } from './selection-model.js';
+import type { SelectionEdit, UiSelection } from './selection-model.js';
 import type { EditorRegionItem } from './ui-options.js';
 import { CONTEXT_PANEL_IDS, contextTools, mapCanvasBounds, placeFloating, selectionSubjects } from './ui-model.js';
 import { colorCss, LABELS, PanelButton, Separator, SHORTCUTS, ToolButton, UiContext, uniform } from './controls.js';
@@ -19,7 +21,7 @@ export interface EditorUiProps {
 }
 const idle:EditorState={revision:null,health:'healthy',editingEnabled:false,busy:true,canUndo:false,canRedo:false};
 
-/** Local UI observes immutable snapshots; every edit uses the engine's semantic API. */
+/** Local UI observes immutable snapshots; every edit submits one native batch transaction. */
 export function EditorUi(props:EditorUiProps) {
   // A sequential document replacement must release all previous UI effects and state.
   const lifetime=useRef({editor:props.editor,key:0});
@@ -27,7 +29,7 @@ export function EditorUi(props:EditorUiProps) {
   return <EditorUiSession key={lifetime.current.key} {...props}/>;
 }
 function EditorUiSession({editor,container,slots={},colorScheme,className='',style,onError}:EditorUiProps) {
-  const [ui,setUi]=useState(editor.ui),[state,setState]=useState<EditorState>(idle),[selection,setSelection]=useState<EditorSelectionSnapshot|null>(null);
+  const [ui,setUi]=useState(editor.ui),[state,setState]=useState<EditorState>(idle),[selection,setSelection]=useState<UiSelection|null>(null);
   const [preferences,setPreferences]=useState<EditorPreferences>({}),[panel,setPanel]=useState<string|null>(null),[error,setError]=useState<unknown>(null);
   const [pending,setPending]=useState<ReadonlySet<string>>(new Set()),[closed,setClosed]=useState(editor.lifecycle!=='ready');
   const alive=useRef(false),pendingRef=useRef(new Set<string>()),overlay=useRef<HTMLDivElement>(null),toolbar=useRef<HTMLFieldSetElement>(null);
@@ -39,13 +41,13 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     if(closed||!ui.enabled)return;
     alive.current=true;let cancelled=false,selectionEvents=0,preferenceEvents=0;
     const stops=[editor.onStateChanged(setState),editor.onUiChanged(setUi),editor.onEvent('selectionChanged',next=>{
-      const previous=selectionRef.current;selectionEvents++;selectionRef.current=next;setSelection(next);
+      const previous=selectionRef.current;selectionEvents++;selectionRef.current=next;setSelection(projectSelection(next));
       if(previous&&(previous.token.session!==next.token.session||previous.token.version!==next.token.version))setPanel(current=>current==='settings'?current:null);
     }),editor.onPreferencesChanged(next=>{preferenceEvents++;setPreferences(next);}),editor.onDisposed(()=>setClosed(true))];
     // Each effect owns its responses. StrictMode can start a new effect while an
     // earlier get is still pending; replayed/new events also supersede initial reads.
     const reject=(reason:unknown)=>{if(!cancelled)report(reason);};
-    void editor.getSelection().then(next=>{if(!cancelled&&selectionEvents===0){selectionRef.current=next;setSelection(next);}},reject);
+    void editor.getSelection().then(next=>{if(!cancelled&&selectionEvents===0){selectionRef.current=next;setSelection(projectSelection(next));}},reject);
     void editor.getPreferences().then(next=>{if(!cancelled&&preferenceEvents===0)setPreferences(next);},reject);
     return ()=>{cancelled=true;alive.current=false;stops.forEach(stop=>stop());};
   },[editor,closed,report,ui.enabled]);
@@ -59,7 +61,7 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
       return false;
     } finally {pendingRef.current.delete(key);if(alive.current)setPending(new Set(pendingRef.current));}
   },[report]);
-  const property=useCallback((change:EditorPropertyChange)=>selection?run(()=>editor.setProperty(selection.token,change)):Promise.resolve(false),[editor,selection,run]);
+  const edit=useCallback<SelectionEdit>((description,changes,target)=>selection?run(()=>editor.editScene(selectionEdit(selection,description,changes,target))):Promise.resolve(false),[editor,selection,run]);
   const changePreferences=async(value:EditorPreferences)=>{await run(()=>editor.setPreferences(value),'preferences');};
   const subjects=selection?selectionSubjects(selection.items):[], item=subjects[0];
   const contextIds=contextTools(subjects,ui.contextToolbar).filter(id=>id!=='editText'||ui.textEditing!=='disabled');
@@ -81,7 +83,7 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
   },[container,selection,closed,ui.enabled,state.busy,contextIds.join(',')]);
 
   if(closed||!ui.enabled)return null;
-  const context={editor,ui,state:{...state,busy:state.busy||pending.has('document')},selection,panel,setPanel,run,property};
+  const context={editor,ui,state:{...state,busy:state.busy||pending.has('document')},selection,panel,setPanel,run,edit};
   function builtin(id:string) {
     if(!ui.buttons[id as keyof typeof ui.buttons])return null;
     const disabled=(id==='undo'?!state.canUndo||editingBlocked:id==='redo'?!state.canRedo||editingBlocked:
@@ -116,8 +118,11 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     const selected=id==='bold'?uniform(p.bold):id==='italic'?uniform(p.italic):id==='cornerRadius'?(uniform(p.cornerRadius)??0)>0:id.startsWith('textSize')?uniform(p.textSize)===id.slice(8):undefined;
     const direct=()=>{
       if(id==='editText')return run(()=>editor.beginTextEditing(item?.id));
-      if(id.startsWith('textSize'))return property({command:'TextSize',fontSize:id.slice(8)});
-      return property({command:({bold:'ToggleBold',italic:'ToggleItalic',cornerRadius:'ToggleCornerRadius',swapLineEndpoints:'SwapLineEndpointStyles'} as const)[id as 'bold'|'italic'|'cornerRadius'|'swapLineEndpoints']});
+      if(id.startsWith('textSize'))return edit('Set text size',item=>[setModel(item,['fontStyle','size','sizeClass'],id.slice(8)),setModel(item,['fontStyle','size','sizeValue'],null)]);
+      if(id==='bold')return edit('Toggle bold',item=>[setModel(item,['fontStyle','weight'],uniform(p.bold)===true?400:700)]);
+      if(id==='italic')return edit('Toggle italic',item=>[setModel(item,['fontStyle','slant'],uniform(p.italic)===true?'Upright':'Italic')]);
+      if(id==='cornerRadius')return edit('Toggle corner radius',item=>[callModel(item,'toggleCornerRadius')]);
+      return edit('Swap endpoints',item=>[setModel(item,['startStyle'],item.model.endStyle),setModel(item,['endStyle'],item.model.startStyle)]);
     };
     const content=id==='strokeFillColor'?<span className="dm-stroke-fill" data-transparent={uniform(p.fillColor)?.role==='Transparent'?'':undefined}>
       <PaletteIcon fill={colorCss(uniform(p.fillColor)?.role,uniform(p.fillColor)?.argb)} style={{color:colorCss(uniform(p.fillColor)?.role==='Transparent'?'SecondaryStroke':uniform(p.fillColor)?.role)}}/>

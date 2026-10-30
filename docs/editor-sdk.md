@@ -306,76 +306,119 @@ async function save(editor, writeSnapshot) {
 
 The boolean reports whether that exact saved revision is still current. Edits may occur while the write is pending, so a successful write need not make the editor clean. Track revisions per instance/document, serialize external writes per document, and re-evaluate dirty UI from state changes. Do not compare revision strings across instances or parse their contents. Undo can conservatively produce a new revision even when content resembles an earlier save. A debounced autosave should respect `busy`, retain failed saves, and schedule the latest dirty revision after an in-flight save; it must not clear newer edits on an older acknowledgment.
 
-## Selection and editing API
+## Generated scene model and batch editing
+
+The document API exposes generated values from scene metadata and every live graphics item's persisted model. It does not maintain a separate command or DTO for each property. Native model additions appear in the model and schema automatically; runtime services, caches and CRDT clocks are excluded.
 
 | Function | Result / arguments |
 | --- | --- |
-| `getSelection()` | `Promise<EditorSelectionSnapshot>` |
-| `setProperty(token, change)` | Applies a semantic property transaction to the validated selection |
+| `getScene()` | `Promise<EditorSceneSnapshot>`: revision, metadata and all live items |
+| `editScene(edit)` | Validates and commits one batch as one document transaction and one Undo step |
+| `getSelection()` | `Promise<EditorSelectionSnapshot>`: observed revision, selection token, selected items and screen anchor |
 | `deleteSelection(token)` | Deletes the validated selection through the engine |
 | `beginTextEditing(targetItemId?)` | Begins text input for an explicit item or the selected target |
 | `applyText(token, targetItemId, content)` | Commits host-supplied text without entering inline input |
 | `copySelection(token)` | Returns opaque `{ version: 1, data: string }` |
 | `pasteSelection(payload, { x, y })` | Clones/remaps the opaque graph through the engine; returns the pasted selection |
 
-`EditorSelectionSnapshot` contains `token`, `items`, aggregate `properties` and nullable `anchor`. Tokens contain an opaque `session` and numeric `version`; retain the token associated with the selection shown by your control. Reselection can invalidate a token even when item IDs are unchanged. `StaleSelection` means refresh the UI and revalidate the user's intent; do not silently reapply it to another selection.
+### Discover objects, properties and operations
 
-Each item reports `id`, `kind`, optional bound text/line attachments, `screenBounds`, `properties` and capabilities: `stroke`, `fill`, `cornerRadius`, `editText`, `text`, `verticalTextAlignment`, `line`, `connectorRouting`, `group`, `groupTitle`. These are detached summaries, not engine object references.
+`getScene()` returns `{ revision, metadata: { type, model, schema }, items: [{ id, type, model, schema }] }`. Each `model` is a detached JSON object, not a mutable reference to the C# object. SDK results are deeply immutable. Modifying a snapshot never edits the document; call `editScene` to commit changes.
 
-Each property is tagged `Uniform`, `Mixed` or `Unavailable`. Use `value` only for `Uniform`. `EditorColorValue` contains a theme `role` and optional numeric `argb`; property setters currently accept theme roles, not arbitrary CSS color strings or ARGB overrides.
-
-| Snapshot field | Shape / meaning |
-| --- | --- |
-| `token` | `{ session: string, version: number }`; selection identity |
-| `items` | Read-only array of selected object summaries |
-| `properties` | Aggregate tagged property values for effective subjects |
-| `anchor` | Nullable `{ left, top, right, bottom }` for positioning selection controls |
-| Item `id` / `kind` | Opaque ID and `Shape`, `Line`, `Group`, `IndependentText` or `BoundText` |
-| Item `bindingItemId` / `textId` | Nullable owner and bound-text IDs |
-| Item `capabilities` / `properties` | That item's capabilities and tagged values |
-| Item `screenBounds` / `text` | Iframe screen bounds and optional nullable text content |
-| Item `boundText` | Optional nullable nested bound-text summary |
-| Item `startAttachment` / `endAttachment` | Optional endpoint summary: `{ attachment: { kind, ownerId, boundaryId }, boundaryIds, unresolved }` |
-| Item `routingUnavailable` | Whether the line has an unresolved routing failure |
-
-Property keys are `strokeColor`, `fillColor`, `strokeWidth`, `strokeStyle`, `cornerRadius`, `textSize`, `resolvedTextSize`, `bold`, `italic`, `horizontalAlignment`, `verticalAlignment`, `lineStartStyle`, `lineEndStyle`, `lineRouting`, `groupColorRole` and `groupHeaderVisible`. `resolvedTextSize` and `cornerRadius` are numeric; endpoint styles are integers; bold/italic/header visibility are booleans. Text/line style classifications and alignments use the enum strings below. `groupColorRole` can have a uniform null value for the theme default.
+A schema contains `type`, `properties` and `operations`. Each property describes `name`, `kind`, `writable`, `nullable`, optional enum `values` and optional nested `properties`. Operation descriptors contain the generated camel-case `name` and ordered parameter names. Use these descriptors to build an inspector without an SDK property whitelist.
 
 ```javascript
-const selection = await editor.getSelection();
-if (selection.items.length && selection.items.every(item => item.capabilities.fill)) {
-  await editor.setProperty(selection.token, { command: 'FillColor', color: 'PrimaryFill' });
+const scene = await editor.getScene();
+console.log(scene.metadata.model.title, scene.metadata.schema.properties);
+for (const item of scene.items) {
+  console.log(item.id, item.type, item.model, item.schema.operations);
 }
 ```
 
-The engine validates capabilities again inside the transaction. An optional `change.targetItemId` addresses a selected item or a selected owner's bound text; it cannot target an unrelated scene object. Without it, the effective selection is edited together.
+Property names use camel case. Enums use native names, such as `"Solid"` or `"Orthogonal"`. Signed and unsigned 64-bit integers use decimal strings to preserve precision. Colors use numeric unsigned ARGB values; vectors use `{ x, y }`. Arrays are replaced as a complete leaf value. A nested tracked object is patched through its existing children, preserving their identity. Unsupported value types and lifecycle-sensitive state remain readable where possible and explicitly read-only. Read the schema before building generic controls: IDs, ownership, tombstones, group membership and derived routing geometry are not ordinary writable properties.
 
-### Property commands
+### Batch contract
 
-Use the following canonical command names and enum string values. Supply only the parameter belonging to the command.
+`editScene` accepts `{ revision, description, changes, token? }`. Every change has a `path: string[]` and optional `itemId`. Omitting `itemId` targets scene metadata; providing an ID targets any existing live item, including one outside the current selection.
 
-| `change.command` | Parameter / accepted value |
+| Operation | Shape |
 | --- | --- |
-| `StrokeColor`, `FillColor` | `color`: theme role from the list below |
-| `StrokeWidth` | `width`: `Thin`, `Normal`, `Bold`, `Group` |
-| `StrokeStyle` | `stroke`: `Solid`, `Dashed`, `Dotted`, `Theme` |
-| `ToggleCornerRadius` | No value; supported objects only |
-| `TextSize` | `fontSize`: `Small`, `Medium`, `Large`, `Body`, `GroupTitle` |
-| `ToggleBold`, `ToggleItalic` | No value; toggles from current committed text properties |
-| `HorizontalAlignment` | `horizontalAlignment`: `Left`, `Center`, `Right` |
-| `VerticalAlignment` | `verticalAlignment`: `Top`, `Center`, `Bottom`; bound text only |
-| `LineStartStyle`, `LineEndStyle` | `endpointStyle`: integer `0`–`5` |
-| `SwapLineEndpointStyles` | No value |
-| `LineRouting` | `routing`: `Straight`, `Orthogonal`, `Curved`; connector capability required for non-straight routes |
-| `ToggleLineElbow` | No value; toggles straight/orthogonal on connector-capable lines |
-| `StartAttachment`, `EndAttachment` | `boundaryId`: an advertised boundary ID or `null` to disconnect |
-| `GroupColorRole` | `color`: a Primary/Secondary/Accent/Success/Warning stroke/fill role, or `null` for the theme default |
-| `GroupHeaderVisible` | `enabled`: boolean, or `null` for the theme default |
-| `ResetGroupStyle` | `groupReset`: `All`, `Border`, `Body`, `Line`, `Corners`, `Opacity`, `Header` |
-| `ResetGroupTitleStyle` | `titleReset`: `All`, `Color`, `Size`, `Weight`, `Slant`, `Alignment` |
+| Set a property | `{ itemId?, path, value, op?: 'set' }` |
+| Remove a dictionary entry | `{ itemId?, path, op: 'remove' }` |
+| Call an advertised model operation | `{ itemId?, path: [operationName], op: 'call', arguments: [...] }` |
 
-Color roles are `Transparent`, `Foreground`, `Background`, `PrimaryStroke`, `PrimaryFill`, `SecondaryStroke`, `SecondaryFill`, `AccentStroke`, `AccentFill`, `SuccessStroke`, `SuccessFill`, `WarningStroke`, `WarningFill`, `GroupBody`, `GroupHeader`, `GroupBorder`, `GroupTitle`. Their resolved colors follow the theme. Width/font group roles and `Theme` stroke likewise retain theme-derived behavior.
+The complete batch is validated against detached staged targets before any live mutation, then checked again under the transaction lock. Invalid paths, types, enum values, read-only writes or operation arguments reject the whole batch. No partial edits, history entry or document clock update is produced by a validation rejection. C# owns tracked setters, history, text measurement, spatial indexes, grips, connector routing and repaint. JavaScript sends one request for the entire edit; it does not hold a native transaction open across calls.
 
-Endpoint styles map to `0` none, `1` simple arrow, `2` filled arrow, `3` open arrow, `4` circle, `5` diamond. Attachment changes retain the existing owner; select a `boundaryId` reported by that endpoint's `boundaryIds`. This API is not a general connect-to-any-object operation. Unresolved attachments and routing failures remain visible in the selection summary.
+Use the opaque `revision` from the snapshot that produced your edit. `StaleRevision` rejects outdated values or edits for a replaced document. After an edit, obtain a fresh scene or selection before preparing the next dependent batch. Do not parse revisions or silently retry an edit against a newer document. A `token` is optional; selection-based controls should supply the token they displayed to reject reselection with `StaleSelection`. `EditorBusy` means an active interaction must finish first. Structured errors remain `EditorError` values. Uncertain persistence retains the explicit fault/retry behavior described above; validation guarantees do not promise storage rollback after an unknown durable receipt.
+
+### Change scene metadata and several objects together
+
+```javascript
+const scene = await editor.getScene();
+const item = scene.items.find(item => item.id === targetItemId);
+if (!item) throw new Error('The target item is unavailable.');
+await editor.editScene({
+  revision: scene.revision,
+  description: 'Move object and update diagram',
+  changes: [
+    { itemId: item.id, path: ['data', 'transformation', 'translation'], value: { x: 200, y: 120 } },
+    { itemId: item.id, path: ['xData', 'custom:label'], value: 'Reviewed' },
+    { path: ['title'], value: 'Architecture overview' },
+    { path: ['style'], value: 1 }, // 0: normal; 1: sketchy
+  ],
+});
+```
+
+A direct property edit changes the persisted value. For domain operations, use an advertised model method: a group's `setTranslation({ x, y })` also moves its descendants, while changing `data.transformation.translation` changes the group's frame. Connector waypoints and routed endpoints are derived output; move a line through its canonical attachments or advertised operations. Method availability is discovered from the object's schema.
+
+### Style a validated selection
+
+```javascript
+const selection = await editor.getSelection();
+const shapes = selection.items.filter(item => item.capabilities.fill);
+if (shapes.length) {
+  await editor.editScene({
+    revision: selection.revision,
+    token: selection.token,
+    description: 'Change fill color',
+    changes: shapes.flatMap(item => [
+      { itemId: item.id, path: ['data', 'paintStyle', 'fillColor', 'colorClass'], value: 'PrimaryFill' },
+      { itemId: item.id, path: ['data', 'paintStyle', 'fillColor', 'colorValue'], value: null },
+    ]),
+  });
+}
+```
+
+Clear the explicit `colorValue` when choosing a theme role. Likewise, `widthValue: null` and `sizeValue: null` restore theme-derived width and font size. An explicit ARGB color or numeric width/size can be set through the same generated graph.
+
+### Use model operations and dictionaries
+
+```javascript
+const scene = await editor.getScene();
+const group = scene.items.find(item => item.id === groupId);
+if (group?.schema.operations.some(operation => operation.name === 'resetTitleStyle')) {
+  await editor.editScene({
+    revision: scene.revision,
+    description: 'Restore title and remove annotation',
+    changes: [
+      { itemId: group.id, op: 'call', path: ['resetTitleStyle'], arguments: ['All'] },
+      { itemId: group.id, op: 'remove', path: ['xData', 'custom:label'] },
+    ],
+  });
+}
+```
+
+Existing model operations include group `setThemeColorRole(roleOrNull)`, `setHeaderVisible(booleanOrNull)`, `resetStyle(property)` and `resetTitleStyle(property)`; connector `setRoutingMode(mode)`, `setEndpointBoundary(start, boundaryId)` and `disconnectStart()`/`disconnectEnd()`; and supported item `toggleCornerRadius()`/`setTranslation(position)`. Pass all declared arguments, including explicit nulls. Group style reset values are `All`, `Border`, `Body`, `Line`, `Corners`, `Opacity` and `Header`. Title reset values are `All`, `Color`, `Size`, `Weight`, `Slant` and `Alignment`.
+
+Endpoint styles use integers `0` none, `1` simple arrow, `2` filled arrow, `3` open arrow, `4` circle and `5` diamond. Endpoint boundary operations retain the current owner and accept IDs advertised in that endpoint's `boundaryIds`; they are not a general connect-to-any-object API.
+
+### Selection observations
+
+`EditorSelectionSnapshot` contains `revision`, `token`, `items` and nullable `anchor`. A token contains opaque `session` and numeric `version`; reselection can invalidate it even when the IDs are unchanged. Keep the token associated with the control shown to the user.
+
+Each selected item exposes its generated `model`, small `resolved` presentation values, `id`, `kind`, `bindingItemId`, `textId`, `screenBounds`, capabilities and optional `text`/`boundText`/`startAttachment`/`endAttachment`. Kinds are `Shape`, `Line`, `Group`, `IndependentText` and `BoundText`. Capabilities report `stroke`, `fill`, `cornerRadius`, `editText`, `text`, `verticalTextAlignment`, `line`, `connectorRouting`, `group` and `groupTitle`. `resolved` contains the effective corner radius, generated effective font style for text, and group theme/header values where applicable. Mixed-value aggregation belongs to the UI; the public scene API has no property-specific aggregate DTO.
+
+Attachment observations contain `{ attachment: { kind, ownerId, boundaryId }, boundaryIds, unresolved }`. `routingUnavailable` reports unresolved routing failure. Screen anchors remain native observations, so custom controls do not need to reconstruct canvas geometry.
 
 ### Coordinates
 
@@ -596,7 +639,7 @@ The SDK serializes native operations, invokes ExecuteAsync(method, arguments) on
 
 Storage, font and preference callbacks are direct JS functions independent of the operation queue, so C# can await them without deadlock. Dedicated Workers own IndexedDB and OPFS I/O using request IDs. Subscription registration, host actions and clipboard helpers remain in JS. Private synchronization is owned by the site.
 
-Use `editor.setTool('rectangle')`, `editor.setProperty(token, change)` and the other documented functions. There is no supported `editor.sendCommand(...)`, raw-port accessor or direct call to internal Blazor globals. Do not deep-import protocol/Worker implementation files. React controls use the same semantic API as custom host controls. Private synchronization integration remains separate site work and is not documented as a public SDK facility.
+Use `editor.setTool('rectangle')`, `editor.editScene({ revision, description, changes })` and the other documented functions. There is no supported `editor.sendCommand(...)`, raw-port accessor or direct call to internal Blazor globals. Do not deep-import protocol/Worker implementation files. React controls use the same batch API as custom host controls. Private synchronization integration remains separate site work and is not documented as a public SDK facility.
 
 ## Integration checklist
 

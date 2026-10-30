@@ -16,14 +16,14 @@ test('all four corners and drawing tools are configurable without hiding inline 
  await page.evaluate(()=>instances.push(mount(false)));expect(await page.locator('.dm-editor-ui').count()).toBe(1);
 });
 
-test('context panels send versioned semantic intents and preserve the two-layer color icon',async({page})=>{
+test('context panels send one versioned generated-model batch and preserve the two-layer color icon',async({page})=>{
  await page.evaluate(()=>{instances.push(mount());instances[0].select();});
  await page.getByTestId('context-toolbar-fill-color').click();
  await expect(page.locator('.dm-stroke-fill > svg')).toHaveCount(2);
  const colors=page.getByRole('dialog',{name:'Border and Fill Color',exact:true});
  expect(await colors.evaluate(panel=>{const bounds=panel.getBoundingClientRect();return [...panel.querySelectorAll('button')].every(button=>{const rect=button.getBoundingClientRect();return rect.left>=bounds.left&&rect.right<=bounds.right&&rect.top>=bounds.top&&rect.bottom<=bounds.bottom;});})).toBe(true);
  await page.getByTestId('panel-fill-color-secondaryfill').click();
- const call=await page.evaluate(()=>instances[0].calls.at(-1));expect(call.method).toBe('setProperty');expect(call.args[0].version).toBe(2);expect(call.args[1]).toEqual({command:'FillColor',color:'SecondaryFill'});
+ const call=await page.evaluate(()=>instances[0].calls.at(-1));expect(call.method).toBe('editScene');expect(call.args[0]).toMatchObject({revision:'r0',token:{version:2},changes:[{itemId:'Shape',path:['data','paintStyle','fillColor','colorClass'],value:'SecondaryFill'},{itemId:'Shape',path:['data','paintStyle','fillColor','colorValue'],value:null}]});
  await page.evaluate(()=>instances[0].setFailure({code:'StaleSelection',message:'Selection changed. Select again.'}));
  await page.getByTestId('panel-stroke-color-foreground').click();await expect(page.getByRole('alert')).toContainText('Selection changed');
  expect(await page.locator('body > .mantine-Popover-dropdown').count()).toBe(0);
@@ -56,7 +56,7 @@ test('a closing palette cannot apply to the next selection during a transition',
  await page.waitForTimeout(170);const bounds=await target.boundingBox();
  await page.evaluate(()=>instances[0].select('Shape',{id:'second'}));
  await page.mouse.click(bounds.x+bounds.width/2,bounds.y+bounds.height/2);
- expect(await page.evaluate(()=>instances[0].calls.filter(call=>call.method==='setProperty'))).toEqual([]);
+ expect(await page.evaluate(()=>instances[0].calls.filter(call=>call.method==='editScene'))).toEqual([]);
 });
 test('selection refreshes and an old idle notification cannot show tools over a new gesture',async({page})=>{
  await page.evaluate(()=>{instances.push(mount());instances[0].select();});
@@ -70,11 +70,11 @@ test('selection refreshes and an old idle notification cannot show tools over a 
 test('group controls stay inline and the title toolbar keeps its nested color panel',async({page})=>{
  await page.evaluate(()=>{instances.push(mount());instances[0].select('Group');});
  await expect(page.getByLabel('Group theme color',{exact:true})).toBeVisible();
- await page.getByLabel('Group theme color',{exact:true}).selectOption('AccentStroke');expect(await page.evaluate(()=>instances[0].calls.at(-1).args[1])).toEqual({command:'GroupColorRole',color:'AccentStroke'});
+ await page.getByLabel('Group theme color',{exact:true}).selectOption('AccentStroke');expect(await page.evaluate(()=>instances[0].calls.at(-1).args[0].changes)).toEqual([{itemId:'Group',op:'call',path:['setThemeColorRole'],arguments:['AccentStroke']}]);
  await page.getByRole('button',{name:'Title style',exact:true}).click();
  const title=page.getByRole('dialog',{name:'Title style',exact:true});await expect(title.getByLabel('Restore title theme style',{exact:true})).toBeVisible();
  await title.getByRole('button',{name:'Color',exact:true}).click();await page.getByTestId('panel-stroke-color-warningstroke').click();
- expect(await page.evaluate(()=>instances[0].calls.at(-1).args[1])).toEqual({command:'StrokeColor',color:'WarningStroke',targetItemId:'title'});
+ expect(await page.evaluate(()=>instances[0].calls.at(-1).args[0].changes)).toEqual([{itemId:'title',path:['fontStyle','color','colorClass'],value:'WarningStroke'},{itemId:'title',path:['fontStyle','color','colorValue'],value:null}]);
  await expect(title).toBeVisible();
 });
 test('a toolbar mounted after a busy document boundary is positioned at the retained selection',async({page})=>{
