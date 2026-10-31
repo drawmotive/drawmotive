@@ -88,7 +88,8 @@ export interface EditorSelectionSnapshot {
   readonly anchor: EditorScreenBounds | null;
 }
 /** Opaque immutable MemoryPack graph; JS never mutates the graph or remaps IDs. */
-export interface EditorSelectionPayload { readonly version: 1; readonly data: string; }
+export interface EditorSelectionPayload { readonly version: 1; readonly data: string; readonly png?: string | null; }
+export interface EditorSelectionCopyOptions { png?: boolean; }
 export interface EditorClipboardCopyOptions { system?:boolean; }
 export interface EditorClipboardCopyResult { readonly internal:true;readonly system:'written'|'denied'|'unavailable'|'skipped'; }
 export interface EditorClipboardPasteOptions { source?:'auto'|'internal'|'system'; }
@@ -131,7 +132,8 @@ export interface EditorInstance {
   updateInteractionModifiers(modifiers: { alt: boolean; shift: boolean }): Promise<void>;
   beginTextEditing(targetItemId?: string): Promise<void>;
   applyText(token: EditorSelectionToken, targetItemId: string, content: string): Promise<void>;
-  copySelection(token: EditorSelectionToken): Promise<EditorSelectionPayload>;
+  /** Optional PNG is rendered from the same native selection capture as the graph. */
+  copySelection(token: EditorSelectionToken, options?: EditorSelectionCopyOptions): Promise<EditorSelectionPayload>;
   pasteSelection(payload: EditorSelectionPayload, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
   copyToClipboard(token:EditorSelectionToken,options?:EditorClipboardCopyOptions):Promise<EditorClipboardCopyResult>;
   /** Omitted position uses the native canvas pointer in drawing/model coordinates. */

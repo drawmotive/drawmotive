@@ -209,7 +209,10 @@ export async function createEditorSession(options = {}, privateOptions) {
     },
     beginTextEditing(targetItemId) { return request('beginTextEditing',{ targetItemId }); },
     applyText(token,targetItemId,content) { return invoke('applyText', () => ({ token,targetItemId,content: text(content,'content') })); },
-    copySelection(token) { return request('copySelection',{ token }); },
+    copySelection(token,options = {}) { return invoke('copySelection', () => {
+      keys(options,['png'],'selection copy');
+      return {token,...(options.png === undefined ? {} : {png:boolean(options.png,'png')})};
+    }); },
     pasteSelection(payload,position) { return request('pasteSelection',{ payload,position }); },
     copyToClipboard(token,options) { return clipboard.copy(token,options); },
     pasteFromClipboard(position,options) { return clipboard.paste(position,options); },
@@ -244,6 +247,7 @@ export async function createEditorSession(options = {}, privateOptions) {
       let complete, fail;
       disposal = new Promise((resolve,reject) => { complete = resolve; fail = reject; });
       lifecycle = 'disposing';
+      clipboard.dispose();
       for (const controller of actionControllers) controller.abort(disposedError());
       // A successor cannot share a runtime whose previous scope or writer may still be alive.
       void bounded(async () => { await queue; await native.dispose(); await platform.dispose(); },deadlines.dispose).then(() => {
