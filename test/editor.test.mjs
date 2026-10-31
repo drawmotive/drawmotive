@@ -55,6 +55,34 @@ test('stale notifications cannot affect a reopened document',async t=>{
 test('clipboard stays in JS and semantic payloads remain opaque',async t=>{
  const h=host(t),payload={version:1,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
 });
+test('clipboard is retired before blocked native disposal completes',async t=>{
+ const h=host(t);let release,access=0;
+ Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){access++;return Promise.resolve('drawmotive/selection:1\nAQID');},writeText(){access++;return Promise.resolve();}}});
+ const editor=await h.mount({disposeTimeoutMs:1000});h.cleanup(()=>new Promise(resolve=>release=resolve));
+ const closing=editor.dispose();await new Promise(setImmediate);
+ try {
+  await assert.rejects(editor.copyToClipboard({}),{code:'EditorDisposed'});
+  await assert.rejects(editor.pasteFromClipboard({x:0,y:0}),{code:'EditorDisposed'});
+  assert.equal(access,0);
+ } finally {release();await closing;}
+});
+test('a pending copy provider cannot supply bytes after disposal begins',async t=>{
+ const h=host(t);let finish,provider;
+ Object.defineProperty(h.dom.window,'ClipboardItem',{value:class{constructor(data){this.data=data;}}});
+ Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{write(items){provider=items[0].data['text/plain'];return provider.then(()=>{});}}});
+ h.behavior(()=>new Promise(resolve=>finish=resolve));const editor=await h.mount();
+ const copying=editor.copyToClipboard({});void copying.catch(()=>{});await new Promise(setImmediate);
+ const closing=editor.dispose();finish({version:1,data:'AQID'});
+ await assert.rejects(copying,{code:'EditorDisposed'});await assert.rejects(provider,{code:'EditorDisposed'});await closing;
+});
+test('a pending paste cannot dispatch into a disposed or recreated editor',async t=>{
+ const h=host(t);let read;
+ Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText:()=>new Promise(resolve=>read=resolve)}});
+ h.behavior(method=>method==='getPointerPosition'?{x:1,y:2}:null);
+ const first=await h.mount(),pending=first.pasteFromClipboard();void pending.catch(()=>{});await new Promise(setImmediate);await first.dispose();
+ const second=await h.mount();read('drawmotive/selection:1\nAQID');await assert.rejects(pending,{code:'EditorDisposed'});
+ assert.equal(h.calls.some(call=>call.method==='pasteSelection'),false);await second.dispose();
+});
 test('interaction methods dispatch semantic intent without native keyboard events',async t=>{
  const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
  await editor.cancelInteraction();await editor.beginPan();await editor.endPan();await editor.repeatLastTool();

@@ -510,7 +510,11 @@ pasteButton.addEventListener('click', () => {
 });
 ```
 
-Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. React shortcuts use this JS clipboard service. Browser text clipboard handling and C# graph transfer remain separate; the remaining clipboard migration is tracked independently.
+Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. React shortcuts and the Copy menu use this JS clipboard service. Native inline text retains browser text copy/paste.
+
+Each editor keeps its own opaque internal copy in JS. Paste snapshots that fallback when invoked; a newer copy cannot replace an earlier pending paste. When no position is supplied, paste starts system access first and immediately requests the native model-space pointer position, preserving placement while permission handling is pending. Disposal immediately clears and retires the clipboard, including both deferred MIME providers and pending pastes. The C# transfer service retains no clipboard buffer; it freezes the closed graph and displayed line geometry into bytes, then remaps identities and applies placement and transactions on insertion.
+
+Where `ClipboardItem` is supported, system copy writes one item with `image/png` and `text/plain`. Other applications can consume the PNG; DrawMotive decodes the versioned graph envelope from the text representation to retain editable objects, labels and connections. Both formats come from one native capture of the selected graph, not a whole-document screenshot. Large selection images are proportionally reduced to fit the native raster budget; graph data retains the full geometry. `copySelection(token, { png: true })` also exposes that PNG companion as base64 for custom hosts. Internal-only copies skip raster rendering. The older `writeText` fallback carries graph data alone.
 
 ## State, events and host actions
 
