@@ -197,6 +197,16 @@ export async function createEditorSession(options = {}, privateOptions) {
     getScene() { return request('getScene'); },
     editScene(edit) { return request('editScene',edit); },
     deleteSelection(token) { return request('deleteSelection',{ token }); },
+    cancelInteraction() { return request('cancelInteraction'); },
+    beginPan() { return request('beginPan'); },
+    endPan() { return request('endPan'); },
+    repeatLastTool() { return request('repeatLastTool'); },
+    updateInteractionModifiers(modifiers) {
+      return invoke('updateInteractionModifiers',()=>{
+        keys(modifiers,['alt','shift'],'interaction modifiers');
+        return {alt:boolean(modifiers.alt,'alt'),shift:boolean(modifiers.shift,'shift')};
+      });
+    },
     beginTextEditing(targetItemId) { return request('beginTextEditing',{ targetItemId }); },
     applyText(token,targetItemId,content) { return invoke('applyText', () => ({ token,targetItemId,content: text(content,'content') })); },
     copySelection(token) { return request('copySelection',{ token }); },
@@ -245,7 +255,7 @@ export async function createEditorSession(options = {}, privateOptions) {
   const clipboardOptions = {};
   try { clipboardOptions.clipboard = hostWindow.navigator.clipboard; clipboardOptions.ClipboardItem = hostWindow.ClipboardItem; clipboardOptions.Blob = hostWindow.Blob; }
   catch { /* The internal clipboard remains usable when the host denies system access. */ }
-  clipboard = createEditorClipboard(instance, clipboardOptions);
+  clipboard = createEditorClipboard(instance, {...clipboardOptions,getPastePosition:()=>request('getPointerPosition')});
   const startupTimer = setTimeout(() => startup.abort(new EditorError('StartupTimeout','Editor initialization timed out.')),deadlines.startup);
   let starting;
   try {

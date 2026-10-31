@@ -13,7 +13,7 @@ export function decodeSelection(text) {
 }
 
 /** Host JS owns both system access and the instance-local copy. Engine bytes stay opaque. */
-export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob = globalThis.Blob } = {}) {
+export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob = globalThis.Blob, getPastePosition } = {}) {
   let internal, disposed = false, copyGeneration = 0;
   const active = () => { if (disposed) throw new EditorError('EditorDisposed', 'Editor has been disposed'); };
   return Object.freeze({
@@ -44,7 +44,9 @@ export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob =
     },
     async paste(position, {source = 'auto'} = {}) {
       active();
-      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) throw new TypeError('A finite drawing position is required');
+      if (position === undefined && !getPastePosition || position !== undefined && (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y))) throw new TypeError('A finite drawing position is required');
+      // Capture explicit intent before system access yields to the browser.
+      const target = position === undefined ? undefined : {x:position.x,y:position.y};
       if (!['auto','internal','system'].includes(source)) throw new TypeError('source must be auto, internal or system');
       let payload;
       if (source !== 'internal') {
@@ -59,7 +61,10 @@ export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob =
       }
       payload ??= internal;
       if (!payload) throw new EditorError('ClipboardEmpty','Copy a selection first.');
-      active();return editor.pasteSelection(payload,{x:position.x,y:position.y});
+      // Default placement is native model space, read only after privileged
+      // clipboard access has started during the original browser gesture.
+      const resolved = target ?? await getPastePosition();
+      active();return editor.pasteSelection(payload,resolved);
     },
     dispose() { disposed = true; internal = undefined; },
   });

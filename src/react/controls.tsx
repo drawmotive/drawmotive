@@ -22,8 +22,9 @@ export const LABELS: Record<string, string> = {
   strokeColor:'Color',strokeStyle:'Line style',cornerRadius:'Round corners',editText:'Edit text',textSizeSmall:'Small text',textSizeMedium:'Medium text',textSizeLarge:'Large text',
   bold:'Bold',italic:'Italic',textAlign:'Text alignment',lineStartStyle:'Start style',lineEndStyle:'End style',swapLineEndpoints:'Swap endpoints',lineRouting:'Connector type',
   lineAttachment:'Line attachment',groupTheme:'Group theme',groupTitleStyle:'Title style',moreOptions:'More options',
+  copy:'Copy selection',paste:'Paste selection',delete:'Delete selection',cancel:'Cancel interaction',pan:'Pan canvas',
 };
-export const SHORTCUTS: Record<string,string> = {undo:'Ctrl/⌘ Z',redo:'Ctrl/⌘ Shift Z',arrow:'A',rectangle:'R',ellipse:'E',diamond:'D',text:'T',sketchyMode:'S',bold:'Ctrl/⌘ B',italic:'Ctrl/⌘ I',editText:'Enter'};
+export const SHORTCUTS: Record<string,string> = {undo:'Ctrl/⌘ Z',redo:'Ctrl/⌘ Shift Z',arrow:'A',rectangle:'R',ellipse:'O',diamond:'D',text:'T',sketchyMode:'S',bold:'Ctrl/⌘ B',italic:'Ctrl/⌘ I',editText:'Enter',copy:'Ctrl/⌘ C',paste:'Ctrl/⌘ V',delete:'Delete',cancel:'Escape',pan:'Space (hold)'};
 
 interface ToolButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { icon?: string; selected?: boolean | 'mixed'; shortcut?: string; }
 export const ToolButton = forwardRef<HTMLButtonElement, ToolButtonProps>(function ToolButton({icon,children,selected,shortcut,className = '',...props},ref) {

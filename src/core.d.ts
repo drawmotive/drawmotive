@@ -121,12 +121,21 @@ export interface EditorInstance {
   /** Validates and commits every change as one native document transaction. */
   editScene(edit: EditorSceneEdit): Promise<void>;
   deleteSelection(token: EditorSelectionToken): Promise<void>;
+  /** Cancels the active preview or inline text session before clearing selection. */
+  cancelInteraction(): Promise<void>;
+  /** Acquires temporary canvas panning; false means the current interaction owns input. */
+  beginPan(): Promise<boolean>;
+  endPan(): Promise<void>;
+  repeatLastTool(): Promise<void>;
+  /** Replays a drag at its current pointer position with the supplied modifiers. */
+  updateInteractionModifiers(modifiers: { alt: boolean; shift: boolean }): Promise<void>;
   beginTextEditing(targetItemId?: string): Promise<void>;
   applyText(token: EditorSelectionToken, targetItemId: string, content: string): Promise<void>;
   copySelection(token: EditorSelectionToken): Promise<EditorSelectionPayload>;
   pasteSelection(payload: EditorSelectionPayload, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
   copyToClipboard(token:EditorSelectionToken,options?:EditorClipboardCopyOptions):Promise<EditorClipboardCopyResult>;
-  pasteFromClipboard(position:{x:number;y:number},options?:EditorClipboardPasteOptions):Promise<EditorSelectionSnapshot>;
+  /** Omitted position uses the native canvas pointer in drawing/model coordinates. */
+  pasteFromClipboard(position?:{x:number;y:number},options?:EditorClipboardPasteOptions):Promise<EditorSelectionSnapshot>;
   getPreferences(): Promise<EditorPreferences>;
   /** Replays a known value, then reports only authoritative successful runtime changes. */
   onPreferencesChanged(listener:(preferences:EditorPreferences)=>void):()=>void;
