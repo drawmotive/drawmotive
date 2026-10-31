@@ -12,10 +12,21 @@
     "./browser": {
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
-    }
+    },
+    "./core": {
+      "types": "./src/core.d.ts",
+      "default": "./src/core.js"
+    },
+    "./react": {
+      "types": "./src/react/index.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./styles.css": "./dist/editor-ui.css"
   },
   "files": [
     "src",
+    "dist",
+    "docs/editor-sdk.md",
     "generated/editor",
     "generated/editor-manifest.json",
     "scripts/copy-assets.mjs",
@@ -25,7 +36,7 @@
     "scripts/audit-package.mjs"
   ],
   "scripts": {
-    "build": "node --check src/index.js && tsc -p tsconfig.json",
+    "build": "node --check src/index.js && tsc -p tsconfig.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.ui.json && node scripts/build-ui.mjs",
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "test:browser": "playwright test",
     "prepack": "node .release/check.cjs --ready && npm test && npm run build && npm run audit:package",
@@ -43,9 +54,15 @@
     "node": ">=22"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
+    "@playwright/test": "1.63.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
+    "fake-indexeddb": "6.2.6",
     "jsdom": "^30.1.2",
-    "@playwright/test": "1.63.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "^7.0.2"
   },
   "keywords": [
     "diagram",
@@ -66,5 +83,22 @@
   },
   "bin": {
     "drawmotive-copy-assets": "./scripts/copy-assets.mjs"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@mantine/core": "9.7.4",
+    "@mantine/hooks": "9.7.4",
+    "dexie": "4.4.7"
   }
 }

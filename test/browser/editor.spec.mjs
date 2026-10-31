@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('real embedded editor loads WASM in parallel, imports, exports and reopens a document', async ({ page, context }) => {
+test('real direct canvas editor loads WASM in parallel, imports, exports and reopens a document', async ({ page, context }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const gate = Promise.withResolvers();
@@ -17,16 +17,16 @@ test('real embedded editor loads WASM in parallel, imports, exports and reopens 
     await expect.poll(() => wasmRequests.size, { timeout: 15_000 }).toBeGreaterThan(1);
   } finally { gate.resolve(); }
   await expect(page.locator('#status')).toHaveText('Ready to edit');
-  const editor = page.frameLocator('iframe');
+  const editor = page;
   await expect(editor.locator('[data-testid="dcanvas"]')).toBeVisible();
-  await expect(editor.locator('[data-testid="home-toolbar-undo"]')).toBeDisabled();
-  await editor.locator('[data-testid="home-toolbar-rectangle"]').click();
+  await expect(editor.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
+  await editor.getByRole('button',{name:'Rectangle',exact:true}).click();
   const canvas = await editor.locator('canvas').first().boundingBox();
   await page.mouse.move(canvas.x + canvas.width * 0.65, canvas.y + canvas.height * 0.7);
   await page.mouse.down();
   await page.mouse.move(canvas.x + canvas.width * 0.85, canvas.y + canvas.height * 0.85, { steps: 8 });
   await page.mouse.up();
-  await expect(editor.locator('[data-testid="home-toolbar-undo"]')).toBeEnabled();
+  await expect(editor.getByRole('button',{name:'Undo',exact:true})).toBeEnabled();
   await editor.locator('canvas').first().press('Escape');
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PNG' }).click();
@@ -39,7 +39,7 @@ test('real embedded editor loads WASM in parallel, imports, exports and reopens 
   await page.locator('#source').fill('Start -> Review -> Finish');
   await page.getByRole('button', { name: 'Generate diagram' }).click();
   await expect(page.locator('#status')).toHaveText('Ready to edit');
-  await expect(editor.locator('[data-testid="home-toolbar-undo"]')).toBeDisabled();
+  await expect(editor.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
   const saveEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Save document' }).click();
   const saved = await saveEvent;
@@ -48,8 +48,8 @@ test('real embedded editor loads WASM in parallel, imports, exports and reopens 
   expect(errors).toEqual([]);
 });
 
-test('public API preserves the document after invalid import and releases the frame', async ({ page }) => {
-  await page.goto('/examples/browser/index.html');
+test('public API preserves the document after invalid import and releases the canvas', async ({ page }) => {
+  await page.goto('/test/browser/host.html');
   const result = await page.evaluate(async () => {
     const { createEditor } = await import('/src/index.js');
     const container = document.createElement('div');
@@ -63,14 +63,14 @@ test('public API preserves the document after invalid import and releases the fr
     try { await editor.replaceDocument('not-valid-base64'); } catch { rejected = true; }
     const after = await editor.exportSnapshot({ formats: ['raw', 'png'] });
     await editor.dispose();
-    return { rejected, before, after, frames: container.querySelectorAll('iframe').length, state: editor.lifecycle };
+    return { rejected, before, after, canvases: container.querySelectorAll('canvas').length, state: editor.lifecycle };
   });
   expect(result.rejected).toBe(true);
   expect(result.after.png).toEqual(result.before.png);
   expect(result.after.raw).toBe(result.before.raw);
   expect(result.after.revision).toBe(result.before.revision);
   expect(result.before.png.width).toBeGreaterThan(0);
-  expect(result.frames).toBe(0);
+  expect(result.canvases).toBe(0);
   expect(result.state).toBe('disposed');
 });
 
@@ -80,5 +80,5 @@ test('example keeps controls and editor accessible on a narrow screen', async ({
   await expect(page.locator('#status')).toHaveText('Ready to edit');
   await expect(page.getByRole('button', { name: 'Generate diagram' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.locator('iframe')).toHaveAttribute('title', 'DrawMotive diagram editor');
+  await expect(page.locator('.dm-canvas-root')).toHaveAttribute('aria-label', 'DrawMotive diagram editor');
 });

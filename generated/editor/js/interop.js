@@ -6,11 +6,19 @@ export function setFocusToCanvas() {
 }
 
 export function getCanvas() {
-    const canvas = document.getElementsByTagName("canvas");
-    if (canvas.length > 0) {
-        return canvas[0];
-    }
-    return null;
+    // The host may contain other canvases; only the native editor owns input.
+    return document.querySelector('.drawmotive-canvas-host canvas')
+        ?? document.querySelector('.canvas-container canvas');
+}
+
+// Release native listeners before their managed references and document scope close.
+export function cleanupCanvasHandlers() {
+    const canvas = getCanvas();
+    if (!canvas) return;
+    if (canvas._wheelHandler) canvas.removeEventListener('wheel', canvas._wheelHandler);
+    if (canvas._focusHandler) canvas.removeEventListener('pointerdown', canvas._focusHandler);
+    delete canvas._wheelHandler;
+    delete canvas._focusHandler;
 }
 
 export function setupCanvasFocusHandler() {
@@ -20,12 +28,9 @@ export function setupCanvasFocusHandler() {
         canvas.removeEventListener('pointerdown', canvas._focusHandler);
     }
 
-    // Radzen popup closure queues a delayed restoration through this cache. A later
-    // canvas gesture owns the focus intent, just as Radzen's own dropdown mousedown
-    // cancels that cache. Leave keyboard-only menu closure and native focus intact.
-    canvas._focusHandler = () => {
-        if (window.Radzen) window.Radzen.activeElement = null;
-    };
+    // Native canvas focus keeps document shortcuts out of host inputs and React menus.
+    canvas.tabIndex = 0;
+    canvas._focusHandler = () => canvas.focus({ preventScroll: true });
     canvas.addEventListener('pointerdown', canvas._focusHandler);
 }
 
@@ -67,16 +72,6 @@ export function saveAsFile(filename, bytesBase64) {
 
 // Resource fetching methods for VS Code mode
 // These bypass HttpClient to avoid System.Uri validation issues with file+.vscode-resource URLs
-
-export async function fetchBinary(url) {
-    console.log('[JS Fetch] Fetching binary:', url);
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const buffer = await response.arrayBuffer();
-    return new Uint8Array(buffer);
-}
 
 export async function fetchText(url) {
     console.log('[JS Fetch] Fetching text:', url);
@@ -461,10 +456,14 @@ export function RegisterKeyCode(globalDocument, eventNames, id, elementRef, only
 
         const handler = function (e, netMethod) {
             const keyCode = e.which || e.keyCode || e.charCode;
+            const hostedCanvas = globalDocument && document.querySelector?.('.drawmotive-canvas-host');
+            // In the shared DOM only the native canvas owns engine shortcuts.
+            // Inline text/composition and React controls retain their own event handlers.
+            if (e.isComposing || keyCode === 229 || (hostedCanvas && e.target !== getCanvas())) return;
 
             if (!!dotNetHelper && !!dotNetHelper.invokeMethodAsync) {
 
-                const targetId = e.target === document.body ? "body" : (e.target?.dataset?.testid ?? e.target?.id ?? "");
+                const targetId = hostedCanvas || e.target === document.body ? "body" : (e.target?.dataset?.testid ?? e.target?.id ?? "");
                 const isPreventDefault = preventDefault || (preventDefaultOnly.length > 0 && preventDefaultOnly.includes(keyCode));
                 const isStopPropagation = stopPropagation;
 

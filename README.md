@@ -1,8 +1,10 @@
 # @drawmotive/editor
 
-Embed the DrawMotive visual editor and compose your own document, save and publish flows. Each instance owns an isolated browser runtime. The public SDK exposes editing operations and state; the host owns files, accounts and external persistence.
+Embed the DrawMotive visual editor and compose your own document, save and publish flows. A page owns one WASM runtime; each opened document has a fresh native scope. The public SDK exposes editing operations and state; the host owns files, accounts and external persistence.
 
-[Browser example](examples/browser/index.html) · [Documentation](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
+[SDK guide and API reference](docs/editor-sdk.md) · [Browser example](examples/browser/index.html) · [Website](https://textgraph.dev/editor/) · [Report an issue](https://github.com/drawmotive/drawmotive/issues)
+
+**Single-canvas architecture:** one editor can be active per page. The canvas mounts directly into the host document; dispose it before opening another document.
 
 ## Example output
 
@@ -55,19 +57,32 @@ application/package versions, dimensions and source/pixel hashes.
 ## Install
 
 ```bash
-npm install @drawmotive/editor@0.3.0
+npm install @drawmotive/editor
 npx drawmotive-copy-assets public/editor
 ```
 
 Copy the complete runtime after every upgrade. For Vite, run `drawmotive-copy-assets public/editor` in `predev` and `prebuild`. Serve runtime assets through HTTP(S), including `.wasm` as `application/wasm`; bundled applications must set `assetBaseUrl` explicitly.
 
-Hosts with an authenticated resource transport can supply `frameDocument: { url, html }`.
-The bootstrap URL must be HTTP(S) on the host's own origin; the SDK loads it before
-writing trusted runtime HTML so its service worker remains available. The host
-owns that HTML's CSP and resource base. The SDK still authenticates the frame
-window and bootstrap origin before opening its private message port.
+## Standalone editor boundary
+
+The public package provides editing UI, the canvas runtime and local browser services.
+It requires editor assets served by a static host, without requiring a DrawMotive
+business server, login session or collaboration connection for local editing.
+It has no authentication or SignalR dependency and exposes no public synchronization API.
+Internal applications own collaboration through separate private site packages and
+private runtime integration; those packages and interfaces are not public editor exports.
+
+Hosts use named functions such as `editor.setTool()` and `editor.editScene()`;
+there is no public `sendCommand`. Internally, these operations call the current
+Blazor object directly through ordered Promise calls. One canvas is supported per
+page, mounted in the host document. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [configuration](docs/editor-sdk.md#ui-configuration) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).
 
 ## Create and edit
+
+The full entry requires `import "@drawmotive/editor/styles.css"` in a bundled host.
+A native ESM page must link the package’s `dist/editor-ui.css`, as the browser example does.
+All controls and popovers remain inside the editor container. Give that container a height.
+Use `@drawmotive/editor/core` for a React-free instance with no UI chrome; inline text editing remains enabled.
 
 ```html
 <div id="editor" style="height: 600px"></div>
@@ -75,12 +90,12 @@ window and bootstrap origin before opening its private message port.
 
 ```javascript
 import { createEditor } from "@drawmotive/editor";
+import "@drawmotive/editor/styles.css";
 
 const editor = await createEditor({
   container: document.querySelector("#editor"),
   assetBaseUrl: "/editor/",
   ui: { buttons: { help: false } },
-  modules: { analytics: false, authentication: false, remoteSync: false },
 });
 await editor.replaceTextGraph("User -> Application -> Database");
 await editor.fitViewport();
@@ -91,11 +106,30 @@ unsubscribe();
 await editor.dispose();
 ```
 
-Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. Runtime IndexedDB is temporary and deleted during disposal; it is not a durable document file.
+Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. The default memory policy is temporary. Persistent mode requires an explicit namespace and documentId; all IndexedDB access runs in a Dedicated Worker, and disposal preserves that document.
 
 TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to the saved document and do not rewrite TextGraph. Calling `replaceTextGraph()` again creates a replacement document; it does not merge source changes with earlier canvas edits.
 
 ## Operations
+
+The `@drawmotive/editor/react` entry exports `Editor` (owns its canvas) and `EditorUi` (observes an existing core instance).
+Import the same stylesheet, provide a sized parent, and memoize object options. Changing document identity disposes and recreates the instance.
+The full imperative entry bundles React; the React entry uses the host’s React 19 installation.
+
+```tsx
+import { Editor } from "@drawmotive/editor/react";
+import "@drawmotive/editor/styles.css";
+
+const ui = { regions: { topRight: false }, drawingToolbar: { tools: ["rectangle", "arrow"] } };
+export function Diagram() {
+  return <Editor assetBaseUrl="/editor/" ui={ui} style={{ height: 600 }} />;
+}
+```
+
+`ui.regions` independently configures each corner’s visibility, item order, `host.*` actions and `slot.*` React content.
+`drawingToolbar` controls visibility, position and tools. `contextToolbar` filters object types, tools and panels.
+`ui: false` disables chrome. `textEditing` independently selects `inline` (default), `external` or `disabled`.
+Tooltip visibility, four-way position and delay are configured through `ui.tooltip`.
 
 | Operation | Result or effect |
 | --- | --- |
@@ -109,7 +143,10 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 | `undo()` / `redo()` | Applies document history |
 | `getState()` / `onStateChanged(listener)` | Current state / subscription with immediate replay |
 | `setActionState(id, { label?, enabled?, visible? })` | Updates a declared host action |
-| `dispose()` | Releases the frame and temporary storage |
+| `dispose()` | Releases this instance and its writer lease; persistent documents remain |
+| `copyToClipboard(token, { system? })` | Copies an opaque graph; reports system success separately from the internal copy |
+| `pasteFromClipboard(position, { source? })` | Pastes through the engine; source is `auto`, `system` or `internal` |
+| `onDisposed(listener)` | Releases host UI on disposal or forced page closure |
 
 State contains `revision`, `health` (`healthy` or `faulted`), `editingEnabled`, `busy`, `canUndo` and `canRedo`. Revisions are opaque and instance-local. Document changes advance the revision; selection, zoom and pan do not. External save success confirms only its snapshot revision, so a delayed acknowledgment must not clear later edits. Undo may conservatively produce a new dirty revision even when content matches an earlier save.
 
@@ -149,28 +186,15 @@ const editor = await createEditor({
 });
 ```
 
-Handlers stay in the parent. Independent reverse RPC lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
+Handlers stay in the host. Direct callbacks lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
 
-## Isolation, modules and lifecycle
+## Canvas lifecycle
 
-One iframe isolates CSS, DOM and .NET globals; it is not an additional security sandbox or guaranteed process. A one-time bootstrap verifies the exact HTTP(S) runtime origin and iframe source, binds the URL nonce, and transfers a private `MessagePort`. All operations/state/actions then use protocol v2 on the port. The parent origin is not parsed, allowing a VS Code webview to host the SDK directly. The SDK is one browser module; SSR import is supported, while creation needs browser DOM, cryptographic random IDs and `MessageChannel`.
+One Blazor runtime and its browser fonts live for the page lifetime. Each document mounts a native canvas directly into the host container with a fresh document scope. Dispose the editor before creating its successor. A second active editor rejects with EditorAlreadyMounted. React UI and canvas share ordinary DOM events and focus.
 
-`modules.analytics`, `authentication` and `remoteSync` default false and freeze before Blazor starts. The public build omits optional implementations; enabling absent modules fails explicitly. Full website builds may enable included modules. Remote sync requires authentication; disabled sync preserves local document/history operations.
+Authentication, analytics and business requests belong to the host application. The core entry has no React dependency; the full entry bundles its React/Mantine UI, and the React entry shares the host React runtime.
 
-Startup cancellation uses `signal`; `startupTimeoutMs` defaults to 120000. After creation, explicit disposal owns the instance. `requestTimeoutMs` also defaults to 120000. An operation deadline throws `EditorError` with `code: RequestTimeoutUnknown`, `requestId`, `method`, and a `completion` promise. The frame/document remain available; no retry occurs and the late result retains its ID.
-
-```javascript
-try {
-  await editor.replaceDocument(raw);
-} catch (error) {
-  if (error.code === "RequestTimeoutUnknown") {
-    const { result, error: eventualError } = await error.completion;
-    // Reconcile the eventual outcome; never automatically retry a mutation.
-  } else throw error;
-}
-```
-
-`completion` resolves to `{ result }` or `{ error }`, including disposal before a response. Runtime errors retain `{ code, message }` on `EditorError`. Idempotent dispose is bounded by `disposeTimeoutMs` (default 5000), rejects pending work, cancels actions and removes the iframe. Missing cleanup acknowledgment rejects `DisposeCleanupUnconfirmed`; removal still completes. Page exit cleanup is best effort.
+Startup cancellation uses signal; startupTimeoutMs defaults to 120000. Document operations return direct Promises and run in order; storage/resource callbacks remain independent while C# awaits persistence or fonts. Runtime errors retain code and message. Disposal cancels host actions, waits for pending operations, removes the native root and releases Workers/storage. disposeTimeoutMs defaults to 5000. Unconfirmed cleanup rejects with DisposeCleanupUnconfirmed and blocks another editor until page reload. Page exit cleanup is best effort.
 
 ## Verification and release
 
@@ -187,7 +211,7 @@ npm run test:browser
 npm pack
 ```
 
-Assets carry package version, exact committed producer and hashes. Native assets are rebuilt for each release; source, symbols, maps and embedded debug metadata are excluded. Package, wire protocol and document format have separate version contracts.
+Assets carry package version, exact committed producer and hashes. Native assets are rebuilt for each release; source, symbols, maps and embedded debug metadata are excluded. Package, native runtime and document format have separate version contracts.
 
 ## License
 

@@ -6,10 +6,28 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
 /** Serve the unchanged runnable package demo; port zero supports isolated captures. */
-export async function serveExample(port = 4186) {
+export async function serveExample(port = 4186, { runtimeUrl } = {}) {
+  const runtimeBase = runtimeUrl === undefined ? undefined : new URL(runtimeUrl);
+  if (runtimeBase && (!['http:', 'https:'].includes(runtimeBase.protocol) || runtimeBase.username || runtimeBase.password))
+    throw new TypeError('The test runtime must use an HTTP(S) URL.');
+  if (runtimeBase && !runtimeBase.pathname.endsWith('/')) runtimeBase.pathname += '/';
   const server = createServer(async (request, response) => {
     try {
-      let relative = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1);
+      const requestUrl = new URL(request.url, 'http://localhost');
+      let relative = decodeURIComponent(requestUrl.pathname).slice(1);
+      // Local WASM DevServer has no cross-origin font CORS headers. A same-origin
+      // asset path matches the package's copy-assets deployment and exercises the
+      // exact runtime bytes without synthetic runtime documents or browser flags.
+      if (runtimeBase && relative.startsWith('runtime/')) {
+        if (relative.split('/').includes('..') || !['GET', 'HEAD'].includes(request.method)) throw new Error('Invalid runtime request');
+        const upstreamUrl = new URL(relative.slice('runtime/'.length), runtimeBase); upstreamUrl.search = requestUrl.search;
+        const upstream = await fetch(upstreamUrl, { method: request.method });
+        response.statusCode = upstream.status;
+        for (const header of ['content-type', 'cache-control', 'etag', 'last-modified'])
+          if (upstream.headers.has(header)) response.setHeader(header, upstream.headers.get(header));
+        response.end(Buffer.from(await upstream.arrayBuffer()));
+        return;
+      }
       relative = relative.replace(/^examples[/]browser[/]runtime[/]/, 'generated/editor/');
       let file = path.resolve(root, relative);
       if (!file.startsWith(root + path.sep) && file !== root) throw new Error('Invalid path');
