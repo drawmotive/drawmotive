@@ -8,6 +8,7 @@ import { CONTEXT_PANEL_IDS, contextTools, mapCanvasBounds, placeFloating, select
 import { colorCss, LABELS, PanelButton, Separator, SHORTCUTS, ToolButton, UiContext, uniform } from './controls.js';
 import { EndpointIcon, Icon, PaletteIcon } from './icons.js';
 import { AlignPanel, AttachmentPanel, Colors, EndpointPanel, GroupPanel, MorePanel, RoutingPanel, SettingsPanel, StrokePanel, TitlePanel } from './panels.js';
+import { useEditorHotkeys } from './use-editor-hotkeys.js';
 
 export interface EditorUiProps {
   editor: EditorInstance;
@@ -34,13 +35,14 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
   const [pending,setPending]=useState<ReadonlySet<string>>(new Set()),[closed,setClosed]=useState(editor.lifecycle!=='ready');
   const alive=useRef(false),pendingRef=useRef(new Set<string>()),overlay=useRef<HTMLDivElement>(null),toolbar=useRef<HTMLFieldSetElement>(null);
   const selectionRef=useRef<EditorSelectionSnapshot|null>(null);
+  const stateRef=useRef<EditorState>(idle);
   const [position,setPosition]=useState({left:0,top:0});
   const errorCallback=useRef(onError);errorCallback.current=onError;
   const report=useCallback((reason:unknown)=>{if(!alive.current)return;setError(reason);try{errorCallback.current?.(reason);}catch{/* Host errors must not reject an event callback. */}},[]);
   useEffect(()=>{
-    if(closed||!ui.enabled)return;
+    if(closed)return;
     alive.current=true;let cancelled=false,selectionEvents=0,preferenceEvents=0;
-    const stops=[editor.onStateChanged(setState),editor.onUiChanged(setUi),editor.onEvent('selectionChanged',next=>{
+    const stops=[editor.onStateChanged(next=>{stateRef.current=next;setState(next);}),editor.onUiChanged(setUi),editor.onEvent('selectionChanged',next=>{
       const previous=selectionRef.current;selectionEvents++;selectionRef.current=next;setSelection(projectSelection(next));
       if(previous&&(previous.token.session!==next.token.session||previous.token.version!==next.token.version))setPanel(current=>current==='settings'?current:null);
     }),editor.onPreferencesChanged(next=>{preferenceEvents++;setPreferences(next);}),editor.onDisposed(()=>setClosed(true))];
@@ -50,7 +52,7 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     void editor.getSelection().then(next=>{if(!cancelled&&selectionEvents===0){selectionRef.current=next;setSelection(projectSelection(next));}},reject);
     void editor.getPreferences().then(next=>{if(!cancelled&&preferenceEvents===0)setPreferences(next);},reject);
     return ()=>{cancelled=true;alive.current=false;stops.forEach(stop=>stop());};
-  },[editor,closed,report,ui.enabled]);
+  },[editor,closed,report]);
 
   const run=useCallback(async(action:()=>Promise<unknown>,key='document'):Promise<boolean>=>{
     if(!alive.current||pendingRef.current.has(key))return false;
@@ -62,6 +64,7 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     } finally {pendingRef.current.delete(key);if(alive.current)setPending(new Set(pendingRef.current));}
   },[report]);
   const edit=useCallback<SelectionEdit>((description,changes,target)=>selection?run(()=>editor.editScene(selectionEdit(selection,description,changes,target))):Promise.resolve(false),[editor,selection,run]);
+  useEditorHotkeys({editor,container,ui,state:()=>stateRef.current,selection:()=>selectionRef.current,run,report});
   const changePreferences=async(value:EditorPreferences)=>{await run(()=>editor.setPreferences(value),'preferences');};
   const subjects=selection?selectionSubjects(selection.items):[], item=subjects[0];
   const contextIds=contextTools(subjects,ui.contextToolbar).filter(id=>id!=='editText'||ui.textEditing!=='disabled');

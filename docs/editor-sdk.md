@@ -452,6 +452,27 @@ const stopText = editor.onEvent('textEditingRequested', intent => {
 
 Prevent overlapping forms and close them when the instance closes or the target becomes invalid. Handle `StaleSelection`/`InvalidTarget` by asking the user to select or reopen the target. Closing the form without `applyText` leaves existing content unchanged. Empty text can discard a new detached placement. There is no public generic inline commit/cancel method; the inline DOM owns that interaction.
 
+## Keyboard shortcuts
+
+The full and React entries use Mantine to match shortcuts only on the owning canvas. Host inputs, menus, foreign canvases and IME retain their browser behavior. Inline Escape cancels the native text interaction; other inline keys remain browser text input. Hidden chrome does not disable shortcuts; `ui.buttons` controls tool availability and editing permissions remain authoritative. The core entry supplies semantic methods for custom host input policy and does not install React shortcuts.
+
+| Keys | Action |
+| --- | --- |
+| A / R / O / D / T | Arrow / rectangle / ellipse / diamond / text |
+| S | Toggle sketchy mode |
+| Ctrl/⌘ Z | Undo |
+| Ctrl/⌘ Shift Z or Ctrl/⌘ Y | Redo |
+| Ctrl/⌘ C / V | Copy / paste using the JS clipboard service |
+| Delete | Delete the current selection |
+| Ctrl/⌘ B / I | Toggle selected text bold / italic |
+| Enter | Begin editing the selected text target |
+| Escape | Cancel the active interaction, then clear selection |
+| Space (hold) | Temporary pan |
+
+Held repeats cannot replace a tool or repeat a document command. Active gestures block tool/document commands; cancellation and drag modifier changes remain available. Releasing Space, losing canvas focus, hiding the page or unmounting the UI settles acquired temporary pan. Alt/Shift transitions replay drag alignment at the current native pointer position.
+
+Custom hosts can call `cancelInteraction()`, `beginPan()` (returns whether pan was acquired), `endPan()`, `repeatLastTool()` and `updateInteractionModifiers({ alt, shift })`. These carry semantic intent rather than keyboard events. Release an acquired pan and clear held modifiers when input ownership ends.
+
 ## Clipboard recipes
 
 `copySelection`/`pasteSelection` exchange an opaque selection graph through explicit function arguments. They do not touch the OS clipboard. This is useful for host-controlled transfer between instances:
@@ -467,7 +488,7 @@ C# owns object cloning, ID/reference remapping, bound labels, connectors and the
 | Function | Behavior |
 | --- | --- |
 | `copyToClipboard(token, { system? })` | Always updates the instance-local internal buffer on successful graph capture; `system` defaults to `true` |
-| `pasteFromClipboard({ x, y }, { source? })` | `source` is `auto` (default), `system` or `internal` |
+| `pasteFromClipboard(position?, { source? })` | `source` is `auto` (default), `system` or `internal`; omitted position uses the native canvas pointer in model coordinates |
 
 Copy returns `{ internal: true, system: 'written' \| 'denied' \| 'unavailable' \| 'skipped' }`. A denied system write can still leave a successful internal copy. The internal buffer is per instance, survives neither disposal nor reload, and is not a document snapshot.
 
@@ -489,7 +510,7 @@ pasteButton.addEventListener('click', () => {
 });
 ```
 
-Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. Full native shortcut/clipboard integration remains an acceptance item for this draft.
+Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. React shortcuts use this JS clipboard service. Browser text clipboard handling and C# graph transfer remain separate; the remaining clipboard migration is tracked independently.
 
 ## State, events and host actions
 

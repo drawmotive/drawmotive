@@ -55,6 +55,22 @@ test('stale notifications cannot affect a reopened document',async t=>{
 test('clipboard stays in JS and semantic payloads remain opaque',async t=>{
  const h=host(t),payload={version:1,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
 });
+test('interaction methods dispatch semantic intent without native keyboard events',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ await editor.cancelInteraction();await editor.beginPan();await editor.endPan();await editor.repeatLastTool();
+ const modifiers={alt:true,shift:false};const update=editor.updateInteractionModifiers(modifiers);modifiers.alt=false;await update;
+ assert.deepEqual(h.calls,[{method:'cancelInteraction',args:{}},{method:'beginPan',args:{}},{method:'endPan',args:{}},{method:'repeatLastTool',args:{}},{method:'updateInteractionModifiers',args:{alt:true,shift:false}}]);
+ await assert.rejects(editor.updateInteractionModifiers({alt:'true',shift:false}),TypeError);
+});
+test('clipboard read starts before resolving native pointer placement',async t=>{
+ const h=host(t),payload={version:1,data:'AQID'},order=[];
+ Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){order.push('system-read');return Promise.resolve('drawmotive/selection:1\nAQID');}}});
+ h.behavior(method=>{order.push(method);return method==='getPointerPosition'?{x:12,y:34}:null;});
+ const editor=await h.mount();t.after(()=>editor.dispose());
+ const paste=editor.pasteFromClipboard();void paste.catch(()=>{});assert.deepEqual(order,['system-read']);await paste;
+ assert.deepEqual(order,['system-read','getPointerPosition','pasteSelection']);
+ assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:12,y:34}}});
+});
 test('obsolete frame and transport options are rejected',async t=>{
  const h=host(t);for(const extra of [{frameDocument:{}},{requestTimeoutMs:5},{ui:{textEditing:'react'}},{assetBaseUrl:'javascript:bad'}])await assert.rejects(h.mount(extra),TypeError);const editor=await h.mount();await assert.rejects(editor.exportSnapshot({formats:[]}),TypeError);await assert.rejects(editor.fitViewport({minScale:2}),TypeError);await editor.dispose();
 });

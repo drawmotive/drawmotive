@@ -29,3 +29,15 @@ test('aborting while the full UI chunk loads rejects startup and releases the re
  await chunk;await page.evaluate(()=>controller.abort());release();
  await expect.poll(()=>page.evaluate(()=>outcome),{timeout:5000}).toBe('AbortError');await expect(page.locator('.dm-canvas-root')).toHaveCount(0);await expect(page.locator('.dm-editor-ui')).toHaveCount(0);
 });
+
+for (const ui of [false, { enabled: false }]) test(`full entry retains Mantine hotkeys with ui=${JSON.stringify(ui)}`, async ({ page }) => {
+ await page.evaluate(async ui => {
+  const { createEditor } = await import('/src/index.js');
+  const container = document.createElement('div'); container.className = 'editor'; document.body.append(container);
+  globalThis.editor = await createEditor({ container, ui, assetBaseUrl: new URL('/stub-runtime/', location.href) });
+ }, ui);
+ await expect(page.getByRole('button', { name: 'Rectangle', exact: true })).toHaveCount(0);
+ await page.locator('.drawmotive-canvas-host canvas').press('r');
+ await expect.poll(() => page.evaluate(async () => (await editor.getState()).tool), { timeout: 5000 }).toBe('rectangle');
+ await page.evaluate(() => editor.dispose());
+});

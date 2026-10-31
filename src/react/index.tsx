@@ -48,7 +48,6 @@ export function Editor({className,style,slots,colorScheme,onReady,onError,...opt
 
 /** Used by the full imperative entry; React hosts can render EditorUi directly. */
 export function mountEditorUi({editor,container,...props}:EditorUiProps): {dispose():void} {
-  if(!editor.ui.enabled)return {dispose(){}};
   const win=container.ownerDocument.defaultView!,previous=container.style.position;
   const changed=win.getComputedStyle(container).position==='static';if(changed)container.style.position='relative';
   const element=container.ownerDocument.createElement('div');element.style.cssText='position:absolute;inset:0;pointer-events:none;';container.append(element);

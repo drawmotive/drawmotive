@@ -8,18 +8,17 @@ export async function createEditor(options) {
   let removeAbort = () => {};
   try {
     signal?.throwIfAborted();
-    if (editor.ui.enabled) {
-      const loading = import('../dist/editor-ui.js');
-      const aborted = signal && new Promise((_,reject) => {
-        const abort = () => reject(signal.reason ?? new DOMException('Initialization aborted','AbortError'));
-        signal.addEventListener('abort',abort,{once:true});removeAbort = () => signal.removeEventListener('abort',abort);
-        if (signal.aborted) abort();
-      });
-      const { mountEditorUi } = await (aborted ? Promise.race([loading,aborted]) : loading);
-      signal?.throwIfAborted();
-      if (editor.lifecycle !== 'ready') throw new EditorError('EditorDisposed','Editor closed before its UI was ready.');
-      mountEditorUi({ editor, container: options.container });
-    }
+    // Hidden chrome still needs React's Mantine input owner.
+    const loading = import('../dist/editor-ui.js');
+    const aborted = signal && new Promise((_,reject) => {
+      const abort = () => reject(signal.reason ?? new DOMException('Initialization aborted','AbortError'));
+      signal.addEventListener('abort',abort,{once:true});removeAbort = () => signal.removeEventListener('abort',abort);
+      if (signal.aborted) abort();
+    });
+    const { mountEditorUi } = await (aborted ? Promise.race([loading,aborted]) : loading);
+    signal?.throwIfAborted();
+    if (editor.lifecycle !== 'ready') throw new EditorError('EditorDisposed','Editor closed before its UI was ready.');
+    mountEditorUi({ editor, container: options.container });
     signal?.throwIfAborted();
     return editor;
   } catch (error) {

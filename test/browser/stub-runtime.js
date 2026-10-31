@@ -1,6 +1,6 @@
 /** Direct-runtime fixture for React/SDK lifetime and DOM interaction tests. */
 export async function mountCanvas({container,emit,platform}) {
-  const canvas=document.createElement('canvas');canvas.style.cssText='width:100%;height:100%';container.append(canvas);
+  const canvas=document.createElement('canvas');canvas.style.cssText='width:100%;height:100%';canvas.tabIndex=0;const host=document.createElement('div');host.className='drawmotive-canvas-host';host.append(canvas);container.append(host);
   const state={revision:'r0',health:'healthy',editingEnabled:true,busy:false,canUndo:false,canRedo:false,tool:'select'};
   const preferences={darkTheme:false,showGrid:true,snapToGrid:true};
   emit('ready',{state});
@@ -12,5 +12,5 @@ export async function mountCanvas({container,emit,platform}) {
     if(method==='setTool'){state.tool=args.tool;emit('stateChanged',{...state});}
     if(method==='replaceDocument'){await platform('storage.open');await platform('storage.read');}
     return null;
-  },async dispose(){await globalThis.nativeCleanup?.();canvas.remove();}};
+  },async dispose(){await globalThis.nativeCleanup?.();host.remove();}};
 }
