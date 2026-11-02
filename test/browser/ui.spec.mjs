@@ -29,16 +29,104 @@ test('context panels send one versioned generated-model batch and preserve the t
  expect(await page.locator('body > .mantine-Popover-dropdown').count()).toBe(0);
 });
 
-test('tooltip arrow is separate, focus-accessible and confined to the instance',async({page})=>{
- await page.evaluate(()=>instances.push(mount({tooltip:{delay:0,position:'right'}})));
- await page.getByRole('button',{name:'Rectangle',exact:true}).focus();
- const tip=page.getByRole('tooltip');await expect(tip).toBeVisible();await expect(tip.locator('.dm-tooltip-arrow')).toHaveCount(1);await expect(tip.locator('.dm-tooltip-content')).toContainText('Rectangle');
- await expect(tip).toHaveAttribute('data-position','right');
- await expect(tip.locator('.dm-tooltip-arrow')).toHaveCSS('border-left-width','0px');
- await expect(tip.locator('.dm-tooltip-arrow')).toHaveCSS('border-right-width','5px');
- expect(await tip.evaluate(el=>{const arrow=el.querySelector('.dm-tooltip-arrow').getBoundingClientRect(),body=el.querySelector('.dm-tooltip-content').getBoundingClientRect();return body.left-arrow.right;})).toBeGreaterThanOrEqual(2);
- const id=await tip.getAttribute('id');await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toHaveAttribute('aria-describedby',id);
- expect(await tip.evaluate(el=>!!el.closest('.dm-editor-ui'))).toBe(true);
+for(const [location,side] of [['topLeft','bottom'],['topRight','bottom'],['bottomLeft','top'],['bottomRight','top'],['left','right'],['right','left'],['top','bottom'],['bottom','top']]) {
+ test('toolbar tooltip faces inward at '+location,async({page})=>{
+  await page.evaluate(location=>{const corner=['topLeft','topRight','bottomLeft','bottomRight'].includes(location);const instance=mount({tooltip:{delay:0},regions:{topLeft:{items:[]},topRight:{items:[]},bottomLeft:{items:[]},bottomRight:{items:[]},...(corner?{[location]:{items:['rectangle']}}:{})},drawingToolbar:corner?false:{position:location,tools:['rectangle']}});instance.root.style.marginTop='100px';instances.push(instance);},location);
+  const button=page.getByRole('button',{name:'Rectangle',exact:true});await button.focus();
+  const tip=page.getByRole('tooltip');await expect(tip).toBeVisible();await expect(tip).toContainText('Rectangle');
+  const id=await tip.getAttribute('id');await expect(button).toHaveAttribute('aria-describedby',id);
+  const target=await button.boundingBox();
+  await expect.poll(async()=>{const bounds=await tip.boundingBox();return side==='top'?bounds.y+bounds.height<=target.y:side==='bottom'?bounds.y>=target.y+target.height:side==='left'?bounds.x+bounds.width<=target.x:bounds.x>=target.x+target.width;}).toBe(true);
+  expect(await tip.evaluate(el=>!!el.closest('.dm-editor-ui'))).toBe(true);
+ });
+}
+
+test('Mantine tooltip and shortcut backgrounds contrast in both local color schemes',async({page})=>{
+ await page.evaluate(()=>instances.push(mount({tooltip:{delay:0}})));
+ const button=page.getByRole('button',{name:'Rectangle',exact:true});await button.focus();
+ const tip=page.getByRole('tooltip');await expect(tip).toBeVisible();
+ const colors=()=>tip.evaluate(el=>{const badge=el.querySelector('kbd'),body=getComputedStyle(el),key=getComputedStyle(badge);return {background:body.backgroundColor,text:body.color,keyBackground:key.backgroundColor,keyText:key.color};});
+ const light=await colors();expect(light.keyBackground).not.toBe(light.background);expect(light.text).not.toBe(light.background);expect(light.keyText).not.toBe(light.keyBackground);
+ await page.evaluate(()=>instances[0].editor.setPreferences({darkTheme:true}));
+ await expect(page.locator('.dm-editor-ui')).toHaveAttribute('data-mantine-color-scheme','dark');
+ const dark=await colors();expect(dark.background).not.toBe(light.background);expect(dark.keyBackground).not.toBe(dark.background);expect(dark.text).not.toBe(dark.background);expect(dark.keyText).not.toBe(dark.keyBackground);
+});
+
+test('a light editor keeps its tooltip and shortcut colors inside a dark Mantine host',async({page})=>{
+ await page.evaluate(()=>instances.push(mount({tooltip:{delay:0}})));
+ await page.getByRole('button',{name:'Rectangle',exact:true}).focus();const tip=page.getByRole('tooltip');await expect(tip).toBeVisible();
+ const colors=()=>tip.evaluate(el=>[el,el.querySelector('kbd')].map(node=>{const style=getComputedStyle(node);return [style.backgroundColor,style.color,style.borderColor];}));
+ const light=await colors();await page.evaluate(()=>document.documentElement.dataset.mantineColorScheme='dark');
+ await expect(page.locator('.dm-editor-ui')).toHaveAttribute('data-mantine-color-scheme','light');
+ expect(await colors()).toEqual(light);
+});
+
+test('creation guidance follows the canvas pointer and updates under a stationary pointer',async({page})=>{
+ await page.evaluate(()=>instances.push(mount()));
+ await page.mouse.move(200,200);
+ await page.evaluate(()=>instances[0].setState({tool:'rectangle',prompt:'Press to set the first corner.'}));
+ const tip=page.getByTestId('creation-tooltip');await expect(tip).toBeVisible();await expect(tip).toContainText('first corner');
+ const before=await tip.boundingBox();await page.mouse.move(300,250);
+ await expect.poll(async()=>{const next=await tip.boundingBox();return next.x>before.x+50&&next.y>before.y+20;}).toBe(true);
+ await page.evaluate(()=>instances[0].setState({busy:true,prompt:'Drag to the opposite corner, then release to finish.'}));
+ await expect(tip).toBeVisible();await expect(tip).toContainText('opposite corner');
+ expect(await page.evaluate(()=>document.elementFromPoint(300,250).tagName)).toBe('CANVAS');
+ await page.mouse.move(15,15);await expect(tip).toBeHidden();
+ await page.mouse.move(300,250);await expect(tip).toBeVisible();
+ await page.evaluate(()=>instances[0].setState({busy:false,tool:'select',prompt:null}));await expect(tip).toBeHidden();
+ await page.evaluate(()=>instances[0].setState({tool:'arrow',prompt:'Press to set the start point.'}));await expect(tip).toBeVisible();
+ await page.evaluate(()=>instances[0].editor.dispose());await expect(tip).toHaveCount(0);
+});
+
+test('creation guidance respects tooltip visibility and instance ownership',async({page})=>{
+ await page.evaluate(()=>{instances.push(mount({tooltip:false}));instances.push(mount());instances.forEach(instance=>instance.setState({tool:'text',prompt:'Click to place text.'}));});
+ await page.mouse.move(200,200);await expect(page.getByTestId('creation-tooltip').filter({visible:true})).toHaveCount(0);
+ await page.mouse.move(850,200);const tip=page.getByTestId('creation-tooltip').filter({visible:true});await expect(tip).toHaveCount(1);
+ expect(await tip.evaluate(el=>instances[1].root.contains(el))).toBe(true);
+ await page.evaluate(()=>instances[1].setState({editingEnabled:false}));await expect(tip).toHaveCount(0);
+});
+
+test('preserved host canvases do not become the creation tooltip target',async({page})=>{
+ await page.evaluate(async()=>{
+  const instance=mount();instance.view.dispose();
+  const foreign=document.createElement('canvas');foreign.id='host-preview';foreign.style.cssText='position:absolute;left:400px;top:300px;width:100px;height:60px;z-index:20';instance.root.prepend(foreign);
+  const {mountEditorUi}=await import('/dist/editor-ui.js');instance.view=mountEditorUi({editor:instance.editor,container:instance.root});instances.push(instance);
+ });
+ await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toBeVisible();
+ await page.mouse.move(200,200);await page.evaluate(()=>instances[0].setState({tool:'rectangle',prompt:'Press to set the first corner.'}));
+ const tip=page.getByTestId('creation-tooltip');await expect(tip).toBeVisible();
+ await page.mouse.move(450,330);await expect(tip).toBeHidden();
+});
+
+test('captured drawing pointers hide guidance over host controls and restore it on canvas reentry',async({page})=>{
+ await page.evaluate(()=>{
+  const instance=mount();const canvas=instance.root.querySelector('.drawmotive-canvas-host canvas');canvas.addEventListener('pointerdown',event=>canvas.setPointerCapture(event.pointerId));instances.push(instance);
+ });
+ await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toBeVisible();
+ await page.mouse.move(200,200);await page.evaluate(()=>instances[0].setState({tool:'rectangle',prompt:'Press to set the first corner.'}));
+ const tip=page.getByTestId('creation-tooltip');await expect(tip).toBeVisible();await page.mouse.down();
+ await page.evaluate(()=>instances[0].setState({busy:true,prompt:'Drag to the opposite corner, then release to finish.'}));
+ await page.mouse.move(15,15);await expect(tip).toBeHidden();
+ await page.mouse.move(300,250);await expect(tip).toBeVisible();await expect(tip).toContainText('opposite corner');
+ await page.mouse.up();
+});
+
+test('stationary creation guidance is remeasured when its instruction grows near the viewport edge',async({page})=>{
+ await page.evaluate(()=>{const instance=mount();instance.root.style.width='100vw';instances.push(instance);});
+ await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toBeVisible();
+ await page.mouse.move(1400,200);await page.evaluate(()=>instances[0].setState({tool:'rectangle',prompt:'Press to set the first corner.'}));
+ const tip=page.getByTestId('creation-tooltip');await expect(tip).toBeVisible();
+ const fits=async()=>{const box=await tip.boundingBox();return box.x>=0&&box.x+box.width<=1440;};
+ await expect.poll(fits).toBe(true);
+ await page.evaluate(()=>instances[0].setState({busy:true,prompt:'Drag to the opposite corner, then release to finish.'}));
+ await expect(tip).toContainText('opposite corner');await expect.poll(fits).toBe(true);
+});
+
+test('an embedded editor does not clip creation guidance at its canvas edge',async({page})=>{
+ await page.evaluate(()=>instances.push(mount()));await expect(page.getByRole('button',{name:'Rectangle',exact:true})).toBeVisible();
+ await page.mouse.move(620,200);await page.evaluate(()=>instances[0].setState({tool:'rectangle',prompt:'Press to set the first corner.'}));
+ const tip=page.getByTestId('creation-tooltip');await expect(tip).toBeVisible();
+ await expect.poll(()=>tip.evaluate(el=>new Promise(resolve=>{const observer=new IntersectionObserver(entries=>{observer.disconnect();resolve(entries[0].intersectionRatio);});observer.observe(el);}))).toBeGreaterThan(.99);
 });
 
 

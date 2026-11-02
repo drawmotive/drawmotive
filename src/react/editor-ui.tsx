@@ -5,7 +5,9 @@ import { callModel, projectSelection, selectionEdit, setModel } from './selectio
 import type { SelectionEdit, UiSelection } from './selection-model.js';
 import type { EditorRegionItem } from './ui-options.js';
 import { CONTEXT_PANEL_IDS, contextTools, mapCanvasBounds, placeFloating, selectionSubjects } from './ui-model.js';
-import { colorCss, LABELS, PanelButton, Separator, SHORTCUTS, ToolButton, UiContext, uniform } from './controls.js';
+import { colorCss, LABELS, PanelButton, Separator, SHORTCUTS, ToolButton, ToolbarTooltipPosition, UiContext, uniform } from './controls.js';
+import { CreationTooltip } from './creation-tooltip.js';
+import { tooltipTheme } from './tooltip-theme.js';
 import { EndpointIcon, Icon, PaletteIcon } from './icons.js';
 import { AlignPanel, AttachmentPanel, Colors, EndpointPanel, GroupPanel, MorePanel, RoutingPanel, SettingsPanel, StrokePanel, TitlePanel } from './panels.js';
 import { useEditorHotkeys } from './use-editor-hotkeys.js';
@@ -86,6 +88,7 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
   },[container,selection,closed,ui.enabled,state.busy,contextIds.join(',')]);
 
   if(closed||!ui.enabled)return null;
+  const scheme=colorScheme??(preferences.darkTheme?'dark':'light');
   const context={editor,ui,state:{...state,busy:state.busy||pending.has('document')},selection,panel,setPanel,run,edit};
   function builtin(id:string) {
     if(!ui.buttons[id as keyof typeof ui.buttons])return null;
@@ -138,11 +141,12 @@ function EditorUiSession({editor,container,slots={},colorScheme,className='',sty
     const panels:Record<string,ReactNode>={strokeFillColor:<Colors fill/>,strokeColor:<Colors/>,strokeStyle:<StrokePanel/>,textAlign:<AlignPanel/>,lineStartStyle:<EndpointPanel start/>,lineEndStyle:<EndpointPanel start={false}/>,lineRouting:<RoutingPanel/>,lineAttachment:<AttachmentPanel/>,groupTheme:<GroupPanel/>,groupTitleStyle:<TitlePanel/>,moreOptions:<MorePanel copy={copy}/>};
     return <PanelButton key={id} id={id} button={button}>{panels[id]}</PanelButton>;
   }
-  return <div ref={overlay} className={'dm-editor-ui '+className} style={style} data-mantine-color-scheme={colorScheme??(preferences.darkTheme?'dark':'light')}>
-    <MantineProvider forceColorScheme={colorScheme??(preferences.darkTheme?'dark':'light')} cssVariablesSelector=".dm-editor-ui" getRootElement={()=>overlay.current??undefined}>
+  return <div ref={overlay} className={'dm-editor-ui '+className} style={style} data-mantine-color-scheme={scheme}>
+    <MantineProvider forceColorScheme={scheme} theme={tooltipTheme(scheme==='dark')} cssVariablesSelector=".dm-editor-ui" getRootElement={()=>overlay.current??undefined}>
       <UiContext.Provider value={context}>
-        {Object.entries(ui.regions).map(([id,region])=>{const children=region.items.map(regionItem).filter(Boolean);return region.visible&&children.length>0?<div key={id} className={'dm-toolbar dm-corner dm-'+id} role="toolbar" aria-label={id+' toolbar'} data-region={id}>{children}</div>:null;})}
-        {ui.drawingToolbar.visible&&ui.drawingToolbar.tools.some(id=>ui.buttons[id])&&<fieldset className={'dm-toolbar dm-drawing dm-'+ui.drawingToolbar.position} disabled={editingBlocked} aria-label="Drawing tools" data-testid="drawing-toolbar">{ui.drawingToolbar.tools.map(builtin)}</fieldset>}
+        {Object.entries(ui.regions).map(([id,region])=>{const children=region.items.map(regionItem).filter(Boolean);return region.visible&&children.length>0?<ToolbarTooltipPosition.Provider key={id} value={id.startsWith('top')?'bottom':'top'}><div className={'dm-toolbar dm-corner dm-'+id} role="toolbar" aria-label={id+' toolbar'} data-region={id}>{children}</div></ToolbarTooltipPosition.Provider>:null;})}
+        {ui.drawingToolbar.visible&&ui.drawingToolbar.tools.some(id=>ui.buttons[id])&&<ToolbarTooltipPosition.Provider value={({left:'right',right:'left',top:'bottom',bottom:'top'} as const)[ui.drawingToolbar.position]}><fieldset className={'dm-toolbar dm-drawing dm-'+ui.drawingToolbar.position} disabled={editingBlocked} aria-label="Drawing tools" data-testid="drawing-toolbar">{ui.drawingToolbar.tools.map(builtin)}</fieldset></ToolbarTooltipPosition.Provider>}
+        <CreationTooltip container={container}/>
         {selection&&selection.anchor&&contextIds.length>0&&!state.busy&&<fieldset ref={toolbar} className="dm-toolbar dm-context" disabled={editingBlocked} style={position} aria-label="Selection tools" data-testid="context-toolbar" data-item-id={item?.id}>
           {contextIds.map((id,index)=>{
             if(id.startsWith('textSize')&&contextIds[index-1]?.startsWith('textSize'))return null;

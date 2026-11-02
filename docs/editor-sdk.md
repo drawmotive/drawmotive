@@ -235,7 +235,7 @@ Button visibility is global for that built-in ID. Omitting a control does not re
 
 Filtering out a panel also removes its launcher. Mixed selections must support an operation across all effective subjects. Bound-label focus uses its text capabilities. `strokeFillColor` retains the overlaid fill/stroke icons; `groupTheme` is an inline control rather than an entry in the panel list. The ContextToolbar is suppressed during busy interactions.
 
-`tooltip` accepts a boolean or `{ visible?, position?, delay? }`. Position is `top`, `bottom`, `left` or `right`; delay is finite and nonnegative. The SDK retains the distinctive separated arrow/body appearance. These options control visibility and placement, not an arbitrary tooltip-rendering callback.
+`tooltip` accepts a boolean or `{ visible?, position?, delay? }`. Position is `top`, `bottom`, `left` or `right`; delay is finite and nonnegative. Mantine renders tooltips and shortcut badges with the instance's color scheme. Toolbar hints face into the editor: below top bars, above bottom bars, right of left bars, and left of right bars. The configured position is the fallback for selection and panel controls. Visibility also controls the cursor-following creation instructions, which advance with the native drawing step and disappear when creation ends or the pointer leaves the canvas.
 
 ## Document and snapshot API
 
@@ -533,7 +533,7 @@ Where `ClipboardItem` is supported, system copy writes one item with `image/png`
 
 Each subscription returns an unsubscribe function. Event callbacks are synchronous notifications; catch failures from asynchronous work you start inside them.
 
-`EditorState` includes `revision: string | null`, `health: 'healthy' | 'faulted'`, `editingEnabled`, `busy`, `canUndo`, `canRedo`, and optional `tool`, `zoom`, `sketchyMode`. Use these values to enable controls; the engine remains authoritative when a command arrives. Selection/zoom/pan do not advance the document revision.
+`EditorState` includes `revision: string | null`, `health: 'healthy' | 'faulted'`, `editingEnabled`, `busy`, `canUndo`, `canRedo`, and optional `tool`, `zoom`, `sketchyMode`, and `prompt`. The optional `prompt: string | null` is the current native creation instruction; it is absent or null outside creation. A busy drawing gesture can still have a prompt. Use these values to enable controls; the engine remains authoritative when a command arrives. Selection/zoom/pan do not advance the document revision.
 
 Public `onEvent` names are:
 

@@ -22,6 +22,20 @@ test('semantic commands are ordered and immutable native events reach subscriber
  const first=editor.replaceDocument('raw'),second=editor.getState();await new Promise(setImmediate);assert.equal(h.calls.length,1);finish(null);await first;assert.equal((await second).revision,'new:1');
  editor.onStateChanged(value=>seen.push(value));h.context.emit('stateChanged',state({revision:'new:2'}));assert.ok(Object.isFrozen(seen.at(-1)));await editor.dispose();
 });
+test('native creation instructions survive state events and reads and clear on retirement',async t=>{
+ const h=host(t),editor=await h.mount(),seen=[];t.after(()=>editor.dispose());
+ editor.onStateChanged(value=>seen.push(value));
+ h.context.emit('stateChanged',state({tool:'rectangle',prompt:'Press to set the first corner.'}));
+ assert.equal(seen.at(-1).prompt,'Press to set the first corner.');
+ h.behavior(()=>state({tool:'rectangle',busy:true,prompt:'Drag to the opposite corner, then release to finish.'}));
+ const current=await editor.getState();assert.equal(current.prompt,'Drag to the opposite corner, then release to finish.');assert.ok(Object.isFrozen(current));
+ h.context.emit('stateChanged',state({tool:'select',prompt:null}));assert.equal(seen.at(-1).prompt,null);
+ h.context.emit('stateChanged',state());assert.equal(seen.at(-1).prompt,undefined);
+});
+test('malformed native instructions are rejected at the state boundary',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ for(const prompt of [42,{},['invalid']]) {h.behavior(()=>state({prompt}));await assert.rejects(editor.getState(),{code:'InvalidRuntimeResponse'});}
+});
 test('platform callbacks remain independent while a document command awaits storage',async t=>{
  const h=host(t),editor=await h.mount();h.behavior(async method=>{if(method==='replaceDocument'){await h.context.platform('storage.open');return h.context.platform('storage.read');}});
  assert.equal(await editor.replaceDocument('raw'),null);await editor.dispose();

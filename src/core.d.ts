@@ -11,6 +11,8 @@ export interface EditorState {
   readonly tool?: 'select' | 'arrow' | 'rectangle' | 'ellipse' | 'diamond' | 'text';
   readonly zoom?: number;
   readonly sketchyMode?: boolean;
+  /** Instruction for the current native creation step; absent/null outside creation. */
+  readonly prompt?: string | null;
 }
 export interface EditorWorkerHandle { readonly worker: Worker; dispose(): void; }
 export type EditorWorkerFactory = (url: string | URL, options?: { name?: string }) => Promise<EditorWorkerHandle>;

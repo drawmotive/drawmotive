@@ -1,5 +1,5 @@
-import { cloneElement, createContext, forwardRef, useContext, useEffect, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
-import { Popover, Tooltip, UnstyledButton } from '@mantine/core';
+import { cloneElement, createContext, forwardRef, useContext, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { Kbd, Popover, Tooltip, UnstyledButton } from '@mantine/core';
 import type { EditorInstance, EditorState } from '../core.js';
 import type { SelectionEdit, UiSelection, UiValue } from './selection-model.js';
 import type { NormalizedUiOptions } from './ui-options.js';
@@ -13,6 +13,8 @@ export interface UiContextValue {
   edit: SelectionEdit;
 }
 export const UiContext = createContext<UiContextValue | null>(null);
+/** Toolbar location owns the inward hint direction; other controls use the host's fallback. */
+export const ToolbarTooltipPosition = createContext<'top'|'bottom'|'left'|'right'|undefined>(undefined);
 export function useUi() { const value = useContext(UiContext); if (!value) throw new Error('Editor controls need EditorUi'); return value; }
 export const uniform = <T,>(value: UiValue<T> | undefined): T | undefined => value?.state === 'Uniform' ? value.value : undefined;
 
@@ -29,12 +31,10 @@ export const SHORTCUTS: Record<string,string> = {undo:'Ctrl/‚åò Z',redo:'Ctrl/‚å
 interface ToolButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { icon?: string; selected?: boolean | 'mixed'; shortcut?: string; }
 export const ToolButton = forwardRef<HTMLButtonElement, ToolButtonProps>(function ToolButton({icon,children,selected,shortcut,className = '',...props},ref) {
   const {ui} = useUi(), label = props['aria-label'] ?? LABELS[icon ?? ''] ?? icon ?? '';
-  // Mantine reports the resolved side after flipping, but does not put it on the DOM.
-  const [position,setPosition]=useState<string>(ui.tooltip.position);
-  useEffect(()=>setPosition(ui.tooltip.position),[ui.tooltip.position]);
-  return <Tooltip label={<><span className="dm-tooltip-arrow" /><span className="dm-tooltip-content">{label}{shortcut && <kbd>{shortcut}</kbd>}</span></>}
-    position={ui.tooltip.position} data-position={position} onPositionChange={setPosition} offset={12} openDelay={ui.tooltip.delay} disabled={!ui.tooltip.visible} events={{hover:true,focus:true,touch:false}}
-    withinPortal={false} withArrow={false} classNames={{tooltip:'dm-tooltip'}}>
+  const position=useContext(ToolbarTooltipPosition)??ui.tooltip.position;
+  return <Tooltip label={<span style={{display:'inline-flex',alignItems:'center',gap:8}}>{label}{shortcut && <Kbd size="xs">{shortcut}</Kbd>}</span>}
+    position={position} offset={12} openDelay={ui.tooltip.delay} disabled={!ui.tooltip.visible} events={{hover:true,focus:true,touch:false}}
+    withinPortal={false} withArrow zIndex={100}>
     <UnstyledButton ref={ref} {...props} className={'dm-tool ' + className} aria-label={label} aria-pressed={selected}
       data-selected={selected === true ? '' : undefined}>
       {children ?? <Icon name={icon ?? ''} />}
