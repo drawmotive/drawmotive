@@ -24,10 +24,11 @@ function positive(value, name, zero = false) {
 function stateValue(value) {
   if (!record(value) || !['healthy', 'faulted'].includes(value.health)
       || !(typeof value.revision === 'string' || value.revision === null)
-      || ['editingEnabled', 'busy', 'canUndo', 'canRedo'].some(key => typeof value[key] !== 'boolean')) {
+      || ['editingEnabled', 'busy', 'canUndo', 'canRedo'].some(key => typeof value[key] !== 'boolean')
+      || !(value.prompt === undefined || value.prompt === null || typeof value.prompt === 'string')) {
     throw new EditorError('InvalidRuntimeResponse', 'Invalid editor state');
   }
-  return Object.freeze({ revision: value.revision, health: value.health, editingEnabled: value.editingEnabled, busy: value.busy, canUndo: value.canUndo, canRedo: value.canRedo, ...(value.tool === undefined ? {} : { tool: value.tool }), ...(value.zoom === undefined ? {} : { zoom: value.zoom }), ...(value.sketchyMode === undefined ? {} : { sketchyMode: value.sketchyMode }) });
+  return Object.freeze({ revision: value.revision, health: value.health, editingEnabled: value.editingEnabled, busy: value.busy, canUndo: value.canUndo, canRedo: value.canRedo, ...(value.tool === undefined ? {} : { tool: value.tool }), ...(value.zoom === undefined ? {} : { zoom: value.zoom }), ...(value.sketchyMode === undefined ? {} : { sketchyMode: value.sketchyMode }), ...(value.prompt === undefined ? {} : { prompt: value.prompt }) });
 }
 function snapshotOptions(options) {
   keys(options, ['formats', 'render', 'png'], 'snapshot');
@@ -114,7 +115,8 @@ export async function createEditorSession(options = {}, privateOptions) {
   }
   function updateState(value) {
     const next = stateValue(value);
-    if (latestState && Object.keys(next).every(key => next[key] === latestState[key])) return;
+    // Optional fields can disappear when a native interaction retires; removal is a state change too.
+    if (latestState && Object.keys(next).length === Object.keys(latestState).length && Object.keys(next).every(key => next[key] === latestState[key])) return;
     latestState = next;
     for (const listener of stateListeners) { try { listener(next); } catch (error) { report(error); } }
   }
