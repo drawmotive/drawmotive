@@ -2,12 +2,7 @@ import { createEditor, EditorError, type EditorSnapshot, type EditorState } from
 import { createEditor as browserEditor } from '@drawmotive/editor/browser';
 
 async function mount(container: HTMLElement) {
-  const editor = await createEditor({ container, assetBaseUrl: '/editor/', ui: {
-    buttons: { help: false }, actions: [{ id: 'host.save', label: 'Save', async onInvoke({ editor, signal }) {
-      await editor.exportSnapshot({ formats: ['png'], png: { embedDocument: true } });
-      signal.throwIfAborted();
-    } }],
-  } });
+  const editor = await createEditor({ container, assetBaseUrl: '/editor/', textEditing: 'inline' });
   const state: EditorState = await editor.getState();
   const unsubscribe = editor.onStateChanged(next => { void next.revision; });
   const result: EditorSnapshot = await editor.exportSnapshot({ formats: ['raw', 'png', 'svg'], render: { scale: 2 } });
@@ -21,7 +16,10 @@ async function mount(container: HTMLElement) {
   editor.setProperty({}, {});
   await editor.fitViewport({ padding: 60 });
   await editor.setEditingEnabled(false);
+  // @ts-expect-error Host web actions belong to private UI.
   await editor.setActionState('host.save', { enabled: false });
+  // @ts-expect-error Chrome configuration is not a canvas API.
+  void editor.ui;
   await editor.clearDocument();
   await editor.undo();
   await editor.redo();

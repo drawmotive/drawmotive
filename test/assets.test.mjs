@@ -47,12 +47,12 @@ test('public browser package has no private loader, auth or collaboration transp
   assert.equal(pkg.exports['./node'], undefined);
   assert.equal(pkg.exports['./worker'], undefined);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), [
-    '@mantine/core', '@mantine/hooks', 'dexie',
+    'dexie',
   ]);
-  assert.equal(pkg.peerDependencies.react, '^19.0.0');
-  assert.equal(pkg.peerDependencies['react-dom'], '^19.0.0');
-  assert.equal(pkg.peerDependenciesMeta.react.optional, true);
-  assert.ok(pkg.files.includes('dist'));
+  assert.equal(pkg.peerDependencies, undefined);
+  assert.equal(pkg.exports['./react'], undefined);
+  assert.equal(pkg.exports['./styles.css'], undefined);
+  assert.ok(pkg.files.includes('dist/workers'));
   assert.ok(pkg.files.includes('generated/editor'));
   assert.ok(pkg.files.includes('examples'));
 });

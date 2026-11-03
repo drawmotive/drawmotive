@@ -10,6 +10,12 @@ function leb(value) {
   do { const byte = value & 127; value >>>= 7; bytes.push(byte | (value ? 128 : 0)); } while (value);
   return Buffer.from(bytes);
 }
+test("npm archive rejects private UI source and stale chrome build artifacts", t => {
+  for (const file of ["src/react/index.tsx", "src/controls.tsx", "src/styles.css", "dist/editor-ui.js", "dist/editor-ui.css", "dist/react.js", "dist/renamed-ui.js"]) {
+    const root = fixture(t, { [file]: "export {};" });
+    assert.throws(() => auditPackageFiles(root, [file]), /Private UI/);
+  }
+});
 function wasm(section, id = 11) {
   return Buffer.concat([Buffer.from([0, 97, 115, 109, 1, 0, 0, 0, id]), leb(section.length), section]);
 }

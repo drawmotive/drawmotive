@@ -1,5 +1,4 @@
 import { EditorError, fromErrorDescriptor, immutableSnapshot } from './errors.js';
-import { normalizeUiOptions } from './react/ui-options-runtime.js';
 import { createPlatformServices } from './platform/services.js';
 import { createPreferenceStore, validatePreferences } from './platform/preferences.js';
 import { createEditorClipboard } from './platform/clipboard.js';
@@ -60,10 +59,9 @@ function viewportOptions(options = {}) {
 
 /** One page owns one canvas. A document switch awaits full native/platform cleanup. */
 export async function createEditorSession(options = {}, privateOptions) {
-  keys(options, ['container','assetBaseUrl','ui','persistence','workerFactory','workerUrls','signal','title','startupTimeoutMs','disposeTimeoutMs'], 'editor');
-  const normalized = normalizeUiOptions(options.ui);
-  let ui = normalized.ui;
-  const handlers = normalized.handlers;
+  keys(options, ['container','assetBaseUrl','textEditing','persistence','workerFactory','workerUrls','signal','title','startupTimeoutMs','disposeTimeoutMs'], 'editor');
+  const textEditing = options.textEditing ?? 'inline';
+  if (!['inline','external','disabled'].includes(textEditing)) throw new TypeError('textEditing must be inline, external or disabled');
   const { container, signal } = options;
   const hostDocument = container?.ownerDocument, hostWindow = hostDocument?.defaultView;
   if (!hostWindow || !(container instanceof hostWindow.HTMLElement)) throw new TypeError('container must be an HTML element in a browser document');
@@ -92,7 +90,7 @@ export async function createEditorSession(options = {}, privateOptions) {
   canvasRoot.style.cssText = 'position:absolute;inset:0;overflow:hidden;';
   container.append(canvasRoot);
   let lifecycle = 'loading', latestState, latestPreferences, native, disposal, clipboard, queue = Promise.resolve();
-  const stateListeners = new Set(), uiListeners = new Set(), preferenceListeners = new Set(), disposalListeners = new Set(), actionControllers = new Set(), eventListeners = new Map();
+  const stateListeners = new Set(), preferenceListeners = new Set(), disposalListeners = new Set(), eventListeners = new Map();
   const fontCacheStatus = new Map();
   const startup = new AbortController();
   const abort = () => startup.abort(signal.reason ?? new DOMException('Initialization aborted','AbortError'));
@@ -107,6 +105,9 @@ export async function createEditorSession(options = {}, privateOptions) {
     else if (name === 'preferencesChanged') updatePreferences(value);
     else if (name === 'fontCacheStatus') fontCacheStatus.set(value.path,immutableSnapshot(value));
     else if (name === 'failed') { const error = fromErrorDescriptor(value); if (lifecycle === 'loading') startup.abort(error); else report(error); }
+    notifyEvent(name,value);
+  }
+  function notifyEvent(name,value) {
     for (const listener of eventListeners.get(name) ?? []) { try { listener(immutableSnapshot(value)); } catch(error) { report(error); } }
   }
   function releaseOwnership() {
@@ -130,8 +131,7 @@ export async function createEditorSession(options = {}, privateOptions) {
     lifecycle = 'disposed';
     hostWindow.removeEventListener('pagehide',pagehide);
     signal?.removeEventListener('abort',abort);
-    for (const controller of actionControllers) controller.abort(disposedError());
-    actionControllers.clear(); handlers.clear(); stateListeners.clear(); uiListeners.clear(); fontCacheStatus.clear(); eventListeners.clear();
+    stateListeners.clear(); fontCacheStatus.clear(); eventListeners.clear();
     clipboard?.dispose(); preferenceListeners.clear(); latestPreferences = undefined;
     for (const listener of disposalListeners) { try { listener(); } catch(error) { report(error); } }
     disposalListeners.clear();
@@ -147,20 +147,6 @@ export async function createEditorSession(options = {}, privateOptions) {
     return result;
   }
   function invoke(method,prepare) { try { return request(method,prepare()); } catch(error) { return Promise.reject(error); } }
-  async function invokeAction(id) {
-    if (lifecycle !== 'ready') throw disposedError();
-    const descriptor = ui.actions.find(action => action.id === id), handler = handlers.get(id);
-    if (!handler) throw new EditorError('UnknownAction', 'Unknown host action: ' + id);
-    if (!descriptor.enabled || !descriptor.visible) throw new EditorError('ActionUnavailable', 'Host action is unavailable: ' + id);
-    const controller = new AbortController(); actionControllers.add(controller);
-    try { await handler({ editor: instance, signal: controller.signal }); }
-    catch (error) {
-      if (error instanceof EditorError) throw error;
-      throw new EditorError(typeof error?.code === 'string' ? error.code : 'HostActionFailed', error?.message ?? String(error), { cause: error });
-    }
-    finally { actionControllers.delete(controller); }
-    return null;
-  }
   const pagehide = event => { if (!event.persisted) void instance.dispose().catch(report); };
   hostWindow.addEventListener('pagehide',pagehide);
   const subscribe = (listeners, listener, value) => {
@@ -170,7 +156,7 @@ export async function createEditorSession(options = {}, privateOptions) {
     return () => listeners.delete(listener);
   };
   const instance = Object.freeze({
-    get lifecycle() { return lifecycle; }, get ui() { return ui; },
+    get lifecycle() { return lifecycle; }, get textEditing() { return textEditing; },
     replaceDocument(raw) { return invoke('replaceDocument', () => ({ raw: text(raw,'Document') })); },
     replacePngDocument(base64) { return invoke('replacePngDocument', () => ({ base64: text(base64,'PNG document') })); },
     replaceTextGraph(source) { return invoke('replaceTextGraph', () => ({ source: text(source,'TextGraph source') })); },
@@ -180,7 +166,6 @@ export async function createEditorSession(options = {}, privateOptions) {
     undo() { return request('undo'); }, redo() { return request('redo'); },
     async getState() { const result = await request('getState'); updateState(result); return latestState; },
     onStateChanged(listener) { return subscribe(stateListeners,listener,latestState); },
-    onUiChanged(listener) { return subscribe(uiListeners,listener,ui); },
     onPreferencesChanged(listener) {
       if (typeof listener !== 'function') throw new TypeError('Listener must be a function');
       if (lifecycle !== 'ready') throw disposedError();
@@ -229,20 +214,6 @@ export async function createEditorSession(options = {}, privateOptions) {
       return Object.fromEntries(Object.entries(preferences).map(([key,value]) => [key,boolean(value,'preferences.' + key)]));
     }); },
     zoom(direction) { return request('zoom',{ direction }); },
-    invokeAction,
-    setActionState(id,value) {
-      try {
-        if (lifecycle !== 'ready') throw disposedError();
-        if (!handlers.has(id)) throw new TypeError('Unknown host action: ' + id);
-        keys(value,['label','enabled','visible'],'action state');
-        const update = {};
-        if (value.label !== undefined) { if (!text(value.label,'Action label').trim()) throw new TypeError('Action label must not be empty'); update.label = value.label; }
-        for (const key of ['enabled','visible']) if (value[key] !== undefined) update[key] = boolean(value[key],'Action ' + key);
-        ui = Object.freeze({ ...ui, actions: Object.freeze(ui.actions.map(action => action.id === id ? Object.freeze({ ...action,...update }) : action)) });
-        for (const listener of uiListeners) { try { listener(ui); } catch (error) { report(error); } }
-        return Promise.resolve();
-      } catch (error) { return Promise.reject(error); }
-    },
     dispose() {
       if (disposal) return disposal;
       if (lifecycle === 'disposed') return Promise.resolve();
@@ -250,7 +221,7 @@ export async function createEditorSession(options = {}, privateOptions) {
       disposal = new Promise((resolve,reject) => { complete = resolve; fail = reject; });
       lifecycle = 'disposing';
       clipboard.dispose();
-      for (const controller of actionControllers) controller.abort(disposedError());
+      notifyEvent('disposing',null);
       // A successor cannot share a runtime whose previous scope or writer may still be alive.
       void bounded(async () => { await queue; await native.dispose(); await platform.dispose(); },deadlines.dispose).then(() => {
         canvasRoot.remove(); releaseOwnership(); close(); complete();
@@ -270,7 +241,7 @@ export async function createEditorSession(options = {}, privateOptions) {
     const runtime = await load(new URL('js/editor-canvas.js',assetBase).href);
     startup.signal.throwIfAborted();
     native = await runtime.mountCanvas({container:canvasRoot,assetBaseUrl:assetBase.href,
-      options:{ui,...(privateOptions?.replication ? {initialEditingEnabled:false} : {})},
+      options:{textEditing,...(privateOptions?.replication ? {initialEditingEnabled:false} : {})},
       drawingId:options.persistence?.documentId ?? hostWindow.crypto.randomUUID(),
       platform:(method,args) => platform.request(method,args),emit,signal:startup.signal});
     startup.signal.throwIfAborted();

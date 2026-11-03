@@ -1,24 +1,25 @@
 # Editor SDK guide and API reference
 
-This guide covers the public standalone `@drawmotive/editor` SDK: mounting, configurable UI, local documents, semantic editing functions, events, browser services and lifecycle. Authentication, analytics, business requests and private site synchronization belong to the embedding application. There is no public synchronization API or `sendCommand` API.
+This guide covers the public standalone `@drawmotive/editor` SDK: canvas mounting, local documents, semantic editing functions, events, browser services and lifecycle. Authentication, analytics, business requests and private site synchronization belong to the embedding application. There is no public synchronization API or `sendCommand` API.
 
 **Architecture:** one active canvas is supported per page. Blazor mounts directly in the host DOM and persists for the page lifetime. Each opened document has a fresh native scope. This branch is a staging candidate; npm publication remains separate.
 
-The generated scene APIs require the matching native runtime built from the companion source revision. The diagrams site builds that committed-source candidate without publishing npm packages. Previously committed generated release assets retain their own producer and are not validation evidence for these new APIs.
+The canvas-only source API, top-level text policy and generated scene APIs require the matching native runtime built from the companion source revision. The diagrams site builds that committed-source candidate without publishing npm packages. Previously committed generated release assets retain their own producer and are not validation evidence for these new APIs.
 
-The authoritative declarations are [core.d.ts](../src/core.d.ts), [UI options](../src/react/ui-options.ts) and [React props](../src/react/index.d.ts). Only package export paths listed below are supported imports.
+Upgrading from the former chrome API removes the public React/style exports, ui creation option, onUiChanged(), invokeAction() and setActionState(). Hosts own their web controls and actions; native text policy moves from ui.textEditing to textEditing.
+
+The authoritative declarations are [core.d.ts](../src/core.d.ts). Only package export paths listed below are supported imports.
 
 ## Contents
 
 - [Entry points and installation](#entry-points-and-installation)
 - [Mounting recipes](#mounting-recipes)
 - [Creation options](#creation-options)
-- [UI configuration](#ui-configuration)
 - [Document and snapshot API](#document-and-snapshot-api)
 - [Selection and editing API](#selection-and-editing-api)
 - [Text editing](#text-editing)
 - [Clipboard recipes](#clipboard-recipes)
-- [State, events and host actions](#state-events-and-host-actions)
+- [State and events](#state-and-events)
 - [Preferences, fonts and Workers](#preferences-fonts-and-workers)
 - [Errors and lifecycle](#errors-and-lifecycle)
 - [How JS interoperates with the engine](#how-js-interoperates-with-the-engine)
@@ -26,15 +27,13 @@ The authoritative declarations are [core.d.ts](../src/core.d.ts), [UI options](.
 
 ## Entry points and installation
 
-| Import | Exports / behavior | Appropriate host |
-| --- | --- | --- |
-| `@drawmotive/editor` | `createEditor`, `EditorError`; mounts the runtime and configured React/Mantine UI | Vanilla JS or another framework needing ready-made editor controls |
-| `@drawmotive/editor/browser` | Alias of the full entry | Explicit browser imports |
-| `@drawmotive/editor/core` | `createEditor`, `EditorError`; mounts only the runtime, without loading React UI | Custom controls, minimal canvas or separately mounted SDK UI |
-| `@drawmotive/editor/react` | `Editor`, `EditorUi`, `mountEditorUi` and React/UI types | React 19 hosts |
-| `@drawmotive/editor/styles.css` | Packaged editor UI stylesheet | Full entry and React UI |
+| Import | Exports / behavior |
+| --- | --- |
+| @drawmotive/editor | createEditor, EditorError; mounts the native canvas only |
+| @drawmotive/editor/browser | Alias of the default browser canvas entry |
+| @drawmotive/editor/core | Same canvas API, retained for existing core consumers |
 
-The full imperative entry bundles its UI's React runtime. The React entry shares the host's React 19 installation. The core entry loads no React UI; native inline text input and grips still belong to the canvas. There is no Node.js or Worker visual-editor entry.
+All entries retain native grips and inline text input. React/Mantine web controls and styles are owned by the embedding application. There is no public React/style, Node.js or Worker visual-editor entry.
 
 For a matching released package:
 
@@ -42,14 +41,6 @@ For a matching released package:
 npm install @drawmotive/editor
 npx drawmotive-copy-assets public/editor
 ```
-
-For a React host, also install compatible React peers:
-
-```bash
-npm install react@19 react-dom@19
-```
-
-Copy the complete runtime again after every package upgrade. A Vite host can include these lifecycle scripts in its package.json:
 
 ```json
 {
@@ -68,66 +59,23 @@ Serve assets over HTTP(S), with `.wasm` served as `application/wasm`. Use a secu
 
 ## Mounting recipes
 
-### Full UI in a non-React application
+### Canvas in any browser application
 
-Give the container a nonzero height before mounting. Keep the instance for later commands and dispose it when the host view closes.
-
-```html
-<div id="diagram" style="position: relative; width: 100%; height: 600px"></div>
-```
+The host owns its sized container and web controls:
 
 ```javascript
 import { createEditor } from '@drawmotive/editor';
-import '@drawmotive/editor/styles.css';
-
-const container = document.getElementById('diagram');
-if (!container) throw new Error('Editor container is missing.');
-
-const editor = await createEditor({
-  container,
-  assetBaseUrl: '/editor/',
-  persistence: { mode: 'memory' },
-});
-await editor.replaceTextGraph('Start -> Finish');
+const editor = await createEditor({ container, assetBaseUrl: '/editor/' });
+await editor.replaceTextGraph('A -> B');
 await editor.fitViewport();
-
-// Run when the host view closes.
-// await editor.dispose();
+rectangleButton.addEventListener('click', () => void editor.setTool('rectangle').catch(reportError));
+const stop = editor.onStateChanged(state => { undoButton.disabled = !state.canUndo || state.busy; });
+// When the host component closes:
+stop();
+await editor.dispose();
 ```
 
-`createEditor()` resolves after runtime readiness, including initial document/resource preparation. Full-entry UI mounting follows that readiness; the promise is not a browser-paint or screenshot barrier.
-
-### React with local persistence and a host slot
-
-```tsx
-import { useMemo } from 'react';
-import type { EditorCreateOptions, EditorUiOptions } from '@drawmotive/editor';
-import { Editor } from '@drawmotive/editor/react';
-import '@drawmotive/editor/styles.css';
-
-export function Diagram({ documentId }: { documentId: string }) {
-  const persistence = useMemo<EditorCreateOptions['persistence']>(() => ({
-    mode: 'persistent', namespace: 'local-diagrams', documentId,
-  }), [documentId]);
-  const ui = useMemo<EditorUiOptions>(() => ({
-    regions: { topRight: { items: ['slot.documentName'] } },
-    drawingToolbar: { position: 'left', tools: ['rectangle', 'arrow', 'text'] },
-  }), []);
-
-  return <Editor
-    assetBaseUrl="/editor/"
-    persistence={persistence}
-    ui={ui}
-    slots={{ documentName: <span>{documentId}</span> }}
-    style={{ height: 600 }}
-    onError={error => console.error(error)}
-  />;
-}
-```
-
-`slot.documentName` reads `slots.documentName`; React elements remain in the host and never cross the runtime port. The component owns creation and disposal. `onReady(editor)` supplies the instance for application commands. Handle asynchronous work started in `onReady` yourself; the callback is not an awaited initialization hook.
-
-Memoize object/function creation options. Changes to `assetBaseUrl`, `ui`, `persistence`, `workerFactory`, `workerUrls`, `signal`, `title` or deadline props recreate the runtime, including reference changes to object values. Changing `slots`, `colorScheme`, `className`, `style` or callbacks updates the React layer. Cleanup waits for the previous writer to be released before starting a successor.
+rectangleButton, undoButton and reportError belong to the host. React hosts can create the same canvas in an effect and await its disposal before starting a successor. The SDK provides no React component or Mantine stylesheet.
 
 ### Minimal canvas, custom controls or read-only preview
 
@@ -137,17 +85,13 @@ import { createEditor } from '@drawmotive/editor/core';
 const editor = await createEditor({
   container,
   assetBaseUrl: '/editor/',
-  ui: { enabled: false, textEditing: 'disabled' },
+  textEditing: 'disabled',
 });
 await editor.replaceDocument(raw);
 await editor.fitViewport();
 ```
 
-Here `container` and `raw` are host-provided values. This configuration removes toolbars and inline text input while retaining canvas manipulation, selection feedback and grips. To retain DContentEditable, use `ui: false` or `textEditing: 'inline'` instead. For a read-only preview, also call `await editor.setEditingEnabled(false)` after loading. Hiding UI does not disable editing. Editing-disabled mode blocks user mutations and Undo/Redo; host loading, document replacement and export remain available. It is not an authorization boundary.
-
-The core entry can retain enabled UI descriptors for a later `EditorUi` mount. It never mounts controls by itself. A React host can render `<EditorUi editor={editor} container={container} />` for that existing instance. The container must own its canvas and provide the overlay positioning context. The host still owns disposal of the core instance.
-
-`mountEditorUi({ editor, container, slots?, colorScheme?, className?, style?, onError? })` is the imperative equivalent and returns `{ dispose(): void }`. Its disposer removes only that UI mount. Mount one UI owner per instance; the full entry already mounts one. `EditorUi` takes the same props and observes the instance without creating another runtime.
+Here container and raw are host-provided values. This configuration disables native text input while retaining canvas manipulation, selection feedback and grips. Use textEditing: 'inline' to retain native inline editing. For a read-only preview, also call await editor.setEditingEnabled(false) after loading. Host loading, document replacement and export remain available in that mode.
 
 ### Reopen a local document or switch documents
 
@@ -159,14 +103,14 @@ One runtime owns one logical document. Switching to another document means await
 
 ## Creation options
 
-All three creation styles use `EditorCreateOptions`; `Editor` supplies `container` internally. Unknown keys and invalid values are rejected.
+All public entries use EditorCreateOptions. Unknown keys and invalid values are rejected.
 
 | Option | Value / default | Purpose |
 | --- | --- | --- |
-| `container` | Required `HTMLElement` for imperative creation | Owns the canvas and UI |
+| `container` | Required `HTMLElement` for imperative creation | Owns only the native canvas |
 | `assetBaseUrl` | HTTP(S) string or URL; defaults relative to the SDK's generated assets | Runtime and font resource base; supply explicitly in bundles |
 | `title` | `DrawMotive diagram editor` | Accessible canvas label |
-| `ui` | `EditorUiOptions` or `false`; enabled by default | UI and text-input policy |
+| textEditing | inline (default), external or disabled | Native text-input policy |
 | `persistence` | Defaults to `{ mode: 'memory' }` | Temporary document or persistent identity |
 | `workerFactory` | Optional `(url, options?) => Promise<{ worker, dispose() }>` | Host-specific Worker construction and cleanup |
 | `workerUrls` | Optional `{ document?: string \| URL, resource?: string \| URL }` | Relocate the two self-contained packaged Workers |
@@ -175,67 +119,6 @@ All three creation styles use `EditorCreateOptions`; `Editor` supplies `containe
 | `disposeTimeoutMs` | `5000`, finite and positive | Explicit disposal cleanup deadline |
 
 Persistence configuration is either `{ mode: 'memory', namespace?, documentId? }` or `{ mode: 'persistent', namespace, documentId }`. Persistent identities must be nonempty strings. Memory mode keeps the document temporary, but fonts may still use OPFS and preferences still use localStorage.
-
-## UI configuration
-
-UI configuration is fixed at creation apart from declared host-action state. Changing the configuration in React recreates the instance; there is no public `setUi` function. `editor.ui` returns the normalized read-only descriptor, without action functions.
-
-| Field | Default / accepted values |
-| --- | --- |
-| `enabled` | `true`; `false` hides all React chrome |
-| `buttons` | Map of built-in IDs to booleans; all visible except `help` |
-| `actions` | Ordered host-action declarations; empty by default |
-| `regions` | Four independently configured corners |
-| `drawingToolbar` | Visible, `position: 'left'`, tools `arrow`, `rectangle`, `ellipse`, `diamond`, `text` |
-| `contextToolbar` | Visible; supported object/tool/panel lists unrestricted |
-| `textEditing` | `inline`; also `external` or `disabled`, independent of chrome visibility |
-| `tooltip` | Visible, `position: 'top'`, `delay: 250` milliseconds |
-
-### Corners, buttons and drawing toolbar
-
-Each region accepts a boolean or `{ visible?, items? }`; items preserve order. Empty regions do not render.
-
-| Region | Default items |
-| --- | --- |
-| `topLeft` | `undo`, `redo` |
-| `topRight` | `help`, followed by host actions not explicitly assigned to another region |
-| `bottomLeft` | Empty |
-| `bottomRight` | `sketchyMode`, `zoomOut`, `resetZoom`, `zoomIn`, `settings` |
-
-Built-in button IDs: `undo`, `redo`, `arrow`, `rectangle`, `ellipse`, `diamond`, `text`, `sketchyMode`, `zoomIn`, `zoomOut`, `resetZoom`, `settings`, `help`. Region items can also reference declared `host.*` actions or `slot.*` React slots. `host.` and `slot.` require a nonempty identifier beginning with a letter or digit; subsequent characters may include letters, digits, dots, underscores and hyphens.
-
-`drawingToolbar` accepts a boolean or `{ visible?, position?, tools? }`. Positions are `left`, `right`, `top`, `bottom`; tool IDs are `arrow`, `rectangle`, `ellipse`, `diamond`, `text`, `sketchyMode`. `select` is a semantic `setTool` value, not a configurable built-in toolbar button. Lists reject duplicate IDs.
-
-```javascript
-const ui = {
-  regions: {
-    topLeft: { items: ['undo', 'redo'] },
-    topRight: false,
-    bottomLeft: false,
-    bottomRight: { items: ['zoomOut', 'resetZoom', 'zoomIn'] },
-  },
-  drawingToolbar: { position: 'top', tools: ['rectangle', 'arrow'] },
-  contextToolbar: false,
-  textEditing: 'inline',
-  tooltip: { position: 'bottom', delay: 150 },
-};
-```
-
-Button visibility is global for that built-in ID. Omitting a control does not revoke the corresponding API capability. Settings/help are SDK controls; login, accounts, Save and Publish are host workflows. Shortcut hints describe commands; complete keyboard binding migration remains pending in this draft and should not be inferred from a visible hint.
-
-### ContextToolbar and tooltip
-
-`contextToolbar` accepts a boolean or `{ visible?, objectTypes?, tools?, panels? }`. Omitted lists include supported entries; an empty list selects none. Entries also depend on current selection capabilities and interaction state. Unknown filter strings do not create new controls.
-
-| Filter | Supported IDs |
-| --- | --- |
-| `objectTypes` | `Shape`, `Line`, `Group`, `IndependentText`, `BoundText` |
-| `tools` | `strokeFillColor`, `strokeColor`, `strokeStyle`, `cornerRadius`, `editText`, `textSizeSmall`, `textSizeMedium`, `textSizeLarge`, `bold`, `italic`, `textAlign`, `lineStartStyle`, `lineEndStyle`, `swapLineEndpoints`, `lineRouting`, `lineAttachment`, `groupTheme`, `groupTitleStyle`, `moreOptions` |
-| `panels` | `strokeFillColor`, `strokeColor`, `strokeStyle`, `textAlign`, `lineStartStyle`, `lineEndStyle`, `lineRouting`, `lineAttachment`, `groupTitleStyle`, `moreOptions` |
-
-Filtering out a panel also removes its launcher. Mixed selections must support an operation across all effective subjects. Bound-label focus uses its text capabilities. `strokeFillColor` retains the overlaid fill/stroke icons; `groupTheme` is an inline control rather than an entry in the panel list. The ContextToolbar is suppressed during busy interactions.
-
-`tooltip` accepts a boolean or `{ visible?, position?, delay? }`. Position is `top`, `bottom`, `left` or `right`; delay is finite and nonnegative. Mantine renders tooltips and shortcut badges with the instance's color scheme. Toolbar hints face into the editor: below top bars, above bottom bars, right of left bars, and left of right bars. The configured position is the fallback for selection and panel controls. Visibility also controls the cursor-following creation instructions, which advance with the native drawing step and disappear when creation ends or the pointer leaves the canvas.
 
 ## Document and snapshot API
 
@@ -428,7 +311,7 @@ Paste positions are **drawing/model coordinates**, with X right and Y down. `scr
 
 ## Text editing
 
-| `ui.textEditing` | Behavior |
+| `textEditing` | Behavior |
 | --- | --- |
 | `inline` | Default; DContentEditable handles browser text input/IME inside the canvas |
 | `external` | Emits `textEditingRequested`; the host supplies its own form and submits through `applyText` |
@@ -454,22 +337,7 @@ Prevent overlapping forms and close them when the instance closes or the target 
 
 ## Keyboard shortcuts
 
-The full and React entries use Mantine to match shortcuts only on the owning canvas. Host inputs, menus, foreign canvases and IME retain their browser behavior. Inline Escape cancels the native text interaction; other inline keys remain browser text input. Hidden chrome does not disable shortcuts; `ui.buttons` controls tool availability and editing permissions remain authoritative. The core entry supplies semantic methods for custom host input policy and does not install React shortcuts.
-
-| Keys | Action |
-| --- | --- |
-| A / R / O / D / T | Arrow / rectangle / ellipse / diamond / text |
-| S | Toggle sketchy mode |
-| Ctrl/⌘ Z | Undo |
-| Ctrl/⌘ Shift Z or Ctrl/⌘ Y | Redo |
-| Ctrl/⌘ C / V | Copy / paste using the JS clipboard service |
-| Delete | Delete the current selection |
-| Ctrl/⌘ B / I | Toggle selected text bold / italic |
-| Enter | Begin editing the selected text target |
-| Escape | Cancel the active interaction, then clear selection |
-| Space (hold) | Temporary pan |
-
-Held repeats cannot replace a tool or repeat a document command. Active gestures block tool/document commands; cancellation and drag modifier changes remain available. Releasing Space, losing canvas focus, hiding the page or unmounting the UI settles acquired temporary pan. Alt/Shift transitions replay drag alignment at the current native pointer position.
+The SDK installs no web shortcut matcher. Hosts own shortcut policy and focus/IME filtering. Native inline text retains browser input behavior. Bind the named editing methods to the host's controls or keyboard handlers, and release held input when focus or ownership ends.
 
 Custom hosts can call `cancelInteraction()`, `beginPan()` (returns whether pan was acquired), `endPan()`, `repeatLastTool()` and `updateInteractionModifiers({ alt, shift })`. These carry semantic intent rather than keyboard events. Release an acquired pan and clear held modifiers when input ownership ends.
 
@@ -510,23 +378,21 @@ pasteButton.addEventListener('click', () => {
 });
 ```
 
-Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. React shortcuts and the Copy menu use this JS clipboard service. Native inline text retains browser text copy/paste.
+Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. Host shortcuts and menus can use this JS clipboard service. Native inline text retains browser text copy/paste.
 
 Each editor keeps its own opaque internal copy in JS. Paste snapshots that fallback when invoked; a newer copy cannot replace an earlier pending paste. When no position is supplied, paste starts system access first and immediately requests the native model-space pointer position, preserving placement while permission handling is pending. Disposal immediately clears and retires the clipboard, including both deferred MIME providers and pending pastes. The C# transfer service retains no clipboard buffer; it freezes the closed graph and displayed line geometry into bytes, then remaps identities and applies placement and transactions on insertion.
 
 Where `ClipboardItem` is supported, system copy writes one item with `image/png` and `text/plain`. Other applications can consume the PNG; DrawMotive decodes the versioned graph envelope from the text representation to retain editable objects, labels and connections. Both formats come from one native capture of the selected graph, not a whole-document screenshot. Large selection images are proportionally reduced to fit the native raster budget; graph data retains the full geometry. `copySelection(token, { png: true })` also exposes that PNG companion as base64 for custom hosts. Internal-only copies skip raster rendering. The older `writeText` fallback carries graph data alone.
 
-## State, events and host actions
+## State and events
 
 ### State and subscriptions
 
 | Member | Contract |
 | --- | --- |
 | `lifecycle` | Read-only `ready`, `disposing`, `disposed` |
-| `ui` | Current normalized UI descriptor |
 | `getState()` | Promise of current `EditorState` |
 | `onStateChanged(listener)` | Immediate replay of known state, then changes |
-| `onUiChanged(listener)` | Immediate replay, then descriptor changes from host-action updates |
 | `onPreferencesChanged(listener)` | Replays a known value if available, then successful runtime changes |
 | `onDisposed(listener)` | Called once at closure; immediately if already disposed |
 | `onEvent(name, listener)` | Event subscription; no immediate replay |
@@ -539,6 +405,7 @@ Public `onEvent` names are:
 
 | Name | Payload / initialization |
 | --- | --- |
+| `disposing` | Synchronous notification when disposal starts, before pending native cleanup; no payload |
 | `selectionChanged` | `EditorSelectionSnapshot`; use `getSelection()` for the initial value |
 | `textEditingRequested` | `EditorTextEditIntent`; external text-input intent |
 | `fontCacheStatus` | `{ path, cache, detail? }`; use `getFontCacheStatus()` for startup results |
@@ -554,33 +421,6 @@ const stop = editor.onEvent('selectionChanged', value => {
 const initial = await editor.getSelection();
 if (notifications === 0) renderSelection(initial);
 ```
-
-### Host actions
-
-```javascript
-const editor = await createEditor({
-  container,
-  assetBaseUrl: '/editor/',
-  ui: {
-    actions: [{
-      id: 'host.save', label: 'Save', icon: 'save',
-      async onInvoke({ editor, signal }) {
-        const snapshot = await editor.exportSnapshot({
-          formats: ['png'], png: { embedDocument: true },
-        });
-        await writeSnapshot(snapshot, signal); // Host-owned write and acknowledgment.
-      },
-    }],
-    regions: { topRight: { items: ['host.save'] } },
-  },
-});
-```
-
-Here `createEditor` is the full entry and `writeSnapshot` is host-provided. An action requires `id: 'host.…'`, a nonempty text `label` and `onInvoke`. Optional `enabled` and `visible` default to true; `icon` names an existing SDK icon, not arbitrary markup or a component. Omit it for a text-only action. Functions stay in the host and do not cross the port. Duplicate IDs, undeclared action references and missing handlers fail validation.
-
-`await editor.invokeAction(id)` invokes a declared available action. `await editor.setActionState(id, { label?, enabled?, visible? })` updates its descriptor in the host; it is not a C# document mutation. Unknown actions are rejected. The supplied SDK controls suppress repeated pending clicks; direct programmatic invocation is not a global action mutex, so serialize business writes in the host.
-
-The handler may export, update action state or dispose the editor. Its `signal` is aborted on disposal/page closure; the host must observe cancellation, and cancellation cannot undo an external write. A rejected host save does not itself fault the canvas. When implementing dirty/save state, use the revision rules above.
 
 ## Preferences, fonts and Workers
 
@@ -650,13 +490,12 @@ Public methods validate basic shapes in JS and semantic constraints in C#. Inval
 | `PreferenceReadFailed`, `PreferenceWriteFailed`, `InvalidPreferences` | Report preference storage failure |
 | `ResourceUnavailable`, `ResourceHashMismatch`, `ResourceWorkerFailed` | Restore valid matching resources/connectivity; do not use corrupt cache bytes |
 | `ClipboardEmpty`, `ClipboardUnavailable`, `ClipboardPermissionDenied`, `ClipboardFormatUnsupported` | Ask for a supported source/access or use an explicit internal operation |
-| `UnknownAction`, `ActionUnavailable`, `HostActionFailed` | Resolve the host action/state/error |
 | `EditorDisposed` | Stop using this instance |
 | `DisposeCleanupUnconfirmed` | Cleanup was not confirmed; reload the page before opening a successor |
 
 A local transaction failure may set health to faulted and revision to null. retryPersistence is reserved for an identical retained storage batch with uncertain completion. Direct editor operations have no transport timeout or automatic retry.
 
-Await editor.dispose() before switching documents. It cancels host action signals, waits for document operations, disposes the native root and document scope, releases Workers/writer ownership and removes UI. Persistent documents remain; the internal copy buffer is discarded. Blazor and browser fonts stay loaded for the page. Only one active canvas is supported. Unconfirmed cleanup blocks a successor until page reload.
+Await editor.dispose() before switching documents. It waits for document operations, disposes the native root and document scope, releases Workers/writer ownership and removes the native canvas. Persistent documents remain; the internal copy buffer is discarded. Blazor and browser fonts stay loaded for the page. Only one active canvas is supported. Unconfirmed cleanup blocks a successor until page reload.
 
 ## How JS interoperates with the engine
 
@@ -664,19 +503,19 @@ Await editor.dispose() before switching documents. It cancels host action signal
 
 The SDK serializes native operations, invokes ExecuteAsync(method, arguments) on the current .NET object reference and resolves the returned Promise. C# validates intent, applies transactions and publishes immutable state/selection events. There is no frame, window-message handshake or runtime MessagePort.
 
-Storage, font and preference callbacks are direct JS functions independent of the operation queue, so C# can await them without deadlock. Dedicated Workers own IndexedDB and OPFS I/O using request IDs. Subscription registration, host actions and clipboard helpers remain in JS. Private synchronization is owned by the site.
+Storage, font and preference callbacks are direct JS functions independent of the operation queue, so C# can await them without deadlock. Dedicated Workers own IndexedDB and OPFS I/O using request IDs. Subscription registration and clipboard helpers remain in JS. Private synchronization is owned by the site.
 
-Use `editor.setTool('rectangle')`, `editor.editScene({ revision, description, changes })` and the other documented functions. There is no supported `editor.sendCommand(...)`, raw-port accessor or direct call to internal Blazor globals. Do not deep-import protocol/Worker implementation files. React controls use the same batch API as custom host controls. Private synchronization integration remains separate site work and is not documented as a public SDK facility.
+Use `editor.setTool('rectangle')`, `editor.editScene({ revision, description, changes })` and the other documented functions. There is no supported `editor.sendCommand(...)`, raw-port accessor or direct call to internal Blazor globals. Do not deep-import protocol/Worker implementation files. Host controls use the same semantic batch API. Private synchronization integration remains separate site work and is not documented as a public SDK facility.
 
 ## Integration checklist
 
 - Use one matching SDK/runtime/Worker set and explicitly size the container.
-- Choose full, React or core mounting once; give each instance one UI owner.
-- Configure corner/drawing/context controls and text policy independently.
+- Mount one public canvas and let the host own web controls.
+- Configure native text policy independently of host toolbars.
 - Choose a temporary document or an explicit persistent identity; await disposal before switching.
 - Read capabilities/state and retain the selection token for the user's displayed intent.
 - Keep model and canvas screen coordinates distinct, both Y down.
 - Save opaque snapshots with their revision and keep older acknowledgments from clearing newer edits.
 - Start OS clipboard access in a user gesture and expose internal copy/paste explicitly.
 - Handle resource/storage failures, uncertain request completion and cleanup errors.
-- Verify the actual packaged WASM/UI in the target browser. Draft component/Worker checks do not replace standalone-editor or real-App E2E.
+- Verify the actual packaged native WASM/canvas in the target browser. Draft component/Worker checks do not replace standalone-editor or real-App E2E.

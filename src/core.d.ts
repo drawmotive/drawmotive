@@ -1,6 +1,5 @@
-import type { EditorUiOptions, NormalizedUiOptions, EditorUiActionState } from './react/ui-options.js';
 export { EditorError } from './errors.js';
-export type { EditorUiOptions, EditorButtonId, EditorRegionId, EditorUiAction as EditorAction, EditorUiActionState as EditorActionState } from './react/ui-options.js';
+export type TextEditingMode = 'inline' | 'external' | 'disabled';
 export interface EditorState {
   readonly revision: string | null;
   readonly health: 'healthy' | 'faulted';
@@ -20,7 +19,8 @@ export interface EditorCreateOptions {
   container: HTMLElement;
   assetBaseUrl?: string | URL;
   title?: string;
-  ui?: EditorUiOptions | false;
+  /** Native text input policy; independent of host web controls. Defaults to inline. */
+  textEditing?: TextEditingMode;
   /** One instance owns one logical document. Switching documents recreates the instance. */
   persistence?: { mode: 'memory'; namespace?: string; documentId?: string } | { mode: 'persistent'; namespace: string; documentId: string };
   workerFactory?: EditorWorkerFactory;
@@ -99,8 +99,8 @@ export interface EditorTextEditIntent { readonly targetItemId: string; readonly 
 export interface EditorPreferences { darkTheme?: boolean; showGrid?: boolean; snapToGrid?: boolean; }
 export interface EditorFontCacheStatus { readonly path: string; readonly cache: 'hit' | 'stored' | 'unavailable' | 'write-failed'; readonly detail?: string; }
 export interface EditorInstance {
+  readonly textEditing: TextEditingMode;
   readonly lifecycle: 'ready' | 'disposing' | 'disposed';
-  readonly ui: NormalizedUiOptions;
   replaceDocument(raw: string): Promise<void>;
   replacePngDocument(base64: string): Promise<void>;
   replaceTextGraph(source: string): Promise<void>;
@@ -112,9 +112,10 @@ export interface EditorInstance {
   setEditingEnabled(enabled: boolean): Promise<void>;
   undo(): Promise<void>; redo(): Promise<void>; getState(): Promise<EditorState>;
   onStateChanged(listener: (state: EditorState) => void): () => void;
-  onUiChanged(listener: (ui: NormalizedUiOptions) => void): () => void;
   /** Called once on disposal or a forced close such as pagehide. */
   onDisposed(listener: () => void): () => void;
+  /** Synchronous disposal-start notification, before pending native cleanup. */
+  onEvent(name: 'disposing', listener: () => void): () => void;
   onEvent(name: 'selectionChanged', listener: (selection: EditorSelectionSnapshot) => void): () => void;
   onEvent(name: 'textEditingRequested', listener: (intent: EditorTextEditIntent) => void): () => void;
   onEvent(name: 'fontCacheStatus', listener: (status: EditorFontCacheStatus) => void): () => void;
@@ -148,8 +149,6 @@ export interface EditorInstance {
   setSketchyMode(enabled: boolean): Promise<void>;
   setPreferences(preferences: EditorPreferences): Promise<void>;
   zoom(direction: 'in' | 'out' | 'reset'): Promise<void>;
-  invokeAction(id: string): Promise<void>;
-  setActionState(id: string, state: EditorUiActionState): Promise<void>;
   /** Persistent data survives disposal. Deadline failure means cleanup is unconfirmed. */
   dispose(): Promise<void>;
 }

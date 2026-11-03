@@ -4,12 +4,24 @@ const source = document.querySelector('#source');
 const status = document.querySelector('#status');
 const buttons = [...document.querySelectorAll('button')];
 const file = document.querySelector('#file');
-let editor;
+let editor, currentState, working = false;
+function refreshControls() {
+  buttons.forEach(button => { button.disabled = !editor || leaving || working; });
+  for (const action of ['undo','redo']) document.querySelector('#'+action).disabled ||= !currentState?.[action === 'undo' ? 'canUndo' : 'canRedo'];
+}
+for (const button of document.querySelectorAll('[data-tool]')) button.addEventListener('click', () => void run(() => editor.setTool(button.dataset.tool), 'Ready to edit'));
+for (const action of ['undo','redo']) document.querySelector('#'+action).addEventListener('click', () => void run(() => editor[action](), 'Ready to edit'));
+document.querySelector('#editor').addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
+  if (!(event.target instanceof HTMLElement) || !event.target.closest('.dm-canvas-root')
+      || !(event.target.matches('canvas') || event.target.closest('[contenteditable]'))) return;
+  void editor?.cancelInteraction().catch(error => { status.textContent = error.message; });
+});
 let leaving = false;
 const startup = new AbortController();
 
 async function run(operation, message) {
-  buttons.forEach(button => { button.disabled = true; });
+  working = true; refreshControls();
   status.textContent = 'Working…';
   try {
     await operation();
@@ -17,7 +29,7 @@ async function run(operation, message) {
   } catch (error) {
     status.textContent = error.message;
   } finally {
-    buttons.forEach(button => { button.disabled = !editor || leaving; });
+    working = false; refreshControls();
   }
 }
 
@@ -61,9 +73,9 @@ await run(async () => {
     container: document.querySelector('#editor'),
     // With an unbundled module, package-owned assets resolve relative to it.
     assetBaseUrl: new URL('../../generated/editor/', import.meta.url),
-    ui: { buttons: { help: false } },
     signal: startup.signal,
   });
+  editor.onStateChanged(state => { currentState = state; refreshControls(); });
   await editor.replaceTextGraph(source.value);
   await editor.fitViewport();
 }, 'Ready to edit');

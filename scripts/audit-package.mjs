@@ -202,6 +202,7 @@ export function auditPackageFiles(root, relativePaths) {
   for (const file of relativePaths) {
     if (typeof file !== "string" || path.isAbsolute(file) || file.includes("\\") || file.split("/").some(part => !part || part === "." || part === "..") || seen.has(file)) throw new Error("Unsafe or duplicate package path");
     seen.add(file);
+    if (/^(?:src[/]react[/]|src[/].*[.](?:tsx|css)$|dist[/](?!workers[/]))/.test(file)) throw new Error("Private UI cannot be published: " + file);
     if (forbiddenFile.test(file)) throw new Error("Source/debug file cannot be published: " + file);
     const absolute = path.join(root, file);
     if (realpathSync(absolute) !== absolute || !statSync(absolute).isFile()) throw new Error("Package files must be regular local files: " + file);
@@ -226,6 +227,11 @@ export function auditPackage(root = fileURLToPath(new URL("../", import.meta.url
   const packed = JSON.parse(execFileSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }));
   if (packed.length !== 1 || !Array.isArray(packed[0].files)) throw new Error("Unexpected npm pack file list");
   const files = packed[0].files.map(file => file.path);
+  const pkg = JSON.parse(readFileSync(path.join(root,"package.json"),"utf8"));
+  for (const name of Object.keys({...pkg.dependencies,...pkg.peerDependencies})) {
+    if (/^(?:@mantine[/]|react(?:-dom)?$)/.test(name)) throw new Error("Private UI dependency cannot be published: " + name);
+  }
+  if (pkg.exports?.["./react"] || pkg.exports?.["./styles.css"]) throw new Error("Private UI exports cannot be published");
   for (const required of ["examples/online-order.png", "examples/online-order.textgraph", "examples/editor-browser.png"]) {
     if (!files.includes(required)) throw new Error("Missing public README example: " + required);
   }

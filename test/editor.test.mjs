@@ -12,6 +12,27 @@ function host(t) {
  return {dom,container,calls,options,get context(){return context;},behavior(fn){behavior=fn;},cleanup(fn){dispose=fn;},
  mount(extra={},privateOptions={}){return createEditorSession({...options,...extra},{runtimeLoader:async()=>({mountCanvas}),...privateOptions});}};
 }
+test('canvas session exposes independent text policy without web chrome',async t=>{
+ const h=host(t),editor=await h.mount({textEditing:'external'});t.after(()=>editor.dispose());
+ assert.deepEqual(h.context.options,{textEditing:'external'});
+ assert.equal(editor.textEditing,'external');
+ for(const name of ['ui','onUiChanged','invokeAction','setActionState'])assert.equal(editor[name],undefined);
+});
+test('disposal start notifies host lifetimes synchronously before blocked cleanup',async t=>{
+ const h=host(t),editor=await h.mount({disposeTimeoutMs:1000});let release,events=0;
+ h.cleanup(()=>new Promise(resolve=>release=resolve));
+ editor.onEvent('disposing',()=>{events++;assert.equal(editor.lifecycle,'disposing');});
+ const closing=editor.dispose();
+ try {
+  assert.equal(events,1);assert.equal(editor.dispose(),closing);
+ } finally {await new Promise(setImmediate);release();await closing;}
+});
+test('public default entry is the canvas entry and rejects private chrome options',async t=>{
+ const entry=await import('../src/index.js'),core=await import('../src/core.js');
+ assert.equal(entry.createEditor,core.createEditor);
+ const h=host(t);for(const ui of [false,{}, {buttons:{help:true}}])await assert.rejects(h.mount({ui}),/Unknown editor option: ui/);
+ await assert.rejects(h.mount({textEditing:'react'}),/textEditing/);
+});
 test('mounts one direct canvas and rejects a second editor without disturbing it',async t=>{
  const h=host(t),editor=await h.mount();assert.equal(h.container.querySelectorAll('canvas').length,1);assert.equal(h.container.querySelector('iframe'),null);
  assert.equal(editor.instanceId,undefined);assert.equal(editor.documentSessionId,undefined);await assert.rejects(h.mount(),{code:'EditorAlreadyMounted'});assert.equal(editor.lifecycle,'ready');
@@ -50,10 +71,6 @@ test('private composition supplies replication without extending the public hand
 test('startup platform preferences and cache status are retained',async t=>{
  const h=host(t);h.dom.window.localStorage.setItem('drawmotive.editor.preferences.v1','{"darkTheme":true}');const editor=await h.mount();assert.deepEqual(await h.context.platform('preferences.get'),{darkTheme:true});
  h.context.emit('fontCacheStatus',{path:'font.ttf',cache:'stored'});assert.deepEqual(editor.getFontCacheStatus(),[{path:'font.ttf',cache:'stored'}]);await editor.dispose();
-});
-test('host actions can call document methods and close their own editor',async t=>{
- const h=host(t);h.behavior(()=>({raw:'raw'}));let signal;const editor=await h.mount({ui:{actions:[{id:'host.close',label:'Close',async onInvoke(context){signal=context.signal;assert.equal((await context.editor.exportSnapshot({formats:['raw']})).raw,'raw');await context.editor.dispose();}}]}});
- await editor.invokeAction('host.close');assert.equal(signal.aborted,true);assert.equal(editor.lifecycle,'disposed');
 });
 test('disposal waits pending commands and releases ownership only after cleanup',async t=>{
  const h=host(t),editor=await h.mount();let finish,release;h.behavior(()=>new Promise(resolve=>finish=resolve));h.cleanup(()=>new Promise(resolve=>release=resolve));
