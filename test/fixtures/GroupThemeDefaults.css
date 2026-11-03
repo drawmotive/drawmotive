@@ -1,7 +1,7 @@
 /* Additive standard styling schema. Palette leaves always belong to the active host theme. */
 .styling.default {
     --text-body-font-family: var(--font-family);
-    --text-fallback-font-families: NotoColorEmoji, NotoSansSC-Regular;
+    --text-fallback-font-families: Noto-COLRv1, NotoSansSC-Regular;
     --text-body-font-size: medium;
     --text-body-font-weight: 400;
     --text-heading-font-weight: 600;
@@ -40,6 +40,8 @@
     --group-title-vertical-align: center;
     --line-dashed-pattern: 2.5 2.5;
     --line-dotted-pattern: 1 2.5;
+    --line-label-background-opacity: 0.8;
+    --line-label-background-padding: 1px 2px;
     --editor-text-background-role: background;
     --editor-text-border-role: secondary-stroke;
     --editor-text-border-width: var(--line-width-thin);
