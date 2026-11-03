@@ -65,7 +65,9 @@ Copy the complete runtime after every upgrade. For Vite, run `drawmotive-copy-as
 
 ## Standalone editor boundary
 
-The public package provides editing UI, the canvas runtime and local browser services.
+The public package provides the native canvas, grips, inline text input and local browser services.
+Host applications own toolbars, menus, settings, tooltips and other web controls.
+The package has no Mantine or React dependency and exports no React or web stylesheet entry.
 It requires editor assets served by a static host, without requiring a DrawMotive
 business server, login session or collaboration connection for local editing.
 It has no authentication or SignalR dependency and exposes no public synchronization API.
@@ -75,27 +77,18 @@ private runtime integration; those packages and interfaces are not public editor
 Hosts use named functions such as `editor.setTool()` and `editor.editScene()`;
 there is no public `sendCommand`. Internally, these operations call the current
 Blazor object directly through ordered Promise calls. One canvas is supported per
-page, mounted in the host document. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [configuration](docs/editor-sdk.md#ui-configuration) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).
+page, mounted in the host document. See [interop details](docs/editor-sdk.md#how-js-interoperates-with-the-engine), [creation options](docs/editor-sdk.md#creation-options) and [API reference](docs/editor-sdk.md#document-and-snapshot-api).
 
 ## Create and edit
 
-The full entry requires `import "@drawmotive/editor/styles.css"` in a bundled host.
-A native ESM page must link the package’s `dist/editor-ui.css`, as the browser example does.
-All controls and popovers remain inside the editor container. Give that container a height.
-Use `@drawmotive/editor/core` for a React-free instance with no UI chrome; inline text editing remains enabled.
-
-```html
-<div id="editor" style="height: 600px"></div>
-```
+Give the canvas container a height. The default, browser and core entries expose the same canvas-only API. Native canvas styles load with the runtime assets.
 
 ```javascript
 import { createEditor } from "@drawmotive/editor";
-import "@drawmotive/editor/styles.css";
 
 const editor = await createEditor({
   container: document.querySelector("#editor"),
   assetBaseUrl: "/editor/",
-  ui: { buttons: { help: false } },
 });
 await editor.replaceTextGraph("User -> Application -> Database");
 await editor.fitViewport();
@@ -112,25 +105,6 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 
 ## Operations
 
-The `@drawmotive/editor/react` entry exports `Editor` (owns its canvas) and `EditorUi` (observes an existing core instance).
-Import the same stylesheet, provide a sized parent, and memoize object options. Changing document identity disposes and recreates the instance.
-The full imperative entry bundles React; the React entry uses the host’s React 19 installation.
-
-```tsx
-import { Editor } from "@drawmotive/editor/react";
-import "@drawmotive/editor/styles.css";
-
-const ui = { regions: { topRight: false }, drawingToolbar: { tools: ["rectangle", "arrow"] } };
-export function Diagram() {
-  return <Editor assetBaseUrl="/editor/" ui={ui} style={{ height: 600 }} />;
-}
-```
-
-`ui.regions` independently configures each corner’s visibility, item order, `host.*` actions and `slot.*` React content.
-`drawingToolbar` controls visibility, position and tools. `contextToolbar` filters object types, tools and panels.
-`ui: false` disables chrome. `textEditing` independently selects `inline` (default), `external` or `disabled`.
-Tooltip visibility, four-way position and delay are configured through `ui.tooltip`.
-
 | Operation | Result or effect |
 | --- | --- |
 | `createEditor(options)` | Ready isolated instance |
@@ -142,7 +116,6 @@ Tooltip visibility, four-way position and delay are configured through `ui.toolt
 | `setEditingEnabled(enabled)` | Controls user edits and JS history; loading/export remain available |
 | `undo()` / `redo()` | Applies document history |
 | `getState()` / `onStateChanged(listener)` | Current state / subscription with immediate replay |
-| `setActionState(id, { label?, enabled?, visible? })` | Updates a declared host action |
 | `dispose()` | Releases this instance and its writer lease; persistent documents remain |
 | `copyToClipboard(token, { system? })` | Copies an opaque graph; reports system success separately from the internal copy |
 | `pasteFromClipboard(position, { source? })` | Pastes through the engine; source is `auto`, `system` or `internal` |
@@ -167,34 +140,21 @@ Choose distinct formats: `raw`, `png`, `svg`. Raw-only export does not render. R
 
 `png.embedDocument` defaults to false. When true, WASM inserts the editable document into the PNG from the same snapshot; hosts write the complete image without implementing chunks or CRC. PNG options require the PNG format. `replacePngDocument` rejects ordinary PNGs without embedded documents and damaged images without clearing the current diagram.
 
-## Buttons and host actions
+## Host controls and text policy
 
-`ui.buttons` overrides built-in visibility. IDs are `undo`, `redo`, `arrow`, `rectangle`, `ellipse`, `diamond`, `text`, `sketchyMode`, `zoomIn`, `zoomOut`, `resetZoom`, `settings`, and `help`. All default visible except `help`. Visibility does not revoke editing permission or disable JS operations.
+Use ordinary host controls with semantic methods such as setTool(), undo(), redo(), zoom() and setPreferences(). Subscribe to onStateChanged() to reflect the native editor's current capabilities. The runnable browser example owns its own plain DOM drawing controls; they are not SDK components.
 
-Declare product actions in order through `ui.actions`. IDs use the `host.` namespace, labels are text, and icons use existing icon names. Actions default visible and enabled; Save, Publish, accounts and product buttons are not built in.
+Creation accepts textEditing: 'inline' (default), 'external' or 'disabled'. This native policy is independent of host controls. External text editing emits textEditingRequested; the host submits applyText(). Hiding a host toolbar does not revoke editing permission; setEditingEnabled(false) provides a read-only interaction policy.
 
-```javascript
-const editor = await createEditor({
-  container, assetBaseUrl: runtimeUrl,
-  ui: { actions: [{
-    id: "host.save", label: "Save", icon: "save",
-    async onInvoke({ editor, signal }) {
-      const snapshot = await editor.exportSnapshot({ formats: ["png"], png: { embedDocument: true } });
-      await saveAndConfirm(snapshot, signal);
-    },
-  }] },
-});
-```
-
-Handlers stay in the host. Direct callbacks lets a handler export, update action state or dispose without holding the document queue. The runtime prevents repeated pending clicks and shows structured errors. Disposal/page exit cancels the handler signal without waiting for it; cancellation does not undo an external write. Unknown options, duplicate action IDs and missing handlers fail creation.
+The former public React/style exports and ui/action configuration are removed. Hosts using those APIs must provide their own controls when upgrading to this canvas-only API. Internal DrawMotive applications compose separate private UI packages.
 
 ## Canvas lifecycle
 
-One Blazor runtime and its browser fonts live for the page lifetime. Each document mounts a native canvas directly into the host container with a fresh document scope. Dispose the editor before creating its successor. A second active editor rejects with EditorAlreadyMounted. React UI and canvas share ordinary DOM events and focus.
+One Blazor runtime and its browser fonts live for the page lifetime. Each document mounts a native canvas directly into the host container with a fresh document scope. Dispose the editor before creating its successor. A second active editor rejects with EditorAlreadyMounted. Host controls and canvas share ordinary DOM events and focus.
 
-Authentication, analytics and business requests belong to the host application. The core entry has no React dependency; the full entry bundles its React/Mantine UI, and the React entry shares the host React runtime.
+Authentication, analytics and business requests belong to the host application. Every public entry is independent of React and Mantine.
 
-Startup cancellation uses signal; startupTimeoutMs defaults to 120000. Document operations return direct Promises and run in order; storage/resource callbacks remain independent while C# awaits persistence or fonts. Runtime errors retain code and message. Disposal cancels host actions, waits for pending operations, removes the native root and releases Workers/storage. disposeTimeoutMs defaults to 5000. Unconfirmed cleanup rejects with DisposeCleanupUnconfirmed and blocks another editor until page reload. Page exit cleanup is best effort.
+Startup cancellation uses signal; startupTimeoutMs defaults to 120000. Document operations return direct Promises and run in order; storage/resource callbacks remain independent while C# awaits persistence or fonts. Runtime errors retain code and message. Disposal waits for pending operations, removes the native root and releases Workers/storage. disposeTimeoutMs defaults to 5000. Unconfirmed cleanup rejects with DisposeCleanupUnconfirmed and blocks another editor until page reload. Page exit cleanup is best effort.
 
 ## Verification and release
 

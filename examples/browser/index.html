@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DrawMotive editor · Browser example</title>
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="../../dist/editor-ui.css">
   <script type="importmap">{"imports":{"@drawmotive/editor":"../../src/index.js"}}</script>
 </head>
 <body>
@@ -29,7 +28,16 @@ User -> App -> DB</textarea>
         <button id="generate" disabled>Generate diagram</button>
         <p class="hint">Generating replaces the canvas. Save your edits before starting again.</p>
         <h2>2. Make it yours</h2>
-        <p>Drag shapes to move them. Double-click a label to edit it. Use the canvas tools to add shapes and connections.</p>
+        <p>Drag shapes to move them. Double-click a label to edit it. Use these page controls to choose a canvas tool.</p>
+        <div class="actions" aria-label="Host drawing controls">
+          <button data-tool="select" disabled>Select</button>
+          <button data-tool="rectangle" disabled>Rectangle</button>
+          <button data-tool="ellipse" disabled>Ellipse</button>
+          <button data-tool="arrow" disabled>Arrow</button>
+          <button data-tool="text" disabled>Text</button>
+          <button id="undo" disabled>Undo</button>
+          <button id="redo" disabled>Redo</button>
+        </div>
         <h2>3. Take it with you</h2>
         <div class="actions">
           <button id="download" disabled>Download PNG</button>

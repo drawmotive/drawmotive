@@ -1,43 +1,33 @@
-import {test,expect} from '@playwright/test';
-test.use({launchOptions:{executablePath:process.env.DRAWMOTIVE_CHROMIUM_PATH}});
-test.beforeEach(async({page})=>{
- await page.route('**/stub-runtime/js/editor-canvas.js',route=>route.fulfill({contentType:'text/javascript',body:'export {mountCanvas} from "/test/browser/stub-runtime.js";'}));
- await page.goto('/test/browser/host.html');
- await page.addStyleTag({url:'/dist/editor-ui.css'});
+import { test, expect } from '@playwright/test';
+test.use({ launchOptions: { executablePath: process.env.DRAWMOTIVE_CHROMIUM_PATH } });
+test('public default entry mounts only a canvas without fetching private UI assets', async ({ page }) => {
+  const requests = []; page.on('request', request => requests.push(request.url()));
+  await page.route('**/stub-runtime/js/editor-canvas.js', route => route.fulfill({ contentType: 'text/javascript', body: 'export {mountCanvas} from "/test/browser/stub-runtime.js";' }));
+  await page.goto('/test/browser/host.html');
+  const result = await page.evaluate(async () => {
+    const { createEditor } = await import('/src/index.js');
+    const container = document.createElement('div'); container.className = 'editor'; document.body.append(container);
+    const editor = await createEditor({ container, assetBaseUrl: '/stub-runtime/', textEditing: 'external' });
+    await editor.setTool('rectangle');
+    const result = { textEditing: editor.textEditing, tool: (await editor.getState()).tool, canvases: container.querySelectorAll('canvas').length,
+      buttons: container.querySelectorAll('button').length, chrome: container.querySelectorAll('.dm-editor-ui').length,
+      ui: editor.ui, invokeAction: typeof editor.invokeAction };
+    await editor.dispose(); return { ...result, remaining: container.childElementCount };
+  });
+  expect(result).toEqual({ textEditing: 'external', tool: 'rectangle', canvases: 1, buttons: 0, chrome: 0, ui: undefined, invokeAction: 'undefined', remaining: 0 });
+  expect(requests.some(url => /editor-ui|mantine|react[.]js/.test(url))).toBe(false);
 });
-
-test('full entry mounts styled, interactive React controls; core can stay UI-free',async({page})=>{
- await page.evaluate(async()=>{const {createEditor}=await import('/src/index.js');const container=document.createElement('div');container.className='editor';document.body.append(container);globalThis.editor=await createEditor({container,assetBaseUrl:new URL('/stub-runtime/',location.href)});});
- const tool=page.getByRole('button',{name:'Rectangle',exact:true});await expect(tool).toBeVisible();await expect(tool).toHaveCSS('pointer-events','auto');await tool.click();
- expect(await page.evaluate(async()=> (await editor.getState()).tool)).toBe('rectangle');
- await page.evaluate(()=>editor.dispose());await expect(page.locator('.dm-editor-ui')).toHaveCount(0);await expect(page.locator('.dm-canvas-root')).toHaveCount(0);
-});
-test('host preference changes update React appearance and the settings controls',async({page})=>{
- await page.evaluate(async()=>{const {createEditor}=await import('/src/index.js');const container=document.createElement('div');container.className='editor';document.body.append(container);globalThis.editor=await createEditor({container,assetBaseUrl:new URL('/stub-runtime/',location.href)});});
- await expect(page.locator('.dm-editor-ui')).toHaveAttribute('data-mantine-color-scheme','light');
- await page.evaluate(()=>editor.setPreferences({darkTheme:true,showGrid:false}));
- await expect(page.locator('.dm-editor-ui')).toHaveAttribute('data-mantine-color-scheme','dark');
- await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Dark Theme',exact:true})).toBeChecked();await expect(page.getByRole('checkbox',{name:'Show and Snap to Grid',exact:true})).not.toBeChecked();
- await page.evaluate(()=>editor.dispose());
-});
-
-test('aborting while the full UI chunk loads rejects startup and releases the ready core',async({page})=>{
- let release;const gate=new Promise(resolve=>release=resolve);
- await page.route('**/dist/editor-ui.js',async route=>{await gate;await route.continue();});
- const chunk=page.waitForRequest('**/dist/editor-ui.js');
- await page.evaluate(async()=>{const {createEditor}=await import('/src/index.js');const container=document.createElement('div');container.className='editor';document.body.append(container);globalThis.controller=new AbortController();globalThis.outcome='pending';void createEditor({container,assetBaseUrl:new URL('/stub-runtime/',location.href),signal:controller.signal,disposeTimeoutMs:1000}).then(()=>outcome='resolved',error=>outcome=error.name);});
- await chunk;await page.evaluate(()=>controller.abort());release();
- await expect.poll(()=>page.evaluate(()=>outcome),{timeout:5000}).toBe('AbortError');await expect(page.locator('.dm-canvas-root')).toHaveCount(0);await expect(page.locator('.dm-editor-ui')).toHaveCount(0);
-});
-
-for (const ui of [false, { enabled: false }]) test(`full entry retains Mantine hotkeys with ui=${JSON.stringify(ui)}`, async ({ page }) => {
- await page.evaluate(async ui => {
-  const { createEditor } = await import('/src/index.js');
-  const container = document.createElement('div'); container.className = 'editor'; document.body.append(container);
-  globalThis.editor = await createEditor({ container, ui, assetBaseUrl: new URL('/stub-runtime/', location.href) });
- }, ui);
- await expect(page.getByRole('button', { name: 'Rectangle', exact: true })).toHaveCount(0);
- await page.locator('.drawmotive-canvas-host canvas').press('r');
- await expect.poll(() => page.evaluate(async () => (await editor.getState()).tool), { timeout: 5000 }).toBe('rectangle');
- await page.evaluate(() => editor.dispose());
+test('host example ignores IME Escape and handles rejected canvas cancellation', async ({ page }) => {
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/generated/editor/js/editor-canvas.js',route=>route.fulfill({contentType:'text/javascript',body:
+    'import {mountCanvas as mount} from "/test/browser/stub-runtime.js"; export async function mountCanvas(options){const native=await mount(options);globalThis.hostCalls=[];return {...native,request(method,args){hostCalls.push(method);if(method==="cancelInteraction")throw new Error("Cancellation rejected");return native.request(method,args);}};}'}));
+  await page.goto('/examples/browser/');await expect(page.locator('#status')).toHaveText('Ready to edit');
+  await page.evaluate(()=>{
+    const canvas=document.querySelector('canvas');
+    for(const options of [{isComposing:true},{keyCode:229}])canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,...options}));
+    const foreign=document.createElement('input');document.querySelector('#editor').append(foreign);foreign.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  });
+  expect(await page.evaluate(()=>hostCalls.includes('cancelInteraction'))).toBe(false);
+  await page.locator('canvas').press('Escape');await expect(page.locator('#status')).toHaveText('Cancellation rejected');
+  expect(errors).toEqual([]);
 });
