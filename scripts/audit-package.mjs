@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 const groupDefaultsHashes = new Set([
   "27496b24a6086fa1b45e78c7f9fe07ce431533647ea51acda71d0df63a5deecb", // 166386683b3b90a4917eb4cfc1a04361b30f1710
   "9025ba845d24308a8687379b6e7983f7e40df7c1c5e1b123315202a1c7cd473b", // be84f251d1a3c5154879ffb1706f550cf2e27b7a: two public line-label CSS defaults
+  "fef7b0df57dc6853aa126b24e0d10d273b7516f8c89e83a25fb344f8bc1e3060", // Shared Noto-COLRv1 emoji fallback; other default tokens are unchanged.
 ]);
 const prefix = "Graphics.Core.Styles.Resources.";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
