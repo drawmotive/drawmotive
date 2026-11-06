@@ -139,7 +139,7 @@ Unless stated otherwise, commands return promises. Await dependent operations. R
 | `zoom(direction)` | Display-only `in`, `out` or `reset` |
 | `setSketchyMode(enabled: boolean)` | Changes document sketch appearance through an undoable transaction |
 
-Invalid imports preserve the current document. Operations requiring an idle document reject unfinished gestures/text input rather than silently cancelling them. TextGraph-to-canvas is one-way: canvas edits do not rewrite TextGraph source.
+Invalid imports preserve the current document. Operations requiring an idle document reject unfinished gestures/text input rather than silently cancelling them. TextGraph-to-canvas is one-way: canvas edits do not rewrite TextGraph source; calling `replaceTextGraph()` again replaces prior edits. There is no public incremental TextGraph merge or mutable scene-object API.
 
 ### Export options and return values
 
