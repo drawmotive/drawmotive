@@ -6,14 +6,10 @@ import { createHash } from "node:crypto";
 import { parseNpmPack } from "../.release/release-registry.mjs";
 
 // StandardTheme has a public byte-for-byte counterpart; additive defaults do not.
-// Retain historical approval so existing distributions remain auditable. Each
-// new payload requires source review rather than trusting its declared filename.
-const groupDefaultsHashes = new Set([
-  "27496b24a6086fa1b45e78c7f9fe07ce431533647ea51acda71d0df63a5deecb", // 166386683b3b90a4917eb4cfc1a04361b30f1710
-  "9025ba845d24308a8687379b6e7983f7e40df7c1c5e1b123315202a1c7cd473b", // be84f251d1a3c5154879ffb1706f550cf2e27b7a: two public line-label CSS defaults
-  "fef7b0df57dc6853aa126b24e0d10d273b7516f8c89e83a25fb344f8bc1e3060", // Shared Noto-COLRv1 emoji fallback; other default tokens are unchanged.
-  "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046", // 96e7d2a95bda0a10ba32f7c650c0f77567d0639f: reviewed 10px shape radius and disabled shadow defaults.
-]);
+// Approve only the current payload after source review, independently of its
+// declared filename: 96e7d2a95bda0a10ba32f7c650c0f77567d0639f introduced the
+// reviewed 10px shape radius and disabled shadow defaults.
+const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046";
 const prefix = "Graphics.Core.Styles.Resources.";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 function range(bytes, offset, size) {
@@ -76,7 +72,7 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
     names.add(resource.name);
     if (resource.offset < end || resource.offset-end > 7 || range(resources,end,resource.offset-end).some(byte=>byte!==0)) throw new Error("Unaccounted managed resource bytes");
     if (resource.name === prefix+"GroupThemeDefaults.css") {
-      if (!groupDefaultsHashes.has(hash(resource.data))) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
+      if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
     } else if (resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
     } else throw new Error("Unapproved managed resource: "+resource.name);

@@ -127,24 +127,15 @@ test('resource audit rejects source names, changed contents, aliases and hidden 
  }
 });
 
-test('alpha.4 resource approval accepts only the reviewed line-label defaults',()=>{
- const entries=themeEntries();
- entries[0].data=readFileSync(new URL('./fixtures/GroupThemeDefaults-alpha4.css',import.meta.url));
- const fixture=resourceMetadata(entries);
- assert.doesNotThrow(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss));
- entries[0].data=Buffer.concat([entries[0].data,Buffer.from('/* unreviewed */')]);
- const changed=resourceMetadata(entries);
- assert.throws(()=>auditManagedResources(changed.streams,changed.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
-});
-
-test('0.3.1 resource approval retains the exact reviewed emoji fallback defaults',()=>{
- const entries=themeEntries();
- entries[0].data=readFileSync(new URL('./fixtures/GroupThemeDefaults-0.3.1.css',import.meta.url));
- const fixture=resourceMetadata(entries);
- assert.doesNotThrow(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss));
- entries[0].data=Buffer.concat([entries[0].data,Buffer.from('/* unreviewed */')]);
- const changed=resourceMetadata(entries);
- assert.throws(()=>auditManagedResources(changed.streams,changed.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
+test('resource approval rejects superseded styling defaults',()=>{
+ const withoutShapeDefaults=groupCss.toString().replace(/^    --shape-[^\n]+\n/gm,'');
+ const withoutEmojiDefaults=withoutShapeDefaults.replace('Noto-COLRv1','NotoColorEmoji');
+ const withoutLineLabelDefaults=withoutEmojiDefaults.replace(/^    --line-label-background-[^\n]+\n/gm,'');
+ for(const css of [withoutShapeDefaults,withoutEmojiDefaults,withoutLineLabelDefaults]) {
+  const entries=themeEntries();entries[0].data=Buffer.from(css);
+  const fixture=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
+ }
 });
 
 test('automatic shape resource approval accepts only the reviewed radius and shadow defaults',()=>{
