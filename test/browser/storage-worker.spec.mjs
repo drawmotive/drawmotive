@@ -52,3 +52,67 @@ test('origin-wide writer leases reject a second Worker and allow a new writer af
   });
   expect(result).toEqual({ occupied: 'StorageConflict', expired: 'StaleDocumentSession', differentLease: true });
 });
+
+test('independent document Workers restore an incremental suffix and retain ACK identity evidence', async ({ page }) => {
+  await page.route('**/storage-worker-test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html>' }));
+  await page.goto('/storage-worker-test');
+  const result = await page.evaluate(async () => {
+    indexedDB.open = () => { throw new Error('SDK attempted main-thread IndexedDB'); };
+    const { createDocumentWorkerClient } = await import('/src/storage/worker-client.js');
+    const databaseName = 'incremental-browser-' + crypto.randomUUID();
+    const a = { namespace: 'account', documentId: 'a', persistence: 'persistent' };
+    const b = { ...a, documentId: 'b' };
+    let first = await createDocumentWorkerClient({ databaseName });
+    const second = await createDocumentWorkerClient({ databaseName });
+    let session = await first.openSession(a);
+    const other = await second.openSession(b);
+    const snapshot = { batchId: 'snapshot', expectedRevision: null,
+      checkpoint: { revision: 'r1', payload: new Uint8Array([10]), state: new Uint8Array([1]), clock: { author: 1 } }, outbox: [] };
+    await first.commitBatch(session, snapshot);
+    await second.commitBatch(other, { ...snapshot, checkpoint: { ...snapshot.checkpoint, payload: new Uint8Array([99]) } });
+    const append = { batchId: 'append', expectedRevision: 'r1',
+      checkpoint: { revision: 'r2', payload: new Uint8Array(), state: new Uint8Array([2]), clock: { author: 2 } },
+      journal: [{ id: 'tx', payload: new Uint8Array([20]) }], outbox: [{ id: 'tx', revision: 'r2', payload: new Uint8Array([20]) }] };
+    await first.commitBatch(session, append);
+    await first.dispose(); first = await createDocumentWorkerClient({ databaseName }); session = await first.openSession(a);
+    const restored = await first.readCheckpoint(session);
+    await first.acknowledgeOutbox(session, ['tx']);
+    await first.commitBatch(session, { ...snapshot, batchId: 'new-snapshot', expectedRevision: 'r2', checkpoint: { ...snapshot.checkpoint, revision: 'r3' } });
+    await first.commitBatch(session, append);
+    let conflict;
+    try { await first.commitBatch(session, { ...append, batchId: 'changed-id', expectedRevision: 'r3', journal: [{ id: 'tx', payload: new Uint8Array([21]) }] }); }
+    catch (error) { conflict = error.code; }
+    const final = await first.readCheckpoint(session);
+    const pending = await first.readOutbox(session), independent = await second.readCheckpoint(other);
+    await first.dispose(); await second.dispose();
+    return { snapshot: [...restored.payload], state: [...restored.state], journal: restored.journal.map(row => ({ id: row.id, bytes: [...row.payload] })),
+      revision: restored.revision, finalRevision: final.revision, finalJournal: final.journal ?? [], pending, independent: [...independent.payload], conflict };
+  });
+  expect(result).toEqual({ snapshot: [10], state: [2], journal: [{ id: 'tx', bytes: [20] }], revision: 'r2', finalRevision: 'r3', finalJournal: [], pending: [], independent: [99], conflict: 'BatchConflict' });
+});
+
+test('canonical migration holds the legacy writer lease and preserves the source document', async ({ page }) => {
+  await page.route('**/storage-worker-test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html>' }));
+  await page.goto('/storage-worker-test');
+  const result = await page.evaluate(async () => {
+    const { createDocumentWorkerClient } = await import('/src/storage/worker-client.js');
+    const databaseName = 'alias-browser-' + crypto.randomUUID();
+    const legacy = { namespace: 'account', documentId: 'account:legacy', persistence: 'persistent' };
+    const canonical = { ...legacy, documentId: 'account:canonical', legacyDocumentId: legacy.documentId };
+    const source = await createDocumentWorkerClient({ databaseName }), target = await createDocumentWorkerClient({ databaseName });
+    const session = await source.openSession(legacy);
+    await source.commitBatch(session, { batchId: 'one', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([42]), clock: {} }, outbox: [{ id: 'pending', revision: 'r1', payload: new Uint8Array([43]) }] });
+    let occupied;
+    try { await target.openSession(canonical); } catch (error) { occupied = error.code; }
+    await source.closeSession(session);
+    const migrated = await target.openSession(canonical);
+    let protectedSource;
+    try { await source.openSession(legacy); } catch (error) { protectedSource = error.code; }
+    const checkpoint = await target.readCheckpoint(migrated);
+    await target.acknowledgeOutbox(migrated, ['pending']); await target.closeSession(migrated);
+    const previous = await source.openSession(legacy), pending = await source.readOutbox(previous);
+    await source.dispose(); await target.dispose();
+    return { occupied, protectedSource, payload: [...checkpoint.payload], recoveryPending: pending.map(row => row.id) };
+  });
+  expect(result).toEqual({ occupied: 'StorageConflict', protectedSource: 'StorageConflict', payload: [42], recoveryPending: ['pending'] });
+});

@@ -12,11 +12,13 @@ const identifier = value => typeof value === 'string' && !!value.trim();
 export function createPlatformServices({ persistence, replication = false,
   workerFactory, workerUrls = {}, createDocumentStore, createResourceLoader, preferenceStore = createPreferenceStore() } = {}) {
   const mode = persistence?.mode ?? 'memory';
-  if (!['memory', 'persistent'].includes(mode) || persistence && Object.keys(persistence).some(key => !['mode', 'namespace', 'documentId'].includes(key))
+  if (!['memory', 'persistent'].includes(mode) || persistence && Object.keys(persistence).some(key => !['mode', 'namespace', 'documentId', 'legacyDocumentId'].includes(key))
+      || persistence?.legacyDocumentId !== undefined && !identifier(persistence.legacyDocumentId)
       || mode === 'persistent' && (!identifier(persistence.namespace) || !identifier(persistence.documentId)))
     throw new TypeError('Persistent storage requires an opaque namespace and documentId.');
   const options = Object.freeze({ persistence: mode,
-    namespace: persistence?.namespace ?? 'temporary', documentId: persistence?.documentId ?? 'temporary' });
+    namespace: persistence?.namespace ?? 'temporary', documentId: persistence?.documentId ?? 'temporary',
+    ...(persistence?.legacyDocumentId === undefined ? {} : { legacyDocumentId: persistence.legacyDocumentId }) });
   let store, session, opening, resources, loadingResources, closing, disposed = false;
   const pending = new Set();
   const commitListeners = new Set();

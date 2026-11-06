@@ -12,21 +12,33 @@ export interface DocumentSessionOptions {
   namespace: string;
   documentId: string;
   persistence: DocumentPersistenceMode;
+  /** Explicit previous identity in the same namespace; never inferred from IDs. */
+  legacyDocumentId?: string;
 }
-/** An opaque engine checkpoint contains object state, transactions, clock and history. */
+/** An opaque scene snapshot plus the latest engine replica metadata. */
 export interface DocumentCheckpoint {
   readonly revision: string;
   readonly payload: Uint8Array;
   /** Engine-supplied delivery metadata, committed atomically with the opaque payload. */
   readonly clock: Readonly<Record<string, number>>;
+  /** Small engine metadata. Omission retains it on append and clears it on snapshot replacement. */
+  readonly state?: Uint8Array;
+  /** Read result only: ordered immutable transactions accepted after the returned snapshot. */
+  readonly journal?: readonly DocumentJournalEntry[];
+}
+/** Stable causal identity and original serialized engine transaction bytes. */
+export interface DocumentJournalEntry {
+  readonly id: string;
+  readonly payload: Uint8Array;
 }
 export interface DocumentOutboxEntry {
   readonly id: string;
   readonly revision: string;
   readonly payload: Uint8Array;
 }
-/** Checkpoint, new outbox entries and the durable batch receipt commit atomically.
- * Objects, transactions, clock and undo/redo history remain one engine checkpoint.
+/** Snapshot/metadata, journal, outbox and the durable batch receipt commit atomically.
+ * An empty checkpoint payload retains the previous snapshot and appends the journal.
+ * A nonempty payload replaces the snapshot, including this batch's journal entries.
  * expectedRevision mismatches reject without writing any part. A repeated batchId
  * with identical content returns its original receipt; different content rejects. */
 export interface DocumentCommitBatch {
@@ -36,6 +48,8 @@ export interface DocumentCommitBatch {
   /** New entries only, upserted by stable operation ID. This is not a full replacement.
    * Batch replay must not recreate entries removed by a transport acknowledgement. */
   readonly outbox: readonly DocumentOutboxEntry[];
+  /** New immutable transactions only; existing IDs must retain exactly the same bytes. */
+  readonly journal?: readonly DocumentJournalEntry[];
 }
 export interface DocumentCommitReceipt {
   readonly batchId: string;

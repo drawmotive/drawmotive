@@ -22,7 +22,7 @@ export interface EditorCreateOptions {
   /** Native text input policy; independent of host web controls. Defaults to inline. */
   textEditing?: TextEditingMode;
   /** One instance owns one logical document. Switching documents recreates the instance. */
-  persistence?: { mode: 'memory'; namespace?: string; documentId?: string } | { mode: 'persistent'; namespace: string; documentId: string };
+  persistence?: { mode: 'memory'; namespace?: string; documentId?: string } | { mode: 'persistent'; namespace: string; documentId: string; legacyDocumentId?: string };
   workerFactory?: EditorWorkerFactory;
   workerUrls?: { document?: string | URL; resource?: string | URL };
   signal?: AbortSignal;
@@ -104,6 +104,8 @@ export interface EditorInstance {
   replaceDocument(raw: string): Promise<void>;
   replacePngDocument(base64: string): Promise<void>;
   replaceTextGraph(source: string): Promise<void>;
+  /** Adds a fresh graph in one undoable transaction; model placement defaults to the origin. */
+  importTextGraph(source: string, position?: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
   clearDocument(): Promise<void>;
   /** Explicitly retries the retained identical storage batch after an unknown receipt. */
   retryPersistence():Promise<void>;
