@@ -5,7 +5,8 @@ const validClock = value => value !== null && typeof value === 'object' && !Arra
 
 export function documentKey(options) {
   if (!options || !['namespace', 'documentId'].every(key => id(options[key])) ||
-      !['persistent', 'memory'].includes(options.persistence))
+      !['persistent', 'memory'].includes(options.persistence) ||
+      options.legacyDocumentId !== undefined && !id(options.legacyDocumentId))
     throw storageError('InvalidDocumentSession', 'A namespace, document and persistence mode are required.');
   return JSON.stringify([options.namespace, options.documentId]);
 }
@@ -37,37 +38,58 @@ export function createDocumentOwner() {
     },
   };
 }
+/** Copy and validate before yielding; every retained byte belongs exclusively to storage. */
 export async function prepareBatch(value) {
-  // Clone before the first await: callers cannot mutate an in-flight database commit.
   const batch = structuredClone(value);
+  // .NET interop emits null for omitted optional fields. Canonicalize it before
+  // validation/equality; the checkpoint journal is an output-only replay suffix.
+  if (batch?.checkpoint?.state === null) delete batch.checkpoint.state;
+  if (batch?.journal === null) delete batch.journal;
+  if (batch?.checkpoint) delete batch.checkpoint.journal;
+  const validEntries = entries => Array.isArray(entries) && entries.every(entry => id(entry?.id) && entry.payload instanceof Uint8Array) &&
+    new Set(entries.map(entry => entry.id)).size === entries.length;
   if (!batch || !id(batch.batchId) || !(batch.expectedRevision === null || id(batch.expectedRevision)) ||
       !id(batch.checkpoint?.revision) || !(batch.checkpoint.payload instanceof Uint8Array) || !validClock(batch.checkpoint.clock) ||
-      !Array.isArray(batch.outbox) || batch.outbox.some(entry => !id(entry.id) || !id(entry.revision) || !(entry.payload instanceof Uint8Array)) ||
-      new Set(batch.outbox.map(entry => entry.id)).size !== batch.outbox.length)
-    throw storageError('InvalidCommitBatch', 'A complete checkpoint and distinct outbox records are required.');
-  // structuredClone retains SharedArrayBuffer memory and oversized view backing
-  // buffers. Persist compact, independently owned ordinary ArrayBuffers instead.
+      batch.checkpoint.state !== undefined && !(batch.checkpoint.state instanceof Uint8Array) ||
+      !validEntries(batch.outbox) || batch.outbox.some(entry => !id(entry.revision)) ||
+      batch.journal !== undefined && !validEntries(batch.journal))
+    throw storageError('InvalidCommitBatch', 'A complete checkpoint and distinct immutable records are required.');
+  // SharedArrayBuffer and oversized views must become compact ordinary buffers.
   batch.checkpoint.payload = new Uint8Array(batch.checkpoint.payload);
-  for (const entry of batch.outbox) entry.payload = new Uint8Array(entry.payload);
-  const metadata = new TextEncoder().encode(JSON.stringify([batch.batchId, batch.expectedRevision,
-    batch.checkpoint.revision, Object.entries(batch.checkpoint.clock).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
-    batch.checkpoint.payload.length, batch.outbox.map(entry => [entry.id, entry.revision, entry.payload.length])]));
-  const arrays = [metadata, batch.checkpoint.payload, ...batch.outbox.map(entry => entry.payload)];
-  const joined = new Uint8Array(arrays.reduce((length, part) => length + part.length, 0));
-  let offset = 0; for (const part of arrays) { joined.set(part, offset); offset += part.length; }
-  const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', joined)), byte => byte.toString(16).padStart(2, '0')).join('');
-  return { batch, fingerprint };
+  if (batch.checkpoint.state !== undefined) batch.checkpoint.state = new Uint8Array(batch.checkpoint.state);
+  for (const entry of [...batch.outbox, ...(batch.journal ?? [])]) entry.payload = new Uint8Array(entry.payload);
+  return { batch };
 }
 export function copyAcknowledgements(ids) {
   if (!Array.isArray(ids) || ids.some(value => !id(value)))
     throw storageError('InvalidAcknowledgement', 'Acknowledgements require explicit operation IDs.');
   return [...ids];
 }
-export function equalOutbox(left, right) {
-  return left.revision === right.revision && left.payload.length === right.payload.length &&
-    left.payload.every((byte, index) => byte === right.payload[index]);
+export function equalBytes(left, right) {
+  return left === undefined || right === undefined ? left === right : left.length === right.length &&
+    left.every((byte, index) => byte === right[index]);
 }
-export function checkReceipt(receipt, fingerprint) {
-  if (receipt.fingerprint !== fingerprint) throw storageError('BatchConflict', 'A batch ID cannot refer to different content.');
+export function equalOutbox(left, right) {
+  return left.revision === right.revision && equalBytes(left.payload, right.payload);
+}
+/** Equality covers the original request, rather than a digest or the latest mutable head. */
+export function equalBatch(left, right) {
+  const entriesEqual = (a, b, outbox = false) => a === undefined || b === undefined ? a === b :
+    a.length === b.length && a.every((entry, index) => entry.id === b[index].id &&
+      (!outbox || entry.revision === b[index].revision) && equalBytes(entry.payload, b[index].payload));
+  const a = left.checkpoint, b = right.checkpoint;
+  return left.batchId === right.batchId && left.expectedRevision === right.expectedRevision && a.revision === b.revision &&
+    equalBytes(a.payload, b.payload) && equalBytes(a.state, b.state) &&
+    Object.keys(a.clock).length === Object.keys(b.clock).length && Object.entries(a.clock).every(([key, value]) => b.clock[key] === value) &&
+    entriesEqual(left.outbox, right.outbox, true) && entriesEqual(left.journal, right.journal);
+}
+export function checkReceipt(receipt, batch, original = receipt.batch) {
+  if (!equalBatch(original, batch)) throw storageError('BatchConflict', 'A batch ID cannot refer to different content.');
   return { batchId: receipt.batchId, revision: receipt.revision };
+}
+/** Empty payloads append to the existing snapshot; only a replacing snapshot clears omitted state. */
+export function checkpointMetadata(previous, checkpoint) {
+  const { revision, clock } = checkpoint;
+  const state = checkpoint.state ?? (checkpoint.payload.length === 0 ? previous?.state : undefined);
+  return { revision, clock, ...(state === undefined ? {} : { state }) };
 }

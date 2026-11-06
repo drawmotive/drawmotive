@@ -22,7 +22,7 @@ export interface EditorCreateOptions {
   /** Native text input policy; independent of host web controls. Defaults to inline. */
   textEditing?: TextEditingMode;
   /** One instance owns one logical document. Switching documents recreates the instance. */
-  persistence?: { mode: 'memory'; namespace?: string; documentId?: string } | { mode: 'persistent'; namespace: string; documentId: string };
+  persistence?: { mode: 'memory'; namespace?: string; documentId?: string } | { mode: 'persistent'; namespace: string; documentId: string; legacyDocumentId?: string };
   workerFactory?: EditorWorkerFactory;
   workerUrls?: { document?: string | URL; resource?: string | URL };
   signal?: AbortSignal;

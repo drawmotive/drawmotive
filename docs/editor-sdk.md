@@ -456,6 +456,32 @@ are committed atomically. Private application composition may register delivery;
 its offline outbox is distinct from standalone local history and is not a public
 editor API.
 
+Each account namespace and document has its own IndexedDB database. Its name
+encodes the complete identity rather than a hash, and rows do not repeat the
+account/document key. A normal edit appends the original immutable transaction
+bytes, small replica metadata, and a receipt; it does not rewrite the scene or
+previous history. The private storage boundary returns the latest snapshot with
+the ordered journal suffix accepted after that snapshot. Replacing the snapshot
+advances this boundary while retaining immutable evidence for old receipt and
+transaction-identity checks.
+
+An empty checkpoint payload retains the previous snapshot. Omitted replica
+metadata retains the previous metadata on an append, and clears it when a
+nonempty snapshot replaces the scene. Receipts compare every original request
+field and exact bytes, independent of the current scene. Outbox acknowledgements
+remove pending membership while retaining immutable identity evidence, so neither
+an identical retry nor a later edit can resurrect an acknowledged record.
+
+Existing shared-database documents migrate once under the same writer lease.
+When a host changes a document's identity, it may supply the explicit
+`persistence.legacyDocumentId` in the same namespace; storage locks both identities
+and copies the prior document to the canonical identity. Storage never infers
+aliases from ID formats. Migration leaves the source untouched for recovery,
+and explicit deletion keeps the migration marker to prevent reimporting old
+pending records. Legacy receipts contain only hashes, so their unchanged source
+remains necessary to verify old retries; new receipts never persist fingerprints
+and always use original immutable bytes.
+
 The two build artifacts are `dist/workers/document.worker.js` and `dist/workers/resource.worker.js`. Both are self-contained classic Worker scripts. If the bundler/host does not preserve their module-relative URLs, copy these exact files from the same package version into your static asset pipeline and provide their served locations:
 
 ```javascript
