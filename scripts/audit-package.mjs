@@ -3,6 +3,7 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { parseNpmPack } from "../.release/release-registry.mjs";
 
 // StandardTheme has a public byte-for-byte counterpart; additive defaults do not.
 // Retain historical approval so existing distributions remain auditable. Each
@@ -223,12 +224,11 @@ export function auditPackageFiles(root, relativePaths) {
 /** --ignore-scripts prevents recursion when this is invoked by prepack. */
 export function auditPackage(root = fileURLToPath(new URL("../", import.meta.url))) {
   const command = process.platform === "win32" ? process.execPath : "npm";
-  const args = ["pack", "--dry-run", "--ignore-scripts", "--json"];
+  const args = ["pack", "--dry-run", "--ignore-scripts", "--json", "--workspaces=false"];
   if (process.platform === "win32") args.unshift(process.env.npm_execpath ?? path.join(path.dirname(process.execPath), "node_modules/npm/bin/npm-cli.js"));
-  const packed = JSON.parse(execFileSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }));
-  if (packed.length !== 1 || !Array.isArray(packed[0].files)) throw new Error("Unexpected npm pack file list");
-  const files = packed[0].files.map(file => file.path);
   const pkg = JSON.parse(readFileSync(path.join(root,"package.json"),"utf8"));
+  const packed = parseNpmPack(execFileSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }), pkg.name);
+  const files = packed.files.map(file => file.path);
   for (const name of Object.keys({...pkg.dependencies,...pkg.peerDependencies})) {
     if (/^(?:@mantine[/]|react(?:-dom)?$)/.test(name)) throw new Error("Private UI dependency cannot be published: " + name);
   }
