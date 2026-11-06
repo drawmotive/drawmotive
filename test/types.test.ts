@@ -1,4 +1,4 @@
-import { createEditor, EditorError, type EditorSelectionSnapshot, type EditorSnapshot, type EditorState } from '@drawmotive/editor';
+import { createEditor, EditorError, type EditorSnapshot, type EditorState } from '@drawmotive/editor';
 import { createEditor as browserEditor } from '@drawmotive/editor/browser';
 
 async function mount(container: HTMLElement) {
@@ -9,11 +9,8 @@ async function mount(container: HTMLElement) {
   await editor.replaceDocument(result.raw!);
   await editor.replacePngDocument(result.png!.base64);
   await editor.replaceTextGraph('B -> C');
-  const imported: EditorSelectionSnapshot = await editor.importTextGraph('C -> D');
-  await editor.importTextGraph('D -> E', { x: -25, y: 40 });
-  // @ts-expect-error Import placement requires both model coordinates.
-  await editor.importTextGraph('E -> F', { x: 0 });
-  void imported;
+  // @ts-expect-error Website import belongs to its private runtime.
+  await editor.importTextGraph('C -> D');
   const scene = await editor.getScene();
   await editor.editScene({revision:scene.revision,description:'Update document',changes:[{path:['title'],value:'Example'},
     ...scene.items.map(item => ({itemId:item.id,path:['xData','custom:label'],value:'Host annotation'}))]});

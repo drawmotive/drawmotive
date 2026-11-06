@@ -105,7 +105,6 @@ export interface EditorInstance {
   replacePngDocument(base64: string): Promise<void>;
   replaceTextGraph(source: string): Promise<void>;
   /** Adds a fresh graph in one undoable transaction; model placement defaults to the origin. */
-  importTextGraph(source: string, position?: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
   clearDocument(): Promise<void>;
   /** Explicitly retries the retained identical storage batch after an unknown receipt. */
   retryPersistence():Promise<void>;
