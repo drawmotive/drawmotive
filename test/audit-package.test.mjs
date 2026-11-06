@@ -179,3 +179,22 @@ test("producer source paths fail while third-party toolchain paths and JS licens
   assert.throws(() => auditPackageFiles(root, ["private.wide.js"]), /Private producer source path/);
   assert.equal(auditPackageFiles(root, ["native.js"]).files, 1);
 });
+
+test('current shape defaults pass the package audit only with their exact reviewed bytes', t => {
+  const filename = 'generated/editor/_framework/Graphics.Core.current.wasm', theme = 'generated/editor/static/themes.css';
+  const reviewed = readFileSync(new URL('./fixtures/GroupThemeDefaults-shape-defaults.css', import.meta.url));
+  const entries = themeEntries(); entries[0].data = reviewed;
+  const root = fixture(t, { [filename]: resourceAssembly(resourceMetadata(entries)), [theme]: standardCss });
+  assert.deepEqual(auditPackageFiles(root, [filename, theme]), { files: 2, wasmFiles: 1, managedAssemblies: 1 });
+  for (const [before, after] of [
+    ['--shape-corner-radius: 10px', '--shape-corner-radius: 11px'],
+    ['--shape-shadow-sigma: 0', '--shape-shadow-sigma: 1'],
+    ['--shape-shadow-offset-y: 0', '--shape-shadow-offset-y: 1'],
+    ['--shape-shadow-opacity: 0', '--shape-shadow-opacity: 1'],
+    ['}', '} /* unreviewed content */'],
+  ]) {
+    entries[0].data = Buffer.from(reviewed.toString('utf8').replace(before, after));
+    writeFileSync(path.join(root, filename), resourceAssembly(resourceMetadata(entries)));
+    assert.throws(() => auditPackageFiles(root, [filename, theme]), /Unreviewed GroupThemeDefaults.css/);
+  }
+});
