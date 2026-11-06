@@ -137,6 +137,30 @@ test('alpha.4 resource approval accepts only the reviewed line-label defaults',(
  assert.throws(()=>auditManagedResources(changed.streams,changed.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
 });
 
+test('0.3.1 resource approval retains the exact reviewed emoji fallback defaults',()=>{
+ const entries=themeEntries();
+ entries[0].data=readFileSync(new URL('./fixtures/GroupThemeDefaults-0.3.1.css',import.meta.url));
+ const fixture=resourceMetadata(entries);
+ assert.doesNotThrow(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss));
+ entries[0].data=Buffer.concat([entries[0].data,Buffer.from('/* unreviewed */')]);
+ const changed=resourceMetadata(entries);
+ assert.throws(()=>auditManagedResources(changed.streams,changed.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
+});
+
+test('automatic shape resource approval accepts only the reviewed radius and shadow defaults',()=>{
+ const fixture=resourceMetadata(themeEntries());
+ assert.doesNotThrow(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss));
+ for(const replacement of ['--shape-corner-radius: 11px;', '--shape-shadow-sigma: 1;', '--shape-shadow-offset-y: 1;', '--shape-shadow-opacity: 0.1;']) {
+  const entries=themeEntries();
+  const property=replacement.split(':')[0];
+  const current=new RegExp(property+': [^;]+;');
+  assert.match(entries[0].data.toString(),current);
+  entries[0].data=Buffer.from(entries[0].data.toString().replace(current,replacement));
+  const changed=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(changed.streams,changed.resources,'Graphics.Core.wasm',standardCss),/Unreviewed/);
+ }
+});
+
 test('package resource approval requires the theme counterpart in its published file list',t=>{
  const filename='generated/editor/_framework/Graphics.Core.abc.wasm',theme='generated/editor/static/themes.css';
  const root=fixture(t,{[filename]:resourceAssembly(resourceMetadata(themeEntries())),[theme]:standardCss});

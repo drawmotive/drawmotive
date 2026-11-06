@@ -1,5 +1,9 @@
 /* Additive standard styling schema. Palette leaves always belong to the active host theme. */
 .styling.default {
+    --shape-corner-radius: 10px;
+    --shape-shadow-sigma: 0;
+    --shape-shadow-offset-y: 0;
+    --shape-shadow-opacity: 0;
     --text-body-font-family: var(--font-family);
     --text-fallback-font-families: Noto-COLRv1, NotoSansSC-Regular;
     --text-body-font-size: medium;

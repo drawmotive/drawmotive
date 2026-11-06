@@ -11,6 +11,7 @@ const groupDefaultsHashes = new Set([
   "27496b24a6086fa1b45e78c7f9fe07ce431533647ea51acda71d0df63a5deecb", // 166386683b3b90a4917eb4cfc1a04361b30f1710
   "9025ba845d24308a8687379b6e7983f7e40df7c1c5e1b123315202a1c7cd473b", // be84f251d1a3c5154879ffb1706f550cf2e27b7a: two public line-label CSS defaults
   "fef7b0df57dc6853aa126b24e0d10d273b7516f8c89e83a25fb344f8bc1e3060", // Shared Noto-COLRv1 emoji fallback; other default tokens are unchanged.
+  "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046", // 96e7d2a95bda0a10ba32f7c650c0f77567d0639f: reviewed 10px shape radius and disabled shadow defaults.
 ]);
 const prefix = "Graphics.Core.Styles.Resources.";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
