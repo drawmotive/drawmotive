@@ -129,6 +129,7 @@ Unless stated otherwise, commands return promises. Await dependent operations. R
 | `replaceDocument(raw: string)` | Validates an editable base64 document, replaces content and resets selection/history |
 | `replacePngDocument(base64: string)` | Opens a PNG containing an embedded editable document; pass bare base64, not a data URL |
 | `replaceTextGraph(source: string)` | Compiles TextGraph into a replacement document |
+| `importTextGraph(source: string, position?)` | Adds a fresh TextGraph graph in one undoable transaction; returns `EditorSelectionSnapshot` |
 | `clearDocument()` | Replaces with an empty document and resets history |
 | `retryPersistence()` | Explicitly confirms/retries a retained identical local storage batch after an uncertain receipt; does not repeat the edit |
 | `exportSnapshot(options)` | Returns `EditorSnapshot` containing requested formats from one revision |
@@ -139,7 +140,9 @@ Unless stated otherwise, commands return promises. Await dependent operations. R
 | `zoom(direction)` | Display-only `in`, `out` or `reset` |
 | `setSketchyMode(enabled: boolean)` | Changes document sketch appearance through an undoable transaction |
 
-Invalid imports preserve the current document. Operations requiring an idle document reject unfinished gestures/text input rather than silently cancelling them. TextGraph-to-canvas is one-way: canvas edits do not rewrite TextGraph source; calling `replaceTextGraph()` again replaces prior edits. There is no public incremental TextGraph merge or mutable scene-object API.
+Invalid imports preserve the current document. Operations requiring an idle document reject unfinished gestures/text input rather than silently cancelling them. TextGraph-to-canvas is one-way: canvas edits do not rewrite TextGraph source.
+
+Use `importTextGraph(source, { x, y })` to add content to the current document, including during collaboration. Placement uses drawing/model coordinates and defaults to `{ x: 0, y: 0 }`; both coordinates must be finite numbers. The imported graph receives fresh IDs while preserving its internal connections and all existing document objects. It becomes the returned selection and can be undone in one step through the ordinary CRDT transaction history. Repeated imports add separate copies. `replaceTextGraph(source)` instead replaces prior content and edits, resets history, and rejects replacement during collaboration. Import does not incrementally merge later source changes into an existing graph.
 
 ### Export options and return values
 
