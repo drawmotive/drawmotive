@@ -16,7 +16,7 @@ test('canvas session exposes independent text policy without web chrome',async t
  const h=host(t),editor=await h.mount({textEditing:'external'});t.after(()=>editor.dispose());
  assert.deepEqual(h.context.options,{textEditing:'external'});
  assert.equal(editor.textEditing,'external');
- for(const name of ['ui','onUiChanged','invokeAction','setActionState','importTextGraph','request'])assert.equal(editor[name],undefined);
+ for(const name of ['ui','onUiChanged','invokeAction','setActionState'])assert.equal(editor[name],undefined);
 });
 test('disposal start notifies host lifetimes synchronously before blocked cleanup',async t=>{
  const h=host(t),editor=await h.mount({disposeTimeoutMs:1000});let release,events=0;
@@ -67,30 +67,6 @@ test('private composition supplies replication without extending the public hand
  let changes=0;replication.onChanged(()=>changes++);h.context.emit('stateChanged',state({revision:'next'}));assert.equal(changes,0);
  await h.context.platform('storage.commit',{batch:{batchId:'one',expectedRevision:null,checkpoint:{revision:'r1',payload:new Uint8Array([1]),clock:{author:1}},outbox:[{id:'author:1',revision:'r1',payload:new Uint8Array([2])}]}});
  assert.equal(changes,1);assert.deepEqual((await replication.read()).clock,{author:1});await replication.acknowledge(['author:1']);assert.deepEqual((await replication.read()).outbox,[]);await editor.dispose();
-});
-test('private host requests share command ordering, snapshots and disposal with the public editor',async t=>{
- const h=host(t),{editor,request}=await h.mount({}, {replication:true});let finish;
- h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):{items:[{id:'new'}]});
- const blocking=editor.undo();await new Promise(setImmediate);
- const args={position:{x:-25,y:40}};
- let pending,closing;
- try {
-  pending=request('host.operation',args);args.position.x=900;
-  closing=editor.dispose();
-  assert.equal(editor.lifecycle,'disposing');assert.equal(h.calls.length,1);
-  await assert.rejects(request('host.operation'),{code:'EditorDisposed'});
- } finally {finish(null);}
- await blocking;const result=await pending;await closing;
- assert.deepEqual(h.calls.at(-1),{method:'host.operation',args:{position:{x:-25,y:40}}});
- assert.deepEqual(result,{items:[{id:'new'}]});assert.ok(Object.isFrozen(result.items[0]));
- assert.equal(h.container.childElementCount,0);
-});
-test('private host failures preserve structured errors and leave the shared queue usable',async t=>{
- const {EditorError}=await import('../src/editor-session.js');
- const h=host(t),{editor,request}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
- h.behavior(()=>{throw Object.assign(new Error('Invalid host input'),{code:'InvalidArgument'});});
- await assert.rejects(request('host.operation'),error=>error instanceof EditorError&&error.code==='InvalidArgument');
- h.behavior(()=>state());assert.equal((await editor.getState()).health,'healthy');
 });
 test('startup platform preferences and cache status are retained',async t=>{
  const h=host(t);h.dom.window.localStorage.setItem('drawmotive.editor.preferences.v1','{"darkTheme":true}');const editor=await h.mount();assert.deepEqual(await h.context.platform('preferences.get'),{darkTheme:true});

@@ -9,8 +9,6 @@ async function mount(container: HTMLElement) {
   await editor.replaceDocument(result.raw!);
   await editor.replacePngDocument(result.png!.base64);
   await editor.replaceTextGraph('B -> C');
-  // @ts-expect-error Website import belongs to its private runtime.
-  await editor.importTextGraph('C -> D');
   const scene = await editor.getScene();
   await editor.editScene({revision:scene.revision,description:'Update document',changes:[{path:['title'],value:'Example'},
     ...scene.items.map(item => ({itemId:item.id,path:['xData','custom:label'],value:'Host annotation'}))]});

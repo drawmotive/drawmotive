@@ -250,9 +250,7 @@ export async function createEditorSession(options = {}, privateOptions) {
     if (!latestState) throw new EditorError('InvalidRuntimeResponse','The canvas did not publish its initial state.');
     lifecycle = 'ready';
     clearTimeout(startupTimer); signal?.removeEventListener('abort',abort);
-    // Private hosts share ordering, immutable snapshots and disposal with public operations.
-    // The exported editor factory never returns this composition handle.
-    return privateOptions?.replication ? Object.freeze({ editor: instance, request, replication: Object.freeze({
+    return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
     read: platform.replication.read,
     apply: transactions => request('replica.apply', { transactions }),

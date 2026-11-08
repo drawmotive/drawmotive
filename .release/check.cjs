@@ -225,7 +225,7 @@ function verifyEditor(root, expected, sourceCommit, readJson, report) {
   const generated = path.join(root, "generated");
   const manifest = readJson(path.join(generated, "editor-manifest.json"), `${name} native manifest`);
   if (!record(manifest)) { if (manifest !== undefined) report(`${name} native manifest must be an object.`); return; }
-  if (manifest.schemaVersion !== 1 || manifest.runtimeVersion !== 1) report(`${name} editor schemaVersion must be 1 and runtimeVersion must be 1.`);
+  if (manifest.schemaVersion !== 1 || manifest.runtimeVersion !== 1 || manifest.protocolVersion !== undefined) report(`${name} editor schemaVersion must be 1 and runtimeVersion must be 1 without a protocolVersion.`);
   if (manifest.packageName !== name || manifest.packageVersion !== expected) report(`${name} native manifest identity must match ${name}@${expected}.`);
   if (manifest.privateSource?.project !== "Editor.Client" || !/^[a-f0-9]{40}$/.test(manifest.privateSource?.commit ?? "")) report(`${name} native source provenance must name an exact Editor.Client commit.`);
   if (manifest.privateSource?.development === true) report(`${name} contains development native assets.`);

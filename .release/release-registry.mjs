@@ -9,6 +9,19 @@ export { compareReleaseVersions };
 export const registry = 'https://registry.npmjs.org/';
 export const integrity = bytes => 'sha512-' + createHash('sha512').update(bytes).digest('base64');
 
+/** npm 12 names each report entry. Bind a single-package pack to its requested
+ * identity before release auditors trust its file list or retained archive. */
+export function parseNpmPack(stdout, expectedName) {
+  const report = JSON.parse(stdout);
+  assert.ok(report && typeof report === 'object' && !Array.isArray(report), 'Expected an npm pack package-name keyed report');
+  assert.deepEqual(Object.keys(report), [expectedName], 'Expected exactly the requested npm pack package');
+  const packed = report[expectedName];
+  assert.ok(packed && typeof packed === 'object' && !Array.isArray(packed), 'Invalid npm pack package entry');
+  assert.equal(packed.name, expectedName, 'Unexpected npm pack package identity');
+  assert.ok(Array.isArray(packed.files), 'Invalid npm pack file list');
+  return packed;
+}
+
 /** A registry receipt must describe the real archive; visible conflicts fail immediately. */
 export async function npmState(receipt, request = fetch) {
   assert.match(receipt.name, /^(?:@[a-z0-9][a-z0-9._-]*[/])?[a-z0-9][a-z0-9._-]*$/);
