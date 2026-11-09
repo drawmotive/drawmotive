@@ -40,3 +40,11 @@
 - Missing or changed immutable journal/outbox evidence must reject a receipt retry.
 - Archival origin records remain in original recovery order, but never enter causal replay suffixes or the delivery outbox.
 - Private portable snapshot export owns decoded bytes and install/archive inputs remain detached across queued dispatch.
+
+## Native Recovery Adapter Follow-up
+
+- [x] Add adapter regressions for a captured server clock, a native-ordered missing suffix, decoded byte ownership, empty archives, and invalid input/response clocks and records. Raw `storage.journal` retains the full physical archive, including origin records.
+- [x] Confirm RED before production changes: 140 Node tests, 136 pass, four intended adapter failures.
+- [x] Route private `readJournal(serverClock = {})` through `replica.readJournal` with `{ clock }`. Native proves completeness and causal order and excludes origin records; SDK validates the DTO and owns decoded bytes without reordering.
+- [x] Share private clock validation with portable snapshots, preserving legal prototype-name author identities.
+- [x] Verify GREEN: 140/140 Node tests and SDK type/Worker build. Full editor browser coverage still depends on the integrated native asset candidate.

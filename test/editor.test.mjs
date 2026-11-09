@@ -63,7 +63,7 @@ test('platform callbacks remain independent while a document command awaits stor
 });
 test('private composition supplies replication without extending the public handle',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});assert.equal(editor.replication,undefined);assert.equal(editor.sendCommand,undefined);assert.equal(h.context.options.initialEditingEnabled,false);
- h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[],snapshotKey:'origin'});await replication.apply([]);await replication.acknowledge([]);
+ h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return method==='replica.readJournal'?{revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:'Ag=='}]}:null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[],snapshotKey:'origin'});await replication.apply([]);await replication.acknowledge([]);
  let changes=0;replication.onChanged(()=>changes++);h.context.emit('stateChanged',state({revision:'next'}));assert.equal(changes,0);
  await h.context.platform('storage.commit',{batch:{batchId:'one',expectedRevision:null,checkpoint:{revision:'r1',payload:new Uint8Array([1]),clock:{author:1},snapshotAfterJournalId:null},journal:[{id:'author:1',payload:new Uint8Array([2])}],outbox:[{id:'author:1',revision:'r1',payload:new Uint8Array([2])}]}});
  assert.equal(changes,1);assert.deepEqual((await replication.read()).clock,{author:1});await replication.acknowledge(['author:1']);assert.deepEqual((await replication.read()).outbox,[]);
@@ -95,6 +95,67 @@ test('private replication rejects malformed portable snapshot responses',async t
  for(const response of [null,{payload:'!!!',clock:{},key:'cut'},{payload:'AQ==',clock:null,key:'cut'},
   {payload:'AQ==',clock:{author:-1},key:'cut'},{payload:'AQ==',clock:{},key:42}]) {
   h.behavior(()=>response);await assert.rejects(replication.exportSnapshot(),{code:'InvalidRuntimeResponse'});
+ }
+});
+test('private recovery journal forwards the captured server clock and preserves native suffix order and bytes',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ assert.equal(editor.readJournal,undefined);
+ const origin='$origin:0123456789abcdef0123456789abcdef';
+ const nativeJournal={revision:'r3',clock:{creator:3,editor:1},journal:[
+  {id:'creator:2',payload:'AP8B'},{id:'editor:1',payload:'BA=='},{id:'creator:3',payload:'BQY='}
+ ]};
+ const physicalJournal=[
+  {id:'creator:3',payload:new Uint8Array([5,6])},{id:'editor:1',payload:new Uint8Array([4])},
+  {id:origin,payload:new Uint8Array([9])},{id:'creator:1',payload:new Uint8Array([2,3])},
+  {id:'creator:2',payload:new Uint8Array([0,255,1])}
+ ];
+ await h.context.platform('storage.commit',{batch:{batchId:'cold-archive',expectedRevision:null,
+  checkpoint:{revision:'r3',payload:new Uint8Array([9]),clock:{creator:3,editor:1},snapshotAfterJournalId:null},
+  journal:physicalJournal,outbox:[]}});
+ h.behavior(method=>{assert.equal(method,'replica.readJournal');return nativeJournal;});
+ const serverClock={creator:1},reading=replication.readJournal(serverClock);serverClock.creator=99;
+ const recovered=await reading;
+ assert.deepEqual(recovered,{revision:'r3',clock:{creator:3,editor:1},journal:[
+  {id:'creator:2',payload:new Uint8Array([0,255,1])},{id:'editor:1',payload:new Uint8Array([4])},
+  {id:'creator:3',payload:new Uint8Array([5,6])}
+ ]});
+ assert.deepEqual(h.calls,[{method:'replica.readJournal',args:{clock:{creator:1}}}]);
+ assert.deepEqual((await h.context.platform('storage.journal')).journal,physicalJournal);
+ assert.ok(Object.isFrozen(recovered));assert.ok(Object.isFrozen(recovered.clock));
+ assert.ok(Object.isFrozen(recovered.journal));assert.ok(Object.isFrozen(recovered.journal[0]));
+ nativeJournal.clock.creator=99;nativeJournal.journal[0].payload='Bw==';
+ assert.equal(recovered.clock.creator,3);assert.deepEqual([...recovered.journal[0].payload],[0,255,1]);
+ recovered.journal[1].payload[0]=77;
+ assert.deepEqual([...(await replication.readJournal({creator:1})).journal[1].payload],[4]);
+});
+test('private recovery journal accepts an empty native archive before the first checkpoint',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ h.behavior(method=>{assert.equal(method,'replica.readJournal');return {revision:null,clock:{},journal:[]};});
+ assert.deepEqual(await replication.readJournal(),{revision:null,clock:{},journal:[]});
+ assert.deepEqual(h.calls,[{method:'replica.readJournal',args:{clock:{}}}]);
+});
+test('private recovery journal rejects invalid server clocks before native dispatch',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ for(const clock of [null,[],new Date(),new Map(),new Uint8Array([1]),{author:-1},{author:2147483648},{author:1.5},{author:'1'},
+  {' ':1},{'invalid:author':1},{['a'.repeat(129)]:1}]) {
+  await assert.rejects(replication.readJournal(clock),TypeError);
+ }
+ assert.deepEqual(h.calls,[]);
+});
+test('private recovery journal rejects malformed native clocks, records and encoded bytes',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ const valid={revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:'AQ=='}]};
+ for(const response of [null,{...valid,revision:42},{...valid,revision:' '},
+  {...valid,clock:null},{...valid,clock:[]},{...valid,clock:new Date()},
+  {...valid,clock:new Map()},{...valid,clock:new Uint8Array([1])},{...valid,clock:{author:-1}},
+  {...valid,clock:{author:2147483648}},{...valid,clock:{' ':1}},{...valid,clock:{author:1.5}},
+  {...valid,clock:{'invalid:author':1}},
+  {...valid,journal:null},{...valid,journal:[null]},
+  {...valid,journal:[{id:' ',payload:'AQ=='}]},
+  {...valid,journal:[{id:'author:1',payload:new Uint8Array([1])}]},
+  {...valid,journal:[{id:'author:1',payload:'!!!'}]},
+  {...valid,journal:[...valid.journal,...valid.journal]}]) {
+  h.behavior(()=>response);await assert.rejects(replication.readJournal(),{code:'InvalidRuntimeResponse'});
  }
 });
 test('disposal waits pending commands and releases ownership only after cleanup',async t=>{

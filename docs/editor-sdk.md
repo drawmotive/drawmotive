@@ -463,7 +463,7 @@ bytes, small replica metadata, and a receipt; it does not rewrite the scene or
 previous history. Native owns one opaque checkpoint containing the newest loading
 scene, an older normalized undo anchor, and the bounded history between them. The
 SDK atomically replaces that one blob; it does not rotate or nest opaque snapshots.
-The private storage boundary returns the blob with the ordered causal journal
+The private storage boundary returns the blob with the retained journal
 suffix after its explicit `snapshotAfterJournalId` cut. A snapshot can precede
 later journal entries committed in the same batch; those entries still replay.
 
@@ -474,6 +474,10 @@ including records already acknowledged by transport. Reserved
 They are excluded from checkpoint replay suffixes and rejected from the outbox;
 they do not add another active undo snapshot. Private replication reads a stable
 `snapshotKey` from the durable cut so ordinary appends need not export a full scene.
+The private recovery adapter passes the server clock to native, which proves the
+missing suffix is complete and returns original transaction bytes in causal order.
+The SDK decodes and copies that ordered suffix; it does not infer order from the
+raw storage archive or send archival origin records to transport.
 
 An empty checkpoint payload retains the previous snapshot. Omitted replica
 metadata retains the previous metadata on an append, and clears it when a
