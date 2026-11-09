@@ -1,12 +1,14 @@
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
-/** Serve the unchanged runnable package demo; port zero supports isolated captures. */
-export async function serveExample(port = 4186, { runtimeUrl } = {}) {
+/** Candidate verification selects native assets explicitly while keeping the SDK sources
+ * and sealed release projection unchanged. Port zero supports isolated captures. */
+export async function serveExample(port = 4186, { runtimeUrl, assetRoot } = {}) {
+  const assets = assetRoot === undefined ? null : await realpath(path.resolve(assetRoot));
   const runtimeBase = runtimeUrl === undefined ? undefined : new URL(runtimeUrl);
   if (runtimeBase && (!['http:', 'https:'].includes(runtimeBase.protocol) || runtimeBase.username || runtimeBase.password))
     throw new TypeError('The test runtime must use an HTTP(S) URL.');
@@ -29,8 +31,10 @@ export async function serveExample(port = 4186, { runtimeUrl } = {}) {
         return;
       }
       relative = relative.replace(/^examples[/]browser[/]runtime[/]/, 'generated/editor/');
-      let file = path.resolve(root, relative);
-      if (!file.startsWith(root + path.sep) && file !== root) throw new Error('Invalid path');
+      const base = assets && relative.startsWith('generated/editor/') ? assets : root;
+      if (base === assets) relative = relative.slice('generated/editor/'.length);
+      let file = path.resolve(base, relative);
+      if (!file.startsWith(base + path.sep) && file !== base) throw new Error('Invalid path');
       if ((await stat(file)).isDirectory()) file = path.join(file, 'index.html');
       response.setHeader('Content-Type', types[path.extname(file)] ?? 'application/octet-stream');
       response.end(await readFile(file));
@@ -43,4 +47,5 @@ export async function serveExample(port = 4186, { runtimeUrl } = {}) {
   };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await serveExample();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await serveExample(4186, { assetRoot: process.env.DRAWMOTIVE_EDITOR_TEST_ASSET_ROOT });

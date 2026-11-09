@@ -1,8 +1,14 @@
-import { createEditor, EditorError, type EditorSnapshot, type EditorState } from '@drawmotive/editor';
+import { createEditor, EditorError, type EditorSnapshot, type EditorState, type EditorLicenseStatus } from '@drawmotive/editor';
 import { createEditor as browserEditor } from '@drawmotive/editor/browser';
 
 async function mount(container: HTMLElement) {
-  const editor = await createEditor({ container, assetBaseUrl: '/editor/', textEditing: 'inline' });
+  const editor = await createEditor({ container, assetBaseUrl: '/editor/', textEditing: 'inline', licenseKey: 'deployment-key' });
+  const license: EditorLicenseStatus = await editor.getLicenseStatus();
+  const licenseState: 'free' | 'licensed' = license.state;
+  const expiry: string | undefined = license.expiresAt;
+  // @ts-expect-error License status is an immutable native snapshot.
+  license.state = 'licensed';
+  void licenseState; void expiry;
   const state: EditorState = await editor.getState();
   const unsubscribe = editor.onStateChanged(next => { void next.revision; });
   const result: EditorSnapshot = await editor.exportSnapshot({ formats: ['raw', 'png', 'svg'], render: { scale: 2 } });
@@ -36,3 +42,5 @@ createEditor({});
 createEditor({ container: document.body, ui: { buttons: { save: true } } });
 // @ts-expect-error Product identity is not an editor option.
 createEditor({ container: document.body, product: 'vscode' });
+// @ts-expect-error Persistent storage accepts no previous document identity.
+createEditor({ container: document.body, persistence: { mode: 'persistent', namespace: 'account', documentId: 'opaque:document', legacyDocumentId: 'previous' } });

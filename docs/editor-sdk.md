@@ -15,6 +15,7 @@ The authoritative declarations are [core.d.ts](../src/core.d.ts). Only package e
 - [Entry points and installation](#entry-points-and-installation)
 - [Mounting recipes](#mounting-recipes)
 - [Creation options](#creation-options)
+- [Licensing and native branding](#licensing-and-native-branding)
 - [Document and snapshot API](#document-and-snapshot-api)
 - [Selection and editing API](#selection-and-editing-api)
 - [Text editing](#text-editing)
@@ -109,6 +110,7 @@ All public entries use EditorCreateOptions. Unknown keys and invalid values are 
 | --- | --- | --- |
 | `container` | Required `HTMLElement` for imperative creation | Owns only the native canvas |
 | `assetBaseUrl` | HTTP(S) string or URL; defaults relative to the SDK's generated assets | Runtime and font resource base; supply explicitly in bundles |
+| `licenseKey` | Optional raw string | Deployment key verified by native code against the actual page origin |
 | `title` | `DrawMotive diagram editor` | Accessible canvas label |
 | textEditing | inline (default), external or disabled | Native text-input policy |
 | `persistence` | Defaults to `{ mode: 'memory' }` | Temporary document or persistent identity |
@@ -119,6 +121,30 @@ All public entries use EditorCreateOptions. Unknown keys and invalid values are 
 | `disposeTimeoutMs` | `5000`, finite and positive | Explicit disposal cleanup deadline |
 
 Persistence configuration is either `{ mode: 'memory', namespace?, documentId? }` or `{ mode: 'persistent', namespace, documentId }`. Persistent identities must be nonempty strings. Memory mode keeps the document temporary, but fonts may still use OPFS and preferences still use localStorage.
+
+## Licensing and native branding
+
+The entire package is MIT and every editing feature is free for personal and commercial use. The native canvas displays `powered by drawmotive.com` by default. The optional official removal service costs **US$1,000 per site per year**; contact [mason@drawmotive.com](mailto:mason@drawmotive.com). This service does not restrict MIT modification or redistribution rights or make payment legally required to modify MIT code. See the [Editor licensing guide](https://textgraph.dev/editor/licensing).
+
+```javascript
+const editor = await createEditor({
+  container,
+  assetBaseUrl: '/editor/',
+  licenseKey: deploymentLicenseKey,
+});
+const status = await editor.getLicenseStatus();
+// { state: 'free', reason?: string } or { state: 'licensed', expiresAt?: string }
+```
+
+All default, browser and core entries accept the same optional key. JS forwards it unchanged; C#/WASM verifies it and paints the branding. `getLicenseStatus(): Promise<EditorLicenseStatus>` reads an immutable native snapshot with `state: 'free' | 'licensed'`, optional `reason` and optional UTC ISO `expiresAt`. It exposes no key or merchant identity. Licensing does not change document health, revisions or preferences. Recreate and await disposal of the old instance to replace a deployment key; there is no mutable licensed flag.
+
+Free reasons are `missing`, `invalid`, `expired`, `notYetValid`, `siteMismatch`, `unsupportedHost` and `verificationUnavailable`. Missing, invalid, expired or unsupported keys retain branding while editing, import, persistence, history, clipboard and export continue to work. Raw documents, PNG, SVG, embedded documents and copied images remain unbranded and contain no license data.
+
+A site covers one explicitly listed production origin plus named aliases and development/staging origins. Paths, documents, instances and users have no separate fee. Complete normalized scheme/host/port origins must match; asset/CDN origins, unlisted subdomains and suffix matches do not qualify. List localhost development origins explicitly. Standard HTTPS browser embeds are the initial paid scope; VS Code and shared-origin Forge embeds remain fully functional and branded.
+
+DrawMotive issues signed keys with local operator tooling backed by Azure Key Vault. Runtime validation is offline, without activation or a license server, once runtime resources are available. Validity is checked against the local clock, including during a running session and on page restoration; expiry restores branding without changing the document. Offline validation cannot provide immediate revocation or a trustworthy remote clock. Keep existing dependency and font notices.
+
+Use a matching SDK and native runtime containing these APIs; previously generated runtime assets do not acquire licensing support from a JS upgrade alone.
 
 ## Document and snapshot API
 
@@ -450,11 +476,61 @@ There is no CacheStorage or IndexedDB font-cache fallback. Missing offline fonts
 All document IndexedDB operations run in the SDK's static Dexie Worker. Font I/O uses a separate OPFS Worker. Do not open their database or reproduce transactions in application code. Persistent mode requires IndexedDB, Workers and origin-wide Web Locks. Browser storage can be denied or evicted; external backups remain the host's responsibility.
 
 Standalone persistence does not require a synchronization module. Local edits,
-Undo/Redo and reopening retain complete history and clocks without generating
+Undo/Redo and reopening retain bounded active history and clocks without generating
 outgoing delivery records. Checkpoint state and its engine-supplied clock metadata
 are committed atomically. Private application composition may register delivery;
 its offline outbox is distinct from standalone local history and is not a public
 editor API.
+
+Each account namespace and document has its own IndexedDB database. Its name
+encodes the complete identity rather than a hash, and rows do not repeat the
+account/document key. A normal edit appends the original immutable transaction
+bytes, small replica metadata, and a receipt; it does not rewrite the scene or
+previous history. Native owns one opaque checkpoint containing the newest loading
+scene, an older normalized undo anchor, and the bounded history between them. The
+SDK atomically replaces that one blob; it does not rotate or nest opaque snapshots.
+The private storage boundary returns the blob with the retained journal
+suffix after its explicit `snapshotAfterJournalId` cut. A snapshot can precede
+later journal entries committed in the same batch; those entries still replay.
+
+The complete immutable original journal remains available through the private
+atomic `storage.journal` boundary for automatic recovery after a server reset,
+including records already acknowledged by transport. Reserved
+`$origin:<32 lower hex guid>` records archive original scene bytes in journal order.
+They are excluded from checkpoint replay suffixes and rejected from the outbox;
+they do not add another active undo snapshot. Private replication reads a stable
+`snapshotKey` from the durable cut so ordinary appends need not export a full scene.
+The private recovery adapter passes the server clock to native, which proves the
+missing suffix is complete and returns original transaction bytes in causal order.
+The SDK decodes and copies that ordered suffix; it does not infer order from the
+raw storage archive or send archival origin records to transport.
+
+An empty checkpoint payload retains the previous snapshot. Omitted replica
+metadata retains the previous metadata on an append, and clears it when a
+nonempty snapshot replaces the scene. Nonempty writes require an explicit journal
+cut (null means before the entire log); unknown or regressing cuts reject atomically.
+Receipts use SHA-256 over every normalized logical request field and length-framed
+bytes, independent of the current scene. This is cryptographic byte identity, not
+retention of historical snapshot payloads: retired blobs and replica-state bytes
+are not kept in receipts. Matching retries also verify the original immutable
+journal and outbox bytes; missing or changed evidence fails instead of confirming
+a save. Web Crypto SHA-256 is required; there is no weaker identity fallback.
+Outbox acknowledgements
+remove pending membership while retaining immutable identity evidence, so neither
+an identical retry nor a later edit can resurrect an acknowledged record.
+
+Persistent storage uses the fixed `document-v4` database generation. Previous
+shared and per-document formats are ignored: the SDK never opens or imports them,
+and does not remove their database files. Only data written in the current
+generation is restored. Reopening retains that data; explicit document deletion
+clears its snapshot, journal, metadata, receipts and pending delivery records
+atomically, without importing anything on the next open.
+
+Hosts configure only an opaque namespace and document ID. A session holds one
+writer lease for that identity. There is no previous-identity or migration option;
+changing identity starts independent storage. Current-format retries use exact
+cryptographic batch identity and immutable transaction evidence, including after
+acknowledgement or snapshot replacement.
 
 The two build artifacts are `dist/workers/document.worker.js` and `dist/workers/resource.worker.js`. Both are self-contained classic Worker scripts. If the bundler/host does not preserve their module-relative URLs, copy these exact files from the same package version into your static asset pipeline and provide their served locations:
 

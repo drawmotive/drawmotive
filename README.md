@@ -63,6 +63,8 @@ npx drawmotive-copy-assets public/editor
 
 Copy the complete runtime after every upgrade. For Vite, run `drawmotive-copy-assets public/editor` in `predev` and `prebuild`. Serve runtime assets through HTTP(S), including `.wasm` as `application/wasm`; bundled applications must set `assetBaseUrl` explicitly.
 
+The entire package is MIT, with all editing features free for personal and commercial use. The native canvas displays `powered by drawmotive.com`; exports remain unbranded. Optional official branding removal is **US$1,000 per site per year**. See [Editor licensing](https://textgraph.dev/editor/licensing) or contact [mason@drawmotive.com](mailto:mason@drawmotive.com). MIT modification and redistribution rights remain intact.
+
 ## Standalone editor boundary
 
 The public package provides the native canvas, grips, inline text input and local browser services.
@@ -175,4 +177,4 @@ Assets carry package version, exact committed producer and hashes. Native assets
 
 ## License
 
-MIT. Bundled dependencies and fonts retain notices. See [NOTICE](NOTICE), [Contributing](CONTRIBUTING.md), [Changelog](CHANGELOG.md) and [Security reporting](SECURITY.md).
+The entire package remains [MIT](LICENSE), including commercial use, modification and redistribution. Paying for the optional official branding-removal service is not a legal requirement to modify MIT code. Bundled dependencies and fonts retain notices. See [NOTICE](NOTICE), [Contributing](CONTRIBUTING.md), [Changelog](CHANGELOG.md) and [Security reporting](SECURITY.md).

@@ -8,11 +8,11 @@
   overflow: hidden;
   --z-text-edit: 1;
 }
-.drawmotive-canvas-host .canvas-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
 .drawmotive-canvas-host canvas { display: block; outline: none; }
 .drawmotive-canvas-host [contenteditable] { margin: 0; }
+/* Placeholder display never enters editable text or native input history. */
+.drawmotive-canvas-host [data-testid="d-canvas-content-editable"][data-initial-placeholder]:empty::before {
+  content: attr(data-initial-placeholder);
+  pointer-events: none;
+}
 .drawmotive-canvas-host .editor-loading { padding: 24px; font-family: system-ui, sans-serif; }

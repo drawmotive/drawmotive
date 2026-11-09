@@ -33,14 +33,14 @@ Binary source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29
 License: NotoSansSC-LICENSE.txt
 License source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/OFL.txt
 
-MaShanZheng-Regular.ttf
-Embedded version: 2.001
-SHA-256: c97aa8b67b70e0c80fd383404db0fb386f0c0daaccdee6ff6e8f289e51670dee
-License: MaShanZheng-LICENSE.txt
-License source: https://raw.githubusercontent.com/google/fonts/b346dc3e18bed8b4ca602e00537eb35d76ed5025/ofl/mashanzheng/OFL.txt
-
-NotoColorEmoji.ttf and Noto-COLRv1.ttf: see NotoColorEmoji.NOTICE.txt
+Noto-COLRv1.ttf: see NotoColorEmoji.NOTICE.txt
 and NotoColorEmoji.LICENSE.txt for their source, hashes and full license.
 
-Material Symbols Rounded: see ../fonts/MaterialSymbols-NOTICE.txt
-and ../fonts/MaterialSymbols-LICENSE.txt.
+Yozai-Regular.ttf, ZenKurenaido-Regular.ttf, NotoSansKR-Regular.ttf and HiMelody-Regular.ttf:
+see font-pack-sources.json for pinned upstream URLs, hashes and matching licenses.
+
+Files ending in -core.ttf or -ext.ttf are derived subsets generated with
+fontTools 4.60.1 from the corresponding committed full TTF. Their embedded
+primary names begin with DrawMotive; logical family aliases in files.json do
+not change the upstream copyright or license. The subsets retain embedded
+copyright and OFL records and are distributed under their matching source OFL.

@@ -1,0 +1,516 @@
+{
+  "schemaVersion": 2,
+  "id": "star.v2",
+  "minimumAspectRatio": 0,
+  "variables": [
+    "p0.x",
+    "p0.y",
+    "p1.x",
+    "p1.y",
+    "p2.x",
+    "p2.y",
+    "p3.x",
+    "p3.y",
+    "p4.x",
+    "p4.y",
+    "p5.x",
+    "p5.y",
+    "p6.x",
+    "p6.y",
+    "p7.x",
+    "p7.y",
+    "p8.x",
+    "p8.y",
+    "p9.x",
+    "p9.y",
+    "text-start.x",
+    "text-start.y",
+    "text-end.x",
+    "text-end.y",
+    "center.x",
+    "center.y"
+  ],
+  "points": {
+    "p0": [
+      "p0.x",
+      "p0.y"
+    ],
+    "p1": [
+      "p1.x",
+      "p1.y"
+    ],
+    "p2": [
+      "p2.x",
+      "p2.y"
+    ],
+    "p3": [
+      "p3.x",
+      "p3.y"
+    ],
+    "p4": [
+      "p4.x",
+      "p4.y"
+    ],
+    "p5": [
+      "p5.x",
+      "p5.y"
+    ],
+    "p6": [
+      "p6.x",
+      "p6.y"
+    ],
+    "p7": [
+      "p7.x",
+      "p7.y"
+    ],
+    "p8": [
+      "p8.x",
+      "p8.y"
+    ],
+    "p9": [
+      "p9.x",
+      "p9.y"
+    ],
+    "text-start": [
+      "text-start.x",
+      "text-start.y"
+    ],
+    "text-end": [
+      "text-end.x",
+      "text-end.y"
+    ],
+    "center": [
+      "center.x",
+      "center.y"
+    ]
+  },
+  "segments": [
+    {
+      "id": "edge-0",
+      "kind": "line",
+      "from": "p0",
+      "to": "p1"
+    },
+    {
+      "id": "edge-1",
+      "kind": "line",
+      "from": "p1",
+      "to": "p2"
+    },
+    {
+      "id": "edge-2",
+      "kind": "line",
+      "from": "p2",
+      "to": "p3"
+    },
+    {
+      "id": "edge-3",
+      "kind": "line",
+      "from": "p3",
+      "to": "p4"
+    },
+    {
+      "id": "edge-4",
+      "kind": "line",
+      "from": "p4",
+      "to": "p5"
+    },
+    {
+      "id": "edge-5",
+      "kind": "line",
+      "from": "p5",
+      "to": "p6"
+    },
+    {
+      "id": "edge-6",
+      "kind": "line",
+      "from": "p6",
+      "to": "p7"
+    },
+    {
+      "id": "edge-7",
+      "kind": "line",
+      "from": "p7",
+      "to": "p8"
+    },
+    {
+      "id": "edge-8",
+      "kind": "line",
+      "from": "p8",
+      "to": "p9"
+    },
+    {
+      "id": "edge-9",
+      "kind": "line",
+      "from": "p9",
+      "to": "p0"
+    }
+  ],
+  "textSlot": [
+    "text-start",
+    "text-end"
+  ],
+  "boundaries": {
+    "top": {
+      "segments": [
+        "edge-0",
+        "edge-1",
+        "edge-2",
+        "edge-3",
+        "edge-4",
+        "edge-5",
+        "edge-6",
+        "edge-7",
+        "edge-8",
+        "edge-9"
+      ],
+      "mode": "normalizedCardinalContour"
+    },
+    "right": {
+      "segments": [
+        "edge-0",
+        "edge-1",
+        "edge-2",
+        "edge-3",
+        "edge-4",
+        "edge-5",
+        "edge-6",
+        "edge-7",
+        "edge-8",
+        "edge-9"
+      ],
+      "mode": "normalizedCardinalContour"
+    },
+    "bottom": {
+      "segments": [
+        "edge-0",
+        "edge-1",
+        "edge-2",
+        "edge-3",
+        "edge-4",
+        "edge-5",
+        "edge-6",
+        "edge-7",
+        "edge-8",
+        "edge-9"
+      ],
+      "mode": "normalizedCardinalContour"
+    },
+    "left": {
+      "segments": [
+        "edge-0",
+        "edge-1",
+        "edge-2",
+        "edge-3",
+        "edge-4",
+        "edge-5",
+        "edge-6",
+        "edge-7",
+        "edge-8",
+        "edge-9"
+      ],
+      "mode": "normalizedCardinalContour"
+    }
+  },
+  "$schema": "../Schemas/constraint-shape.schema.json",
+  "relations": [
+    {
+      "id": "construction-0",
+      "kind": "proportional",
+      "target": "p0.x",
+      "source": "width",
+      "ratio": 0.5000000000000001
+    },
+    {
+      "id": "construction-1",
+      "kind": "fixed",
+      "target": "p0.y",
+      "value": 0
+    },
+    {
+      "id": "construction-2",
+      "kind": "linear",
+      "terms": {
+        "p1.x": 1
+      },
+      "width": 0.6390576474687264,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": 0.30901699437494756
+        }
+      }
+    },
+    {
+      "id": "construction-3",
+      "kind": "linear",
+      "terms": {
+        "p1.y": 1
+      },
+      "height": 0.351540286525061,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": -0.44721359549995787
+        }
+      }
+    },
+    {
+      "id": "construction-4",
+      "kind": "proportional",
+      "target": "p2.x",
+      "source": "width",
+      "ratio": 1.0
+    },
+    {
+      "id": "construction-5",
+      "kind": "proportional",
+      "target": "p2.y",
+      "source": "height",
+      "ratio": 0.38196601125010515
+    },
+    {
+      "id": "construction-6",
+      "kind": "linear",
+      "terms": {
+        "p3.x": 1
+      },
+      "width": 0.725,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": 0.49999999999999994
+        }
+      }
+    },
+    {
+      "id": "construction-7",
+      "kind": "linear",
+      "terms": {
+        "p3.y": 1
+      },
+      "height": 0.6296555814625137,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": 0.17082039324993697
+        }
+      }
+    },
+    {
+      "id": "construction-8",
+      "kind": "proportional",
+      "target": "p4.x",
+      "source": "width",
+      "ratio": 0.8090169943749475
+    },
+    {
+      "id": "construction-9",
+      "kind": "proportional",
+      "target": "p4.y",
+      "source": "height",
+      "ratio": 1.0
+    },
+    {
+      "id": "construction-10",
+      "kind": "linear",
+      "terms": {
+        "p5.x": 1
+      },
+      "width": 0.5,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": 0.0
+        }
+      }
+    },
+    {
+      "id": "construction-11",
+      "kind": "linear",
+      "terms": {
+        "p5.y": 1
+      },
+      "height": 0.8015402865250609,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": 0.552786404500042
+        }
+      }
+    },
+    {
+      "id": "construction-12",
+      "kind": "proportional",
+      "target": "p6.x",
+      "source": "width",
+      "ratio": 0.19098300562505266
+    },
+    {
+      "id": "construction-13",
+      "kind": "proportional",
+      "target": "p6.y",
+      "source": "height",
+      "ratio": 1.0
+    },
+    {
+      "id": "construction-14",
+      "kind": "linear",
+      "terms": {
+        "p7.x": 1
+      },
+      "width": 0.275,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": -0.49999999999999994
+        }
+      }
+    },
+    {
+      "id": "construction-15",
+      "kind": "linear",
+      "terms": {
+        "p7.y": 1
+      },
+      "height": 0.6296555814625137,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": 0.17082039324993697
+        }
+      }
+    },
+    {
+      "id": "construction-16",
+      "kind": "fixed",
+      "target": "p8.x",
+      "value": 0
+    },
+    {
+      "id": "construction-17",
+      "kind": "proportional",
+      "target": "p8.y",
+      "source": "height",
+      "ratio": 0.38196601125010526
+    },
+    {
+      "id": "construction-18",
+      "kind": "linear",
+      "terms": {
+        "p9.x": 1
+      },
+      "width": 0.36094235253127366,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": -0.3090169943749474
+        }
+      }
+    },
+    {
+      "id": "construction-19",
+      "kind": "linear",
+      "terms": {
+        "p9.y": 1
+      },
+      "height": 0.35154028652506103,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": -0.44721359549995776
+        }
+      }
+    },
+    {
+      "id": "construction-20",
+      "kind": "linear",
+      "terms": {
+        "text-start.x": 1
+      },
+      "width": 0.36,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": -0.3111111111111111
+        }
+      }
+    },
+    {
+      "id": "construction-21",
+      "kind": "linear",
+      "terms": {
+        "text-start.y": 1
+      },
+      "height": 0.4,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": -0.33952534333342665
+        }
+      }
+    },
+    {
+      "id": "construction-22",
+      "kind": "linear",
+      "terms": {
+        "text-end.x": 1
+      },
+      "width": 0.64,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "width": 0.3111111111111111
+        }
+      }
+    },
+    {
+      "id": "construction-23",
+      "kind": "linear",
+      "terms": {
+        "text-end.y": 1
+      },
+      "height": 0.64,
+      "parameterTerms": {
+        "star.innerRadiusRatio": {
+          "height": 0.19380798999990664
+        }
+      }
+    },
+    {
+      "id": "center-x",
+      "kind": "proportional",
+      "target": "center.x",
+      "source": "width",
+      "ratio": 0.5
+    },
+    {
+      "id": "center-y",
+      "kind": "proportional",
+      "target": "center.y",
+      "source": "height",
+      "ratio": 0.552786404500042
+    }
+  ],
+  "grips": [
+    {
+      "id": "frame",
+      "kind": "frameResize",
+      "roles": [
+        "topLeft",
+        "topRight",
+        "bottomLeft",
+        "bottomRight",
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    },
+    {
+      "id": "indent",
+      "kind": "parameter",
+      "parameter": "star.innerRadiusRatio",
+      "point": "p5",
+      "appearance": "adjustment",
+      "guide": {
+        "anchor": "center"
+      }
+    }
+  ],
+  "parameters": {
+    "star.innerRadiusRatio": {
+      "storageSlot": 1,
+      "default": 0.45,
+      "minimum": 0.1,
+      "maximum": 0.8090169943749475
+    }
+  }
+}
