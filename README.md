@@ -164,16 +164,19 @@ Tooling requires Node.js 22+. Current Chromium is the verified visual-runtime ta
 
 ```bash
 npm ci
+npm run source:check
 npm test
 npm run build
 npm run assets:verify
 npm run audit:package
 npx playwright install chromium
 npm run test:browser
-npm pack
+npm pack --ignore-scripts
 ```
 
-Assets carry package version, exact committed producer and hashes. Native assets are rebuilt for each release; source, symbols, maps and embedded debug metadata are excluded. Package, native runtime and document format have separate version contracts.
+The source checkout includes matching compiled native assets for its JavaScript and storage contracts. `source:check` copies the actual runtime and metadata into a temporary source projection and runs the unchanged complete release verifier using that runtime's recorded producer. Source CI also verifies integrity and package contents before creating a source snapshot archive. This archive is validation evidence, not a release artifact.
+
+Assets carry package version, exact committed producer and hashes. The formal release target remains independent of source development: `npm run release:check` and ordinary `npm pack` require its exact native producer through the unchanged prepack gate. A newer source snapshot must receive a matching new release target before publication. Source, symbols, maps and embedded debug metadata are excluded. Package, native runtime and document format have separate version contracts.
 
 ## License
 

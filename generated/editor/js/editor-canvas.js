@@ -49,12 +49,13 @@ async function prepareBrowserFont(path, sha256, bytes, pack) {
 globalThis.drawmotiveCanvas = Object.freeze({
   getDrawingId: () => current().drawingId,
   getAssetBaseUrl: () => runtimeAssetBaseUrl,
+  getPageAddress: () => globalThis.location?.href ?? null,
   getLanguage: () => document.documentElement?.lang || globalThis.navigator?.language || 'en',
   // The public component initializer runs only after the framework enables dynamic roots.
   runtimeReady: () => resolveRuntimeReady?.(),
   getOptions: () => {
     const options = current().options;
-    return JSON.stringify({ textEditing: options.textEditing ?? 'inline', initialEditingEnabled: options.initialEditingEnabled ?? true });
+    return JSON.stringify({ textEditing: options.textEditing ?? 'inline', initialEditingEnabled: options.initialEditingEnabled ?? true, licenseKey: options.licenseKey });
   },
   failed: failure => {
     const owner = current();
@@ -71,6 +72,19 @@ globalThis.drawmotiveCanvas = Object.freeze({
   ready: (reference, stateJson) => {
     const owner = current();
     owner.reference = reference;
+    // JS relays restoration only; C# owns parsing, signature, origin and time decisions.
+    const refresh = () => {
+      if (!owner.closing && !owner.closed && owner.reference && document.visibilityState !== 'hidden')
+        owner.reference.invokeMethodAsync('RefreshLicense').catch(() => {});
+    };
+    globalThis.addEventListener('pageshow', refresh);
+    globalThis.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    owner.detachRestoration = () => {
+      globalThis.removeEventListener('pageshow', refresh);
+      globalThis.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
     owner.resolveStartupSettled();
     if (!owner.closing) { const state = JSON.parse(stateJson); owner.emit('ready', { state }); owner.resolveReady(); }
   },
@@ -90,6 +104,7 @@ globalThis.drawmotiveCanvas = Object.freeze({
   platform,
   openDocument: () => platform('storage.open').then(() => null),
   readDocumentCheckpoint: () => platform('storage.read'),
+  readDocumentJournal: () => platform('storage.journal'),
   commitDocument: batch => platform('storage.commit', { batch }),
   loadFont: async (path, url, sha256, pack) => {
     const result = await loadFontResource(path, url, sha256);
@@ -140,11 +155,14 @@ function startRuntime(assetBaseUrl, assetPaths = {}) {
   })();
   return runtimeStartup;
 }
-async function execute(owner, method, args) {
-  const response = JSON.parse(await owner.reference.invokeMethodAsync('ExecuteAsync', method, json(args ?? {})));
+function readResponse(owner, serialized) {
+  const response = JSON.parse(serialized);
   if (response.state && !owner.closing) owner.emit('stateChanged', response.state);
   if (response.error) throw error(response.error.code, response.error.message);
   return response.result;
+}
+async function execute(owner, method, args) {
+  return readResponse(owner, await owner.reference.invokeMethodAsync('ExecuteAsync', method, json(args ?? {})));
 }
 /** Mounts the page's only canvas. Cleanup finishes before another document can open. */
 export async function mountCanvas({ container, assetBaseUrl, assetPaths, options, drawingId, platform: platformCallback, emit: emitCallback, signal }) {
@@ -165,8 +183,10 @@ export async function mountCanvas({ container, assetBaseUrl, assetPaths, options
   const abort = () => { failure = error('Aborted', 'Canvas startup was aborted.'); owner.closing = true; owner.fail(failure); };
   signal?.addEventListener('abort', abort, { once: true });
   const disposeRoot = async () => {
+    // Delayed ready may install listeners while an aborted mount waits for native startup.
+    if (root) await startupSettled;
+    owner.detachRestoration?.();
     if (root) {
-      await startupSettled;
       await root.dispose();
       // RemoveRootComponent returns before asynchronous component/scope disposal.
       await disposed;
@@ -190,6 +210,12 @@ export async function mountCanvas({ container, assetBaseUrl, assetPaths, options
     throw startupFailure;
   } finally { signal?.removeEventListener('abort', abort); }
   return {
+    // The private site loader owns this preparation capability and drains it
+    // before native disposal. The public SDK only uses request and dispose.
+    compileTextGraph: async source => {
+      if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
+      return readResponse(owner, await owner.reference.invokeMethodAsync('CompileSiteTextGraphAsync', source));
+    },
     request: async (method, args) => {
       if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
       return execute(owner, method, args);
