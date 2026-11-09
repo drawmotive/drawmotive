@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey } from "node:crypto";
 import { parseNpmPack } from "../.release/release-registry.mjs";
 
 // StandardTheme has a public byte-for-byte counterpart; additive defaults do not.
@@ -11,6 +11,14 @@ import { parseNpmPack } from "../.release/release-registry.mjs";
 // reviewed 10px shape radius and disabled shadow defaults.
 const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046";
 const prefix = "Graphics.Core.Styles.Resources.";
+// Reviewed schema-v2 public geometry at ec83d2a69. New names or bytes require
+// renewed source/schema review; a JSON suffix alone never grants approval.
+const shapeHashes = new Map([
+  ["Graphics.Core.Shapes.Resources.capsule.v2.json", "3c76126c491c2cb209325216c02aa7148ed73fc0cb80b6ba441204563d7a2254"],
+  ["Graphics.Core.Shapes.Resources.cloud.v2.json", "2d2d0ccdef1fc567a41ece334edbabe532e20f86f41ca0db479a4d8c62a1f724"],
+  ["Graphics.Core.Shapes.Resources.star.v2.json", "9d6d7beb20de959599ebdb75f15d8bc8a11b71ac90203805039f35423cb6f087"],
+]);
+const licenseCatalog = "Editor.Client.Licensing.editor-license-public-keys.json";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 function range(bytes, offset, size) {
   requireBytes(bytes, offset, size);
@@ -60,10 +68,38 @@ export function readManagedResources(streams, resources) {
   return result;
 }
 
-/** Only reviewed runtime CSS may enter owned assemblies. Reject unknown names,
- * changed payloads, duplicate entries and hidden bytes outside resource rows. */
+/** Catalog rotation may change public keys, never introduce ignored fields or
+ * duplicate JSON properties. Accept the issuer's JSON serialization plus layout
+ * whitespace; round-tripping rejects ambiguous/noncanonical encodings. */
+function auditLicenseCatalog(bytes) {
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const catalog = JSON.parse(text);
+    const compact = text.replace(/"(?:[^"\\]|\\.)*"|[ \t\r\n]+/g, token => token.startsWith('"') ? token : "");
+    const exact = (value, fields) => value !== null && typeof value === "object" && !Array.isArray(value)
+      && Object.keys(value).length === fields.length && fields.every(field => Object.hasOwn(value, field));
+    if (compact !== JSON.stringify(catalog) || !exact(catalog, ["keys"]) || !Array.isArray(catalog.keys)) throw new Error();
+    const seen = new Set();
+    for (const key of catalog.keys) {
+      if (!exact(key, ["kid", "x", "y"]) || typeof key.kid !== "string" || !key.kid.trim() || key.kid.length > 256
+          || /[\u0000-\u001f\u007f]/u.test(key.kid) || seen.has(key.kid)) throw new Error();
+      seen.add(key.kid);
+      for (const coordinate of [key.x, key.y]) {
+        if (typeof coordinate !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(coordinate)
+            || Buffer.from(coordinate, "base64url").toString("base64url") !== coordinate) throw new Error();
+      }
+      createPublicKey({ format: "jwk", key: { kty: "EC", crv: "P-256", x: key.x, y: key.y } });
+    }
+  } catch { throw new Error("Unreviewed editor license public-key catalog contents"); }
+}
+
+/** Only explicitly reviewed resources may enter their owning assembly. Reject
+ * unknown names, changed payloads, duplicate rows and hidden/padding bytes. */
 export function auditManagedResources(streams, resources, filename, publicTheme) {
-  if (!/^Graphics\.Core(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename))) throw new Error("Private assembly embeds resources without an approved resource policy");
+  const graphics = /^Graphics\.Core(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename));
+  const editor = /^Editor\.Client(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename));
+  if (!graphics && !editor) throw new Error("Private assembly embeds resources without an approved resource policy");
+  const required = graphics ? [prefix+"GroupThemeDefaults.css", prefix+"StandardTheme.css"] : [licenseCatalog];
   const entries = readManagedResources(streams, resources);
   const names = new Set();
   let end = 0;
@@ -71,14 +107,17 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
     if (names.has(resource.name)) throw new Error("Duplicate managed resource name");
     names.add(resource.name);
     if (resource.offset < end || resource.offset-end > 7 || range(resources,end,resource.offset-end).some(byte=>byte!==0)) throw new Error("Unaccounted managed resource bytes");
-    if (resource.name === prefix+"GroupThemeDefaults.css") {
+    if (graphics && resource.name === prefix+"GroupThemeDefaults.css") {
       if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
-    } else if (resource.name === prefix+"StandardTheme.css") {
+    } else if (graphics && resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
-    } else throw new Error("Unapproved managed resource: "+resource.name);
+    } else if (graphics && shapeHashes.has(resource.name)) {
+      if (hash(resource.data) !== shapeHashes.get(resource.name)) throw new Error("Unreviewed shape resource contents: "+resource.name);
+    } else if (editor && resource.name === licenseCatalog) auditLicenseCatalog(resource.data);
+    else throw new Error("Unapproved managed resource: "+resource.name);
     end = resource.offset+4+resource.data.length;
   }
-  if (names.size !== 2 || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
+  if (required.some(name=>!names.has(name)) || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
 }
 
 const ownedAssembly = /^(?:Editor\.Client|Graphics\.Core|Blazor\.IndexedDB|Math\.Core|RBush)(?:\.[A-Za-z0-9_-]+)?\.wasm$/;

@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { resourceMetadata, resourceAssembly } from "./fixtures/managed-resources.mjs";
 import { auditManagedResources, auditPackageFiles, auditWasm, readManagedResources } from "../scripts/audit-package.mjs";
 
 function leb(value) {
@@ -53,58 +54,82 @@ test("owned assemblies permit reproducible build metadata but reject symbols and
   assert.throws(() => auditWasm(managed({ pdbStream: true }), "Graphics.Core.abc.wasm"), /Portable PDB metadata/);
 });
 
-function resourceMetadata(entries, { wide = false, precedingRows = 0 } = {}) {
-  const names = [Buffer.from([0])], payload = [], nameIndexes = [], offsets = [];
-  let stringSize = 1, resourceSize = 0;
-  for (const { name, data } of entries) {
-    const text = Buffer.from(name+"\0");nameIndexes.push(stringSize);names.push(text);stringSize += text.length;
-    const bytes = Buffer.alloc(Math.ceil((4+data.length)/8)*8);bytes.writeUInt32LE(data.length);data.copy(bytes,4);
-    offsets.push(resourceSize);payload.push(bytes);resourceSize += bytes.length;
-  }
-  const s = wide ? 4 : 2, rowSize = 8+s+2;
-  const tables = Buffer.alloc(28+(precedingRows?4+precedingRows*2:0)+entries.length*rowSize);
-  tables[6] = wide ? 1 : 0;tables.writeBigUInt64LE((1n<<40n)|(precedingRows?1n<<3n:0n),8);
-  let cursor=24;
-  if(precedingRows) { tables.writeUInt32LE(precedingRows,cursor);cursor+=4; }
-  tables.writeUInt32LE(entries.length,cursor);cursor+=4+precedingRows*2;
-  for(let i=0;i<entries.length;i++) {
-    tables.writeUInt32LE(offsets[i],cursor);tables.writeUInt32LE(1,cursor+4);
-    if(wide) tables.writeUInt32LE(nameIndexes[i],cursor+8);else tables.writeUInt16LE(nameIndexes[i],cursor+8);
-    tables.writeUInt16LE(entries[i].external??0,cursor+8+s);cursor+=rowSize;
-  }
-  return { streams:new Map([["#~",tables],["#Strings",Buffer.concat(names)]]), resources:Buffer.concat(payload) };
-}
 const groupCss = readFileSync(new URL('./fixtures/GroupThemeDefaults.css',import.meta.url));
 const standardCss = Buffer.from('.palette.light { --color-foreground: #000000; }');
 const themeEntries = () => [
   {name:'Graphics.Core.Styles.Resources.GroupThemeDefaults.css',data:Buffer.from(groupCss)},
   {name:'Graphics.Core.Styles.Resources.StandardTheme.css',data:Buffer.from(standardCss)},
 ];
-function resourceAssembly({streams,resources}) {
-  const streamEntries=[...streams], headers=streamEntries.map(([name])=>Math.ceil((8+name.length+1)/4)*4);
-  const headerSize=24+headers.reduce((a,b)=>a+b,0);
-  const metadata=Buffer.alloc(headerSize+streamEntries.reduce((n,[,bytes])=>n+bytes.length,0));
-  metadata.write('BSJB');metadata.writeUInt32LE(4,12);metadata.writeUInt16LE(streamEntries.length,22);
-  let cursor=24,start=headerSize;
-  for(let i=0;i<streamEntries.length;i++) {
-    const [name,bytes]=streamEntries[i];metadata.writeUInt32LE(start,cursor);metadata.writeUInt32LE(bytes.length,cursor+4);metadata.write(name,cursor+8);
-    bytes.copy(metadata,start);start+=bytes.length;cursor+=headers[i];
-  }
-  const bytes=Buffer.alloc(44+72+metadata.length+resources.length);
-  bytes.write('WbIL');bytes.writeUInt16LE(1,8);bytes.writeUInt32LE(0x1000,12);bytes.writeUInt32LE(72,16);
-  bytes.writeUInt32LE(bytes.length-44,28);bytes.writeUInt32LE(0x1000,32);bytes.writeUInt32LE(bytes.length-44,36);bytes.writeUInt32LE(44,40);
-  bytes.writeUInt32LE(72,44);bytes.writeUInt32LE(0x1048,52);bytes.writeUInt32LE(metadata.length,56);
-  bytes.writeUInt32LE(0x1048+metadata.length,68);bytes.writeUInt32LE(resources.length,72);
-  metadata.copy(bytes,116);resources.copy(bytes,116+metadata.length);return wasm(bytes);
-}
+const catalogName = 'Editor.Client.Licensing.editor-license-public-keys.json';
+const publicCatalog = JSON.parse(readFileSync(new URL('./fixtures/editor-license-public-keys.json',import.meta.url)));
+const catalogEntry = value => ({name:catalogName,data:Buffer.isBuffer(value)?value:Buffer.from(JSON.stringify(value))});
 
+test('editor resources accept only public P-256 catalogs and permit explicit key rotation',()=>{
+ for(const keys of [[],publicCatalog.keys,[...publicCatalog.keys,{...publicCatalog.keys[0],kid:'rotated public key α'}]]) {
+  for(const data of [JSON.stringify({keys}),JSON.stringify({keys},null,2)+'\n']) {
+   const fixture=resourceMetadata([catalogEntry(Buffer.from(data))]);
+   assert.deepEqual(auditWasm(resourceAssembly(fixture),'Editor.Client.abc.wasm'),{managed:true});
+  }
+ }
+});
+
+test('catalog approval rejects secret fields, invalid keys and ambiguous JSON without echoing payloads',()=>{
+ const key=publicCatalog.keys[0],secret='private-secret-must-not-be-printed';
+ const invalid=[null,[],{}, {keys:{}},{keys:[null]}, {keys:[{kid:key.kid,x:key.x}]},
+  {keys:[],token:secret},{keys:[{...key,d:secret}]},{keys:[{...key,credentials:secret}]},
+  {keys:[key,key]},...['',' ','x'.repeat(257),'key\n'].map(kid=>({keys:[{...key,kid}]})),
+  {keys:[{...key,x:42}]},{keys:[{...key,x:key.x+'='}]},{keys:[{...key,x:key.x.slice(0,-1)+'Z'}]},
+  {keys:[{...key,x:'A'.repeat(43),y:'A'.repeat(43)}]},
+ ].map(value=>Buffer.from(JSON.stringify(value)));
+ invalid.push(Buffer.from('{"keys":[],'+JSON.stringify(publicCatalog).slice(1)),
+  Buffer.from('{"keys":[],"k'+String.fromCharCode(92)+'u0065ys":'+JSON.stringify(publicCatalog.keys)+'}'),
+  Buffer.from('{"keys":[{"kid":"discarded",'+JSON.stringify(key).slice(1)+']}'),
+  Buffer.from('{"keys":[] } '+secret),Buffer.from([0xff]));
+ for(const data of invalid) {
+  const fixture=resourceMetadata([catalogEntry(data)]);
+  assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.wasm'),error=>{
+   assert.match(error.message,/license.*catalog.*contents/i);assert.ok(!error.message.includes(secret));return true;
+  });
+ }
+});
+
+test('catalog resources retain exact assembly ownership, metadata identity and complete byte accounting',()=>{
+ for(const entries of [[{...catalogEntry(publicCatalog),name:'Editor.Client.Licensing.renamed.json'}],
+  [catalogEntry(publicCatalog),catalogEntry(publicCatalog)],
+  [catalogEntry(publicCatalog),{name:'Editor.Client.Private.json',data:Buffer.from('{}')}],[]]) {
+  const fixture=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(fixture.streams,fixture.resources,'Editor.Client.wasm'),/resource|Resource/);
+ }
+ const fixture=resourceMetadata([catalogEntry(publicCatalog)]);
+ assert.throws(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.wasm',standardCss),/Unapproved managed resource/);
+ assert.throws(()=>auditManagedResources(fixture.streams,fixture.resources,'Math.Core.wasm'),/approved resource policy/);
+ assert.throws(()=>auditManagedResources(fixture.streams,Buffer.concat([fixture.resources,Buffer.from('hidden')]),'Editor.Client.wasm'),/unaccounted/);
+});
+
+test('graphics resources approve exact reviewed built-ins while rejecting changed or aliased shape payloads',()=>{
+ const shapes=['capsule.v2','cloud.v2','star.v2'].map(id=>({name:'Graphics.Core.Shapes.Resources.'+id+'.json',
+  data:readFileSync(new URL('./fixtures/shape-resources/'+id+'.json',import.meta.url))}));
+ for(const entries of [shapes,...shapes.map(shape=>[shape])]) {
+  const fixture=resourceMetadata([...themeEntries(),...entries]);
+  assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
+ }
+ for(const shape of shapes) {
+  for(const changed of [{...shape,name:shape.name.replace('.v2.','.v3.')},
+   {...shape,data:Buffer.from(JSON.stringify({...JSON.parse(shape.data),credentials:'secret'}))}]) {
+   const fixture=resourceMetadata([...themeEntries(),changed]);
+   assert.throws(()=>auditWasm(resourceAssembly(fixture),'Graphics.Core.wasm',{publicTheme:standardCss}),/Unapproved|Unreviewed/);
+  }
+ }
+ const missingCss=resourceMetadata(shapes);
+ assert.throws(()=>auditManagedResources(missingCss.streams,missingCss.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
+});
 test('reviewed CSS resources use metadata names and match public theme bytes',()=>{
  for(const wide of [false,true]) {
   const fixture=resourceMetadata(themeEntries(),{wide,precedingRows:2});
   assert.deepEqual(readManagedResources(fixture.streams,fixture.resources).map(r=>r.name),themeEntries().map(r=>r.name));
   assert.doesNotThrow(()=>auditManagedResources(fixture.streams,fixture.resources,'Graphics.Core.abc.wasm',standardCss));
   assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
-  assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.abc.wasm',{publicTheme:standardCss}),/approved resource policy/);
+  assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.abc.wasm',{publicTheme:standardCss}),/Unapproved managed resource/);
  }
 });
 
