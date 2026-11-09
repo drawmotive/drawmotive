@@ -4,7 +4,7 @@
   "packageVersion": "0.3.2",
   "runtimeVersion": 1,
   "privateSource": {
-    "commit": "df7bdd29ed2f844636a36e1c974df3850a366914",
+    "commit": "01c1b2ebdf677bda15c84894dc6e14ad0bd7199e",
     "project": "Editor.Client"
   },
   "assets": [
@@ -29,9 +29,14 @@
       "sha256": "188f6f43e7cf8c116d8756266feab1733e9cea4c2038f69ba040c204cf466fc3"
     },
     {
-      "path": "editor/_framework/Editor.Client.lggo7pnfac.wasm",
-      "bytes": 440085,
-      "sha256": "5504b9f46b15b8a9727b9131577999295ae0e7086e9ad97de4610621654e9b35"
+      "path": "editor/_framework/BouncyCastle.Cryptography.fwbyvi9uhs.wasm",
+      "bytes": 5143321,
+      "sha256": "417849b895c7b592f040efa0c7f294db5ce8b3fc11f35fd91e4d7e12515d7fec"
+    },
+    {
+      "path": "editor/_framework/Editor.Client.ahray4v89c.wasm",
+      "bytes": 485141,
+      "sha256": "9e8b8790d4895f856678be8a0e525e76c3772e7df8bd55c6b2beddde13ca1d26"
     },
     {
       "path": "editor/_framework/ExCSS.1jyjm4dx0m.wasm",
@@ -39,9 +44,9 @@
       "sha256": "7354d17ae4ca035d9f1af9fd76abe8b4d289c532e186ee50b22c18b7e6699982"
     },
     {
-      "path": "editor/_framework/Graphics.Core.kjkelgz7av.wasm",
-      "bytes": 4561689,
-      "sha256": "803b48d87c9491da86464f5c978eb21d0462c7714701ce0c9b00debff7f1a7f9"
+      "path": "editor/_framework/Graphics.Core.6dcwtzvj7p.wasm",
+      "bytes": 4880153,
+      "sha256": "9a5f5fed467f85f42d84a57277e9ed4bcb823cf6c0d125d5cffa8e3b4cfaf8ac"
     },
     {
       "path": "editor/_framework/HarfBuzzSharp.dkkte5l69t.wasm",
@@ -184,9 +189,9 @@
       "sha256": "7edf1bf34d3ab23694c7c9cecc28dc58845f2101a1562fd90c95c60a809ee4cf"
     },
     {
-      "path": "editor/_framework/RBush.h9um636mix.wasm",
+      "path": "editor/_framework/RBush.61qk1q0z1q.wasm",
       "bytes": 24341,
-      "sha256": "b5d4735f803f82f05c26d6e3e2b60eec41ab6de963dadeb9e409de29a2711298"
+      "sha256": "3636277977fd8f84fae37967a972cff2d5ed59405674ffd472ce2f5802c1cb2c"
     },
     {
       "path": "editor/_framework/SkiaSharp.HarfBuzz.224o4jx5vh.wasm",
@@ -199,9 +204,9 @@
       "sha256": "9cd54826280063b8c18629b3bd8bc2ac5e825dafba3e036e86e51c296cfdc01e"
     },
     {
-      "path": "editor/_framework/SkiaSharp.dzft80sd9l.wasm",
-      "bytes": 113941,
-      "sha256": "d70162a7484a82a9d627a999bf7024df7cc80924ac3f039cd13317270b4f6cfc"
+      "path": "editor/_framework/SkiaSharp.sj7hogbag5.wasm",
+      "bytes": 114965,
+      "sha256": "78c89599f63cf2753a3c070357b93c86cce98ec1bf2613a4c8c526eefaa25540"
     },
     {
       "path": "editor/_framework/Stateless.hwcb405m6v.wasm",
@@ -209,9 +214,9 @@
       "sha256": "116a652dff77a36a50c3808632f09360edb7e043304d7d6d4aa736c49f096c2c"
     },
     {
-      "path": "editor/_framework/System.Collections.4q49ycz831.wasm",
-      "bytes": 68373,
-      "sha256": "d43d5a50c07ad749ad083c1433a5cabe1485f064f9e54c2641afde329d197c24"
+      "path": "editor/_framework/System.Collections.43yp764mjt.wasm",
+      "bytes": 73493,
+      "sha256": "3088ad669af4e396cb020f7fbb8b0aff0b0095cb70b38cdf7abc96da1d8270ab"
     },
     {
       "path": "editor/_framework/System.Collections.Concurrent.d6ifliuwhy.wasm",
@@ -219,9 +224,9 @@
       "sha256": "3b59066deae516ecc03f8b89ac7383ecd83c724f65dc35428b823b998b8ccac4"
     },
     {
-      "path": "editor/_framework/System.Collections.Immutable.dyudcj4ps3.wasm",
-      "bytes": 139029,
-      "sha256": "0bea1f568bdbbbb2e2673c1c0860a56af9c4984a3b3bfa2cbdf9cb24a86db6ec"
+      "path": "editor/_framework/System.Collections.Immutable.278afw7imw.wasm",
+      "bytes": 142613,
+      "sha256": "fe269cd63c1e95ab345956d2ba6da61cc9eb09aba0b423d96c1b006cd2bc2ae5"
     },
     {
       "path": "editor/_framework/System.Collections.NonGeneric.0vo7b0koib.wasm",
@@ -254,9 +259,9 @@
       "sha256": "d432beed1555c63c9a71f83e0de3683cf4132efc75fcf9ecdc41a5b5fa67a6b9"
     },
     {
-      "path": "editor/_framework/System.Console.jdji2wtzru.wasm",
-      "bytes": 15125,
-      "sha256": "697b8002046abc55d840a0afff028cf990f81fd9e2f162dc2e91b3159193b144"
+      "path": "editor/_framework/System.Console.9mha5bz4eh.wasm",
+      "bytes": 15637,
+      "sha256": "4f27b9357df08e49c7ec83b2d8fa6f0c50ac626769d2e38c90b672b16000468c"
     },
     {
       "path": "editor/_framework/System.Diagnostics.DiagnosticSource.a84vy7kbwz.wasm",
@@ -274,14 +279,19 @@
       "sha256": "ce9963b93fd52d093be416c5e4f05e6618d4f6deb0b9c9d341373712d434dd50"
     },
     {
+      "path": "editor/_framework/System.Formats.Asn1.m6dzd3tjcp.wasm",
+      "bytes": 47893,
+      "sha256": "7ed6092325c86663706cee40158a53992fff9b65f4a3d59cce43c68b7a959330"
+    },
+    {
       "path": "editor/_framework/System.IO.Compression.Brotli.ufsvanriso.wasm",
       "bytes": 5397,
       "sha256": "462801a3b6e6cc39a477506ab74fe7484781cf18639341143d928e5e7fa2b1c8"
     },
     {
-      "path": "editor/_framework/System.IO.Compression.whx0pwgvl9.wasm",
-      "bytes": 13077,
-      "sha256": "6c5db6b8ceeda062cf88ab7c3c377a65821b1d401c333dbe573358ed2ecf7dba"
+      "path": "editor/_framework/System.IO.Compression.v2oklckqb3.wasm",
+      "bytes": 31509,
+      "sha256": "e75baff7f4e3db7867f3db06487b79dcd7a67ea839d7a72b62ea2dc8bbdf6932"
     },
     {
       "path": "editor/_framework/System.IO.Pipelines.ytwui0yf9y.wasm",
@@ -309,14 +319,14 @@
       "sha256": "7a9f28ead3a2c73b0154164c24469db58f3f463036ff6461e9fb5c032fb3ac51"
     },
     {
-      "path": "editor/_framework/System.Net.Primitives.q0v81vgq8d.wasm",
-      "bytes": 7445,
-      "sha256": "0a4c1987e893043d14334746a54e9455ab93108d3ee3eb1dad8235529cc14a25"
+      "path": "editor/_framework/System.Net.Primitives.d6rs2cpt0d.wasm",
+      "bytes": 29973,
+      "sha256": "6bc52e14d2b1b25dee68375f68219cb1858ee104cf15a6fe0fae5d04864fb68a"
     },
     {
-      "path": "editor/_framework/System.Numerics.Vectors.29kevmcwco.wasm",
+      "path": "editor/_framework/System.Numerics.Vectors.jiyge61sq6.wasm",
       "bytes": 4885,
-      "sha256": "06b5d7c2e1f59b7a4b33433eb932383bea57cecf786acff2c7b834c4fc09e2ca"
+      "sha256": "bbc892cf7b0967312d246651811f743ae1fa788849f32742a71eb6afe0a3c922"
     },
     {
       "path": "editor/_framework/System.ObjectModel.wg9w1tko7k.wasm",
@@ -324,24 +334,24 @@
       "sha256": "f06c9fd47acc0b0e54c5d76156069c14c4988e22c1e2585433838c571f817516"
     },
     {
-      "path": "editor/_framework/System.Private.CoreLib.0o17j2oy5u.wasm",
-      "bytes": 2209561,
-      "sha256": "d0c0035d2dacb3c8c43b3e3c5b086830329278a217f437914ea16f93582682ba"
+      "path": "editor/_framework/System.Private.CoreLib.1whxb5twy7.wasm",
+      "bytes": 2243865,
+      "sha256": "d1c751fbb825a9fb189396028f6f253913917e8b77fdd10852c15246c910a10e"
     },
     {
-      "path": "editor/_framework/System.Private.Uri.k2mlhvus6k.wasm",
-      "bytes": 68885,
-      "sha256": "0430fac5d367d7928b021825a588dc0111a3a1c16548a0bf512e8f9a7d68e9ad"
+      "path": "editor/_framework/System.Private.Uri.r5qvbmgxle.wasm",
+      "bytes": 69397,
+      "sha256": "d126f1ae771bb2cbae5cfd22d65df69a047e278ea4101bf4488676dba2acfe89"
+    },
+    {
+      "path": "editor/_framework/System.Private.Xml.8seqikgzjp.wasm",
+      "bytes": 550165,
+      "sha256": "a850b0b1a98a2f2d91dee73a549ab1d12b6e6a10160b5c7408bfc8631db77679"
     },
     {
       "path": "editor/_framework/System.Private.Xml.Linq.bt9yfvfgiz.wasm",
       "bytes": 37653,
       "sha256": "2fa1262abb219c9f6a9fd6c848d30840fd66d3b8ebf78a787ee2d8698846ea3f"
-    },
-    {
-      "path": "editor/_framework/System.Private.Xml.bn1dua24bv.wasm",
-      "bytes": 549653,
-      "sha256": "69501d763c07dc68bc72be1d1402fd94c12e3c4807bca6a88b12b1076ee894e2"
     },
     {
       "path": "editor/_framework/System.Reflection.Emit.9r25aok8ir.wasm",
@@ -359,9 +369,14 @@
       "sha256": "290638e546062b78408716b23b0e3f2953049d72a3592a1c1dc2e2884035ff95"
     },
     {
-      "path": "editor/_framework/System.Runtime.3dqlptj6di.wasm",
-      "bytes": 16661,
-      "sha256": "b7753de423c07af95e1daea7905d6624ed6588168e0348d0b06ada0f26af0c29"
+      "path": "editor/_framework/System.Runtime.4m34gl0yzy.wasm",
+      "bytes": 17685,
+      "sha256": "b4102487699b0c62c47a45a079b088dfbbeb7fb42b72010df0229bdb39e1aa34"
+    },
+    {
+      "path": "editor/_framework/System.Runtime.CompilerServices.Unsafe.4i0hcdhs1i.wasm",
+      "bytes": 4885,
+      "sha256": "cc0ce2f47093d286536e32430729c956c903ab12bf99f24852ae31378ba474b9"
     },
     {
       "path": "editor/_framework/System.Runtime.InteropServices.JavaScript.2jjyfzobb9.wasm",
@@ -374,9 +389,9 @@
       "sha256": "32dd632e971c091f776ac666d3f77e839fb0e724e158882bbca2478a355b3b60"
     },
     {
-      "path": "editor/_framework/System.Runtime.Intrinsics.c6aqw326u4.wasm",
+      "path": "editor/_framework/System.Runtime.Intrinsics.nvxwo7t3k0.wasm",
       "bytes": 5397,
-      "sha256": "0462187edf99ff594e2e43b2bc1517c90c1de4263f0576bd91f6e2c52b887492"
+      "sha256": "83974c9a3850cdc844c8330dbc374867074395cebe35d6f482c2b906e3c38b61"
     },
     {
       "path": "editor/_framework/System.Runtime.Loader.vqwdbffr8g.wasm",
@@ -384,9 +399,9 @@
       "sha256": "071ede70afab53e969c0e9655c7d710b9bb0c26605e868690191b7ed1fcb3d74"
     },
     {
-      "path": "editor/_framework/System.Runtime.Numerics.fznb6ozmcp.wasm",
+      "path": "editor/_framework/System.Runtime.Numerics.x3llym2cpm.wasm",
       "bytes": 103701,
-      "sha256": "d5db8520c7c6bfc688fc33488a7a9395d1878fb7b5adda9ee68fef3fa9908659"
+      "sha256": "1df88ac84f6a97cb67c9db5973665b46df6169cb22549498ab2a43da463b5f19"
     },
     {
       "path": "editor/_framework/System.Runtime.Serialization.Primitives.o7zgshhqua.wasm",
@@ -394,9 +409,34 @@
       "sha256": "bcd978e7477a03c2dcf6751a9fb3f9957f02b9a995058ebaf156f078993628bd"
     },
     {
-      "path": "editor/_framework/System.Security.Cryptography.3huyym49kn.wasm",
-      "bytes": 22805,
-      "sha256": "393709a26279256f9e4d3cffd0d56a378a720746785b8f3bd476b2a23bb01640"
+      "path": "editor/_framework/System.Security.Cryptography.Algorithms.bvkfxdfjw0.wasm",
+      "bytes": 4885,
+      "sha256": "67dcb3415ad56ef50a9b953284085ad8171db576f13adfe6df25ab07f60674ea"
+    },
+    {
+      "path": "editor/_framework/System.Security.Cryptography.Csp.iz6k78i3w7.wasm",
+      "bytes": 4885,
+      "sha256": "5ec75c7f24a5c0b812ae037a125471e9b36ab0dec41d1d5e818dd1c1535b3857"
+    },
+    {
+      "path": "editor/_framework/System.Security.Cryptography.Encoding.6jrciolq1y.wasm",
+      "bytes": 4885,
+      "sha256": "62981da0422f7a397929851c47ba7c9aca946f271e9816bb7867230fb0d820a3"
+    },
+    {
+      "path": "editor/_framework/System.Security.Cryptography.Primitives.u8nb0xmk1h.wasm",
+      "bytes": 4885,
+      "sha256": "92314bf2f5a7262eca020f475b72ae3fd4a113f2dffcb40f88d94bb6417378c1"
+    },
+    {
+      "path": "editor/_framework/System.Security.Cryptography.X509Certificates.hawk5ndw3x.wasm",
+      "bytes": 4885,
+      "sha256": "876ee9e918246effe15023cdf8db02ee220df45fccb6f0e6f2b7cf5dac187b04"
+    },
+    {
+      "path": "editor/_framework/System.Security.Cryptography.p6m6vn6tei.wasm",
+      "bytes": 65813,
+      "sha256": "d19001e2d0f362184509613ba9f0bc3ea7ffe536e6b35bbfaec8931aa3fc9598"
     },
     {
       "path": "editor/_framework/System.Text.Encoding.Extensions.ossad590l5.wasm",
@@ -409,14 +449,19 @@
       "sha256": "dac5bda3a9b21e0e408e60e56084887100409f51659d06c24611b1826d881e48"
     },
     {
-      "path": "editor/_framework/System.Text.Json.8phg8pbg1g.wasm",
-      "bytes": 394517,
-      "sha256": "6486a24b4f8a2855ecba7df0920829db0dd0e2057df1df9d12be65fc8c742b89"
+      "path": "editor/_framework/System.Text.Json.exqphzu048.wasm",
+      "bytes": 413973,
+      "sha256": "9251f2217234922f4716627f34577620c8703b50b790bc83fa8bb6f2a04d5881"
     },
     {
-      "path": "editor/_framework/System.Text.RegularExpressions.wx9zm857el.wasm",
-      "bytes": 256277,
-      "sha256": "ecdc1c0dfaad867ea36c770032200e6838ddf6af201cc457da632d5ed4b20cf9"
+      "path": "editor/_framework/System.Text.RegularExpressions.oanpphsjgx.wasm",
+      "bytes": 256789,
+      "sha256": "d0a06ffc2956acb0a90470cb4a3f6592f7a708f47e34a58d9286fce8f9c9dde0"
+    },
+    {
+      "path": "editor/_framework/System.Threading.9yf5y7mgr9.wasm",
+      "bytes": 12053,
+      "sha256": "ffe19b2cd8c0acf8a8bdaa42aea9a9867e931371e02690fd743e075d909af6d6"
     },
     {
       "path": "editor/_framework/System.Threading.Channels.w6rltjdpfz.wasm",
@@ -432,11 +477,6 @@
       "path": "editor/_framework/System.Threading.ThreadPool.fisy8ovcwc.wasm",
       "bytes": 4885,
       "sha256": "d71cd3eee8be57952435bc501310428a37b3e975ae54754d5116cd7ed6089bd2"
-    },
-    {
-      "path": "editor/_framework/System.Threading.z7jpf30q0s.wasm",
-      "bytes": 12053,
-      "sha256": "71f77a268aa5819397aca96cf6619ed7f07d329275e2d83660e25089dc43c7df"
     },
     {
       "path": "editor/_framework/System.Xml.Linq.h1uux8jz0h.wasm",
@@ -465,8 +505,8 @@
     },
     {
       "path": "editor/_framework/dotnet.js",
-      "bytes": 61226,
-      "sha256": "9430cf8dfbef9b47df4f100542890230efde7dd0c382065137655c8535c83f5b"
+      "bytes": 63270,
+      "sha256": "4bb98b54f679b122c4cb2e701e3e486adda58c1c4ad47fdbf35ea149aeee94ac"
     },
     {
       "path": "editor/_framework/dotnet.native.4tiw4kuqp6.js",
@@ -474,9 +514,9 @@
       "sha256": "38db69e983d405bf13089193a50cfb204bc73b56ca12d3fc0a151b57839d683f"
     },
     {
-      "path": "editor/_framework/dotnet.native.qltevdvlod.wasm",
-      "bytes": 8375598,
-      "sha256": "5e901907974436b5526b726341112126cd1f4444e8f3c1c9e17a672e4301caad"
+      "path": "editor/_framework/dotnet.native.gpspbttl0r.wasm",
+      "bytes": 8404944,
+      "sha256": "94ec8cfbdc6523cb628dece8f8e01483d628b76b3503c3629853b983e2de45b9"
     },
     {
       "path": "editor/_framework/dotnet.runtime.5nc8i5dl74.js",
@@ -495,8 +535,8 @@
     },
     {
       "path": "editor/js/editor-canvas.js",
-      "bytes": 11259,
-      "sha256": "1443302608d4f5c3abd961f26ecb04f753bc08aee2d95ae58d12e2ada3cff8ae"
+      "bytes": 12739,
+      "sha256": "9dd575069a01fb2ac05ca67061b4c2fc6b85c680265523e72e2c0f0774b43ac4"
     },
     {
       "path": "editor/js/interop.js",

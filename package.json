@@ -36,6 +36,7 @@
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "test:browser": "playwright test",
     "prepack": "node .release/check.cjs --ready && npm test && npm run build && npm run audit:package",
+    "source:check": "node scripts/check-source.mjs",
     "release:check": "node .release/check.cjs --ready",
     "assets:verify": "node scripts/verify-assets.mjs",
     "audit:package": "node scripts/audit-package.mjs",

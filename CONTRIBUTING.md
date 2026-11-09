@@ -13,17 +13,26 @@ committed compiled editor assets:
 
 ```bash
 npm ci
+npm run source:check
 npm test
 npm run build
 npm run assets:verify
 npm run audit:package
-npm pack
+npm pack --ignore-scripts
 ```
 
-`npm pack` creates a local npm archive and repeats its normal prepack checks.
-No .NET SDK, private source, credentials or sibling checkout is needed.
-Runtime production remains separate: do not alter runtime bytes or manifest
-provenance to bypass checks.
+This sequence creates a source snapshot after explicit tests, asset verification
+and package auditing. No .NET SDK, private source, credentials or sibling checkout
+is needed. Runtime production remains separate: compiled assets and their exact
+producer provenance must be synchronized from a verified companion source build.
+`source:check` runs complete native readiness checks in a disposable copy using
+the actual manifest's producer; it leaves the formal target and plan unchanged.
+
+The formal release target can still describe a previously published version.
+Ordinary `npm pack`, `npm run release:check` and publication retain the strict
+prepack release checks and reject a source snapshot whose native producer differs
+from that target. Select and prepare a matching new release before publication;
+do not relabel source assets as the frozen producer.
 
 For integration changes, run the real Chromium browser suite:
 

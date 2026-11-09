@@ -4,7 +4,7 @@ This guide covers the public standalone `@drawmotive/editor` SDK: canvas mountin
 
 **Architecture:** one active canvas is supported per page. Blazor mounts directly in the host DOM and persists for the page lifetime. Each opened document has a fresh native scope. This branch is a staging candidate; npm publication remains separate.
 
-The canvas-only source API, top-level text policy and generated scene APIs require the matching native runtime built from the companion source revision. The diagrams site builds that committed-source candidate without publishing npm packages. Previously committed generated release assets retain their own producer and are not validation evidence for these new APIs.
+The canvas-only source API, top-level text policy and generated scene APIs require the matching native runtime built from the companion source revision. The committed generated assets carry that source snapshot's exact producer and are exercised by the default browser suite. The diagrams site also builds a committed-source candidate without publishing npm packages. Source snapshots do not change the frozen formal release target; publication requires a separately prepared matching release.
 
 Upgrading from the former chrome API removes the public React/style exports, ui creation option, onUiChanged(), invokeAction() and setActionState(). Hosts own their web controls and actions; native text policy moves from ui.textEditing to textEditing.
 

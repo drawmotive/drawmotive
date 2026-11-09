@@ -23,12 +23,16 @@ jobs:
           cache: npm
       - run: npm install --global npm@12.2.1
       - run: npm ci
+      - run: npm run source:check
       - run: npm test
       - run: npm run build
-      - run: npm pack --json
+      - run: npm run assets:verify
+      - run: npm run audit:package
+      - name: Pack the verified source snapshot without release preparation
+        run: npm pack --ignore-scripts --json
       - uses: actions/upload-artifact@v4
         with:
-          name: editor-npm-${{ matrix.os }}-node-${{ matrix.node }}
+          name: editor-source-npm-${{ matrix.os }}-node-${{ matrix.node }}
           path: "*.tgz"
           if-no-files-found: error
   browser:
@@ -41,7 +45,9 @@ jobs:
           cache: npm
       - run: npm install --global npm@12.2.1
       - run: npm ci
+      - run: npm run source:check
       - run: npm run build
+      - run: npm run assets:verify
       - name: Use the Ubuntu archive over HTTPS
         run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
       - run: npx playwright install --with-deps chromium
