@@ -19,6 +19,7 @@
     }
   },
   "files": [
+    "NOTICE",
     "src",
     "dist/workers",
     "docs/editor-sdk.md",

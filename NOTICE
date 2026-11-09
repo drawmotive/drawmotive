@@ -4,6 +4,7 @@ The public package code uses the MIT license in LICENSE. The compiled editor
 distribution retains the accompanying third-party terms:
 - licenses/DotNet-LICENSE.txt
 - licenses/DotNet-THIRD-PARTY-NOTICES.txt
+- licenses/BouncyCastle-LICENSE.txt
 - licenses/SkiaSharp-LICENSE.txt
 - licenses/HarfBuzzSharp-LICENSE.txt
 - licenses/Radzen-LICENSE.txt

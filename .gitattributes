@@ -5,3 +5,6 @@ generated/editor/** -text
 # Resource-audit fixtures must retain the exact reviewed embedded bytes too.
 test/fixtures/GroupThemeDefaults*.css -text
 test/fixtures/shape-resources/*.json -text
+
+# Preserve the upstream redistribution notice verbatim.
+licenses/BouncyCastle-LICENSE.txt -text whitespace=cr-at-eol
