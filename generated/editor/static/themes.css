@@ -49,7 +49,7 @@
     --color-grip-fill: rgba(0, 255, 255, 0.8);
 }
 
-.styling.default {
+.styling.default, .styling.minimal {
     /* Selection Styles */
     --selection-blend-mode: SrcOver;
     --selection-stroke-path-effect: solid;
@@ -120,4 +120,74 @@
     --textgraph-preview-polyline-route-color: secondary-stroke;
 
     --textgraph-default-opacity: 1;
+}
+
+/* Original hardware-inspired materials: Graphite, Ceramic, Natural Titanium, Blue Titanium and Desert Titanium.
+   Interaction blue stays separate from the neutral Graphite drawing role. */
+.minimal.light {
+    --color-foreground: #1D1D1F;
+    --color-background: #F5F5F7;
+    --color-primary-stroke: #303033;
+    --color-primary-fill: #D2D2D7;
+    --color-secondary-stroke: #8E8E93;
+    --color-secondary-fill: #FFFFFF;
+    --color-accent-stroke: #7C7263;
+    --color-accent-fill: #D8D2C7;
+    --color-success-stroke: #4A596A;
+    --color-success-fill: #C8D2DE;
+    --color-warning-stroke: #8E6854;
+    --color-warning-fill: #E4CDBB;
+    --color-selection-stroke: #007AFF;
+    --color-selection-fill: rgba(0, 122, 255, 0.10);
+    --color-selection-stroke-reverse: #FF3B30;
+    --color-selection-fill-reverse: rgba(255, 59, 48, 0.10);
+    --color-bound-stroke: rgba(0, 122, 255, 0.65);
+    --color-grip-stroke: #007AFF;
+    --color-grip-fill: #FFFFFF;
+}
+
+.minimal.dark {
+    --color-foreground: #F5F5F7;
+    --color-background: #000000;
+    --color-primary-stroke: #C7C7CC;
+    --color-primary-fill: #303034;
+    --color-secondary-stroke: #98989D;
+    --color-secondary-fill: #1C1C1E;
+    --color-accent-stroke: #C6BDAF;
+    --color-accent-fill: #3B3730;
+    --color-success-stroke: #A8B6C7;
+    --color-success-fill: #273441;
+    --color-warning-stroke: #D2AE98;
+    --color-warning-fill: #49342B;
+    --color-selection-stroke: #0A84FF;
+    --color-selection-fill: rgba(10, 132, 255, 0.16);
+    --color-selection-stroke-reverse: #FF453A;
+    --color-selection-fill-reverse: rgba(255, 69, 58, 0.16);
+    --color-bound-stroke: rgba(10, 132, 255, 0.75);
+    --color-grip-stroke: #0A84FF;
+    --color-grip-fill: #1C1C1E;
+}
+
+.styling.minimal {
+    --line-width-thin: 0.75px;
+    --line-width-normal: 1px;
+    --line-width-bold: 2px;
+    --shape-corner-radius: 18px;
+    --shape-shadow-sigma: 4px;
+    --shape-shadow-offset-y: 2px;
+    --shape-shadow-opacity: 0.12;
+    --group-body-fill-mix: 1;
+    --group-header-fill-mix: 1;
+    --group-emphasis-fill-mix: 0.75;
+    --group-emphasis-header-fill-mix: 0.75;
+    --group-border-mix: 0.28;
+    --group-border-min-contrast: 1.3;
+    --group-title-foreground-mix: 1;
+    --group-title-font-weight: 600;
+    --group-title-align: left;
+    --group-header-padding: 16px 24px;
+    --group-corner-radius: 24px;
+    --textgraph-preview-node-corner-radius: 16px;
+    --line-label-background-opacity: 0.96;
+    --line-label-background-padding: 3px 6px;
 }

@@ -36,6 +36,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - run: npm install --global npm@12.2.1
       - run: npm ci --ignore-scripts
       - run: node scripts/npm-release.mjs check
       - run: npm test
@@ -67,7 +68,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org/
-      - run: npm install --global npm@11.19.1
+      - run: npm install --global npm@12.2.1
       - uses: actions/download-artifact@v4
         with:
           name: editor-npm-release
@@ -92,7 +93,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --global npm@11.19.1
+      - run: npm install --global npm@12.2.1
       - name: Download the reviewed archive without rebuilding
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "fontToolsVersion": "4.60.1",
+  "fonts": [
+    {
+      "path": "Yozai-Regular.ttf",
+      "sha256": "25071998a0fe6a72f54c235e714986d259633e5ff670b1a2b5e264387f3316ac",
+      "bytes": 15605374,
+      "revision": "90a91ca019faad7b7dae885a4f70a44359021333",
+      "releaseTag": "v0.868",
+      "releaseAssetId": 292424988,
+      "source": "https://github.com/lxgw/yozai-font/releases/download/v0.868/Yozai-Regular.ttf",
+      "license": "Yozai-LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/lxgw/yozai-font/90a91ca019faad7b7dae885a4f70a44359021333/OFL.txt",
+      "version": "Version 0.868;September 12, 2025"
+    },
+    {
+      "path": "ZenKurenaido-Regular.ttf",
+      "sha256": "58b8d930d9fc10c8a5810c085bae378dacb98d0779073ee6d53d919f19ee6a4f",
+      "bytes": 4303112,
+      "revision": "eb20e9cf19d97cf579fa3867d729d4222d6c59e1",
+      "source": "https://raw.githubusercontent.com/google/fonts/eb20e9cf19d97cf579fa3867d729d4222d6c59e1/ofl/zenkurenaido/ZenKurenaido-Regular.ttf",
+      "license": "ZenKurenaido-LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/google/fonts/eb20e9cf19d97cf579fa3867d729d4222d6c59e1/ofl/zenkurenaido/OFL.txt",
+      "version": "Version 1.001"
+    },
+    {
+      "path": "NotoSansKR-Regular.ttf",
+      "sha256": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
+      "bytes": 10414588,
+      "revision": "eb20e9cf19d97cf579fa3867d729d4222d6c59e1",
+      "source": "https://raw.githubusercontent.com/google/fonts/eb20e9cf19d97cf579fa3867d729d4222d6c59e1/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf",
+      "license": "NotoSansKR-LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/google/fonts/eb20e9cf19d97cf579fa3867d729d4222d6c59e1/ofl/notosanskr/OFL.txt",
+      "version": "Version 2.004-H2;hotconv 1.0.118;makeotfexe 2.5.65603"
+    },
+    {
+      "path": "HiMelody-Regular.ttf",
+      "sha256": "360d2c0a880918aa48328d1d9219f5390788d09a1c9353e12b471de018673ae6",
+      "bytes": 12623412,
+      "revision": "eb20e9cf19d97cf579fa3867d729d4222d6c59e1",
+      "source": "https://raw.githubusercontent.com/google/fonts/eb20e9cf19d97cf579fa3867d729d4222d6c59e1/ofl/himelody/HiMelody-Regular.ttf",
+      "license": "HiMelody-LICENSE.txt",
+      "licenseSource": "https://raw.githubusercontent.com/google/fonts/eb20e9cf19d97cf579fa3867d729d4222d6c59e1/ofl/himelody/OFL.txt",
+      "version": "Version 3.00"
+    }
+  ]
+}

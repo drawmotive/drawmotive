@@ -1,3 +1,4 @@
+import { parseNpmPack } from "../.release/release-registry.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -71,7 +72,7 @@ async function pack(release, commit) {
   const directory = path.join(root, ".release");
   await mkdir(directory, { recursive: true });
   const { stdout } = await npm(["pack", "--ignore-scripts", "--json", "--workspaces=false", "--pack-destination", directory]);
-  const [packed] = JSON.parse(stdout);
+  const packed = parseNpmPack(stdout, release.name);
   for (const key of ["name", "version", "filename"]) assert.equal(packed[key], release[key]);
   auditPackageFiles(root, packed.files.map(file => file.path));
   const receipt = { ...release, commit, integrity: packed.integrity };
