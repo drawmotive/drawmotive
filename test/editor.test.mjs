@@ -83,11 +83,11 @@ test('private replication snapshots own decoded bytes and capture install/archiv
  assert.ok(exported.payload instanceof Uint8Array);assert.deepEqual([...exported.payload],[1,2,3]);
  assert.deepEqual(exported.clock,{author:2});assert.equal(exported.key,'tx2');
  nativeSnapshot.clock.author=99;assert.equal(exported.clock.author,2);exported.payload[0]=7;
- const payload=new Uint8Array([4,5]),transactions=[{id:'one',payload:new Uint8Array([6])}];
- const installed=replication.installSnapshot(payload),archived=replication.archive(transactions);
- payload[0]=9;transactions[0].payload[0]=9;await installed;await archived;
+ const payload=new Uint8Array([4,5]),transactions=[{id:'one',payload:new Uint8Array([6])}],expectedClock={author:2};
+ const installed=replication.installSnapshot(payload,expectedClock),archived=replication.archive(transactions);
+ payload[0]=9;transactions[0].payload[0]=9;expectedClock.author=9;await installed;await archived;
  assert.deepEqual(h.calls,[{method:'replica.exportSnapshot',args:{}},
-  {method:'replica.installSnapshot',args:{payload:new Uint8Array([4,5])}},
+  {method:'replica.installSnapshot',args:{payload:new Uint8Array([4,5]),expectedClock:{author:2}}},
   {method:'replica.archive',args:{transactions:[{id:'one',payload:new Uint8Array([6])}]}}]);
 });
 test('private replication rejects malformed portable snapshot responses',async t=>{
