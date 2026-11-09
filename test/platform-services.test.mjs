@@ -109,20 +109,9 @@ test('preferences bypass document storage and belong to the host', async () => {
   await assert.rejects(services.request('preferences.get'), { code: 'EditorDisposed' });
 });
 
-test('persistent alias options reach the document store unchanged within the configured account', async () => {
-  const services = createPlatformServices({
-    persistence: { mode: 'persistent', namespace: 'account', documentId: 'account:canonical', legacyDocumentId: 'account:legacy' },
-    createDocumentStore: async () => {
-      const { createMemoryDocumentStore } = await import('../src/storage/memory-store.js');
-      const inner = createMemoryDocumentStore();
-      return { ...inner, async openSession(options) {
-        assert.deepEqual(options, { persistence: 'persistent', namespace: 'account', documentId: 'account:canonical', legacyDocumentId: 'account:legacy' });
-        return inner.openSession(options);
-      } };
-    },
-  });
-  const session = await services.request('storage.open');
-  assert.equal(session.documentId, 'account:canonical');
-  await services.dispose();
-  assert.throws(() => createPlatformServices({ persistence: { mode: 'persistent', namespace: 'account', documentId: 'canonical', legacyDocumentId: '' } }), TypeError);
+test('obsolete persistence aliases reject before creating a document store', () => {
+  for (const mode of ['persistent', 'memory']) assert.throws(() => createPlatformServices({
+    persistence: { mode, namespace: 'account', documentId: 'opaque:document', legacyDocumentId: 'previous' },
+    createDocumentStore() { assert.fail('Invalid options must not acquire storage.'); },
+  }), TypeError);
 });

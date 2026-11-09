@@ -91,28 +91,31 @@ test('independent document Workers restore an incremental suffix and retain ACK 
   expect(result).toEqual({ snapshot: [10], state: [2], journal: [{ id: 'tx', bytes: [20] }], revision: 'r2', finalRevision: 'r3', finalJournal: [], pending: [], independent: [99], conflict: 'BatchConflict' });
 });
 
-test('canonical migration holds the legacy writer lease and preserves the source document', async ({ page }) => {
+test('fresh Workers ignore retired databases and preserve only current-generation data', async ({ page }) => {
   await page.route('**/storage-worker-test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html>' }));
   await page.goto('/storage-worker-test');
   const result = await page.evaluate(async () => {
+    const { seedRetiredDocumentStores } = await import('/test/fixtures/retired-document-stores.mjs');
     const { createDocumentWorkerClient } = await import('/src/storage/worker-client.js');
-    const databaseName = 'alias-browser-' + crypto.randomUUID();
-    const legacy = { namespace: 'account', documentId: 'account:legacy', persistence: 'persistent' };
-    const canonical = { ...legacy, documentId: 'account:canonical', legacyDocumentId: legacy.documentId };
-    const source = await createDocumentWorkerClient({ databaseName }), target = await createDocumentWorkerClient({ databaseName });
-    const session = await source.openSession(legacy);
-    await source.commitBatch(session, { batchId: 'one', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([42]), clock: {} }, outbox: [{ id: 'pending', revision: 'r1', payload: new Uint8Array([43]) }] });
-    let occupied;
-    try { await target.openSession(canonical); } catch (error) { occupied = error.code; }
-    await source.closeSession(session);
-    const migrated = await target.openSession(canonical);
-    let protectedSource;
-    try { await source.openSession(legacy); } catch (error) { protectedSource = error.code; }
-    const checkpoint = await target.readCheckpoint(migrated);
-    await target.acknowledgeOutbox(migrated, ['pending']); await target.closeSession(migrated);
-    const previous = await source.openSession(legacy), pending = await source.readOutbox(previous);
-    await source.dispose(); await target.dispose();
-    return { occupied, protectedSource, payload: [...checkpoint.payload], recoveryPending: pending.map(row => row.id) };
+    const databaseName = 'fresh-browser-' + crypto.randomUUID();
+    const configuration = { namespace: 'account', documentId: 'opaque:document', persistence: 'persistent' };
+    await seedRetiredDocumentStores(databaseName, configuration);
+    indexedDB.open = () => { throw new Error('SDK attempted main-thread IndexedDB'); };
+    indexedDB.deleteDatabase = () => { throw new Error('SDK attempted main-thread database deletion'); };
+    let store = await createDocumentWorkerClient({ databaseName }), session = await store.openSession(configuration);
+    const initial = await store.readCheckpoint(session), initialOutbox = await store.readOutbox(session);
+    const batch = { batchId: 'current', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([10]), clock: { author: 1 } },
+      outbox: [{ id: 'current', revision: 'r1', payload: new Uint8Array([20]) }] };
+    await store.commitBatch(session, batch); await store.dispose();
+    store = await createDocumentWorkerClient({ databaseName }); session = await store.openSession(configuration);
+    const restored = await store.readCheckpoint(session);
+    await store.acknowledgeOutbox(session, ['current']);
+    const receipt = await store.commitBatch(session, batch), pending = await store.readOutbox(session);
+    await store.deleteDocument(session); await store.dispose();
+    store = await createDocumentWorkerClient({ databaseName }); session = await store.openSession(configuration);
+    const deleted = await store.readCheckpoint(session), deletedOutbox = await store.readOutbox(session);
+    await store.dispose();
+    return { initial, initialOutbox, restored: [...restored.payload], receipt, pending, deleted, deletedOutbox };
   });
-  expect(result).toEqual({ occupied: 'StorageConflict', protectedSource: 'StorageConflict', payload: [42], recoveryPending: ['pending'] });
+  expect(result).toEqual({ initial: null, initialOutbox: [], restored: [10], receipt: { batchId: 'current', revision: 'r1' }, pending: [], deleted: null, deletedOutbox: [] });
 });

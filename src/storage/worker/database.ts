@@ -1,7 +1,6 @@
 import type { DocumentCheckpoint, DocumentJournalEntry, DocumentOutboxEntry, DocumentSession, DocumentSessionOptions, DocumentStore, DocumentCommitBatch } from '../document-store.js';
 import { createDocumentOwner, prepareBatch, storageError, equalBytes, equalOutbox, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata } from '../store-operations.js';
 import { databaseName, DocumentDatabase, type ExactReceiptRow, type HeadRow } from './schema.ts';
-import { checkLegacyReceipt, migrateDocument } from './legacy-migration.ts';
 
 interface DatabaseOptions { databaseName?: string; acquireWriter?: (key: string) => Promise<() => void>; }
 
@@ -71,25 +70,19 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
       const key = documentKey(configuration);
       if (db || opening) throw storageError('StorageConflict', 'Document storage already has an active document.');
       opening = true;
-      const alias = configuration.legacyDocumentId && configuration.legacyDocumentId !== configuration.documentId
-        ? documentKey({ ...configuration, documentId: configuration.legacyDocumentId }) : undefined;
-      const releases: (() => void)[] = [];
+      let release: (() => void) | undefined;
       let candidate: DocumentDatabase | undefined;
-      const release = () => { for (const action of releases.splice(0).reverse()) action(); };
       try {
-        // Both identities remain locked for the session, preventing an old writer from
-        // modifying the migration source while the canonical identity is being edited.
-        for (const identity of [...new Set([key, ...(alias ? [alias] : [])])].sort()) releases.push(await lock(identity));
+        release = await lock(key);
         if (closing) throw storageError('EditorDisposed', 'Document storage is closing.');
         candidate = new DocumentDatabase(databaseName(options.databaseName, key));
         await candidate.open();
-        await migrateDocument(candidate, options.databaseName, key, alias);
         if (closing) throw storageError('EditorDisposed', 'Document storage is closing.');
         const opened = candidate;
-        const session = owner.add(configuration, () => { opened.close(); db = undefined; release(); });
+        const session = owner.add(configuration, () => { opened.close(); db = undefined; release?.(); });
         db = opened;
         return session;
-      } catch (error) { candidate?.close(); release(); throw error; }
+      } catch (error) { candidate?.close(); release?.(); throw error; }
       finally { opening = false; }
     },
     async readCheckpoint(session: DocumentSession) { return readCheckpoint(database(session)); },
@@ -97,18 +90,10 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
       const currentDb = database(session);
       const { batch }: { batch: DocumentCommitBatch } = await prepareBatch(value);
       owner.get(session);
-      // V1 hashing uses WebCrypto outside a transaction. These immutable receipts are
-      // already accepted; verification returns directly and cannot enqueue outbox bytes.
-      const previous = await currentDb.receipts.get(batch.batchId);
-      if (previous?.kind === 'legacy') {
-        const source = await currentDb.meta.get('legacySource');
-        const receipt = await checkLegacyReceipt(previous, batch, source?.key === 'legacySource' ? source : undefined);
-        owner.get(session); return receipt;
-      }
       return currentDb.transaction('rw', currentDb.tables, async () => {
         owner.get(session);
         const receipt = await currentDb.receipts.get(batch.batchId);
-        if (receipt?.kind === 'exact') return checkReceipt(receipt, batch, await originalBatch(currentDb, receipt));
+        if (receipt) return checkReceipt(receipt, batch, await originalBatch(currentDb, receipt));
         const current = await currentDb.head();
         if ((current?.checkpoint.revision ?? null) !== batch.expectedRevision) throw storageError('StorageConflict', 'Checkpoint revision changed.');
         let nextOutboxOrdinal = current?.nextOutboxOrdinal ?? 0, nextJournalOrdinal = current?.nextJournalOrdinal ?? 0;
@@ -133,7 +118,7 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
           snapshotOrdinal: replacesSnapshot ? nextJournalOrdinal - 1 : current?.snapshotOrdinal ?? -1,
           nextJournalOrdinal, nextOutboxOrdinal };
         await currentDb.meta.put(head);
-        await currentDb.receipts.put({ kind: 'exact', batchId: batch.batchId, revision: batch.checkpoint.revision,
+        await currentDb.receipts.put({ batchId: batch.batchId, revision: batch.checkpoint.revision,
           expectedRevision: batch.expectedRevision, checkpoint: checkpointMetadata(undefined, batch.checkpoint),
           ...(snapshotId ? { snapshotId } : {}), outbox: batch.outbox.map(entry => entry.id),
           ...(batch.journal === undefined ? {} : { journal: batch.journal.map(entry => entry.id) }) });
@@ -159,10 +144,7 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
     async deleteDocument(session: DocumentSession) {
       const currentDb = database(session);
       await currentDb.transaction('rw', currentDb.tables, async () => {
-        // Keep the migration marker so deletion cannot revive legacy pending bytes on reopen.
-        await currentDb.meta.delete('head');
-        await currentDb.meta.delete('legacySource');
-        for (const table of [currentDb.snapshots, currentDb.journal, currentDb.outbox, currentDb.pending, currentDb.receipts]) await table.clear();
+        for (const table of currentDb.tables) await table.clear();
       });
     },
     async dispose() { closing = true; owner.dispose(); db?.close(); },

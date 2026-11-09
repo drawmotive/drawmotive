@@ -12,8 +12,6 @@ export interface DocumentSessionOptions {
   namespace: string;
   documentId: string;
   persistence: DocumentPersistenceMode;
-  /** Explicit previous identity in the same namespace; never inferred from IDs. */
-  legacyDocumentId?: string;
 }
 /** An opaque scene snapshot plus the latest engine replica metadata. */
 export interface DocumentCheckpoint {

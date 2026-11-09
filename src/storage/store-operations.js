@@ -6,7 +6,7 @@ const validClock = value => value !== null && typeof value === 'object' && !Arra
 export function documentKey(options) {
   if (!options || !['namespace', 'documentId'].every(key => id(options[key])) ||
       !['persistent', 'memory'].includes(options.persistence) ||
-      options.legacyDocumentId !== undefined && !id(options.legacyDocumentId))
+      Object.keys(options).some(key => !['namespace', 'documentId', 'persistence'].includes(key)))
     throw storageError('InvalidDocumentSession', 'A namespace, document and persistence mode are required.');
   return JSON.stringify([options.namespace, options.documentId]);
 }

@@ -475,15 +475,17 @@ field and exact bytes, independent of the current scene. Outbox acknowledgements
 remove pending membership while retaining immutable identity evidence, so neither
 an identical retry nor a later edit can resurrect an acknowledged record.
 
-Existing shared-database documents migrate once under the same writer lease.
-When a host changes a document's identity, it may supply the explicit
-`persistence.legacyDocumentId` in the same namespace; storage locks both identities
-and copies the prior document to the canonical identity. Storage never infers
-aliases from ID formats. Migration leaves the source untouched for recovery,
-and explicit deletion keeps the migration marker to prevent reimporting old
-pending records. Legacy receipts contain only hashes, so their unchanged source
-remains necessary to verify old retries; new receipts never persist fingerprints
-and always use original immutable bytes.
+Persistent storage uses the fixed `document-v3` database generation. Previous
+shared and per-document formats are ignored: the SDK never opens or imports them,
+and does not remove their database files. Only data written in the current
+generation is restored. Reopening retains that data; explicit document deletion
+clears its snapshot, journal, metadata, receipts and pending delivery records
+atomically, without importing anything on the next open.
+
+Hosts configure only an opaque namespace and document ID. A session holds one
+writer lease for that identity. There is no previous-identity or migration option;
+changing identity starts independent storage. Current-format retries use exact
+immutable evidence, including after acknowledgement or snapshot replacement.
 
 The two build artifacts are `dist/workers/document.worker.js` and `dist/workers/resource.worker.js`. Both are self-contained classic Worker scripts. If the bundler/host does not preserve their module-relative URLs, copy these exact files from the same package version into your static asset pipeline and provide their served locations:
 

@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Dexie from 'dexie';
 import { IDBObjectStore } from 'fake-indexeddb';
+import { seedRetiredDocumentStores } from './fixtures/retired-document-stores.mjs';
 
 const database = await import('../src/storage/worker/database.ts').catch(() => ({}));
 const memory = await import('../src/storage/memory-store.js').catch(() => ({}));
@@ -205,23 +206,6 @@ for (const kind of ['dexie', 'memory']) {
 const openRaw = async name => {
   const db = new Dexie(name); await db.open(); return db;
 };
-const legacySchema = { documents: 'key', outbox: '[documentKey+id], documentKey, [documentKey+ordinal]', receipts: '[documentKey+batchId], documentKey' };
-async function seedLegacy(name, configuration, commit) {
-  const db = new Dexie(name); db.version(1).stores(legacySchema);
-  const key = JSON.stringify([configuration.namespace, configuration.documentId]);
-  await db.table('documents').put({ key, checkpoint: commit.checkpoint, nextOrdinal: commit.outbox.length });
-  await db.table('outbox').bulkPut(commit.outbox.map((entry, ordinal) => ({ ...entry, documentKey: key, ordinal })));
-  const metadata = bytes(JSON.stringify([commit.batchId, commit.expectedRevision, commit.checkpoint.revision,
-    Object.entries(commit.checkpoint.clock).sort(), commit.checkpoint.payload.length,
-    commit.outbox.map(entry => [entry.id, entry.revision, entry.payload.length])]));
-  const input = new Uint8Array(metadata.length + commit.checkpoint.payload.length + commit.outbox.reduce((sum, entry) => sum + entry.payload.length, 0));
-  let offset = 0;
-  for (const part of [metadata, commit.checkpoint.payload, ...commit.outbox.map(entry => entry.payload)]) { input.set(part, offset); offset += part.length; }
-  const fingerprint = [...new Uint8Array(await crypto.subtle.digest('SHA-256', input))].map(byte => byte.toString(16).padStart(2, '0')).join('');
-  await db.table('receipts').put({ documentKey: key, batchId: commit.batchId, revision: commit.checkpoint.revision, fingerprint });
-  db.close(); return key;
-}
-
 test('persistent identities get separate collision-free databases without account keys on document rows', async () => {
   const prefix = 'identity-' + crypto.randomUUID(), before = new Set((await indexedDB.databases()).map(row => row.name));
   for (const [namespace, documentId] of [['a:b', 'c'], ['a', 'b:c'], ['a', 'b/c'], ['a', 'b%2Fc']]) {
@@ -262,87 +246,64 @@ test('normal incremental appends never rewrite an earlier snapshot or journal re
   await store.dispose();
 });
 
-test('shared legacy migration preserves pending bytes, ACK receipts, account isolation and recovery source', async () => {
-  const name = 'legacy-' + crypto.randomUUID(), original = batch('original', null, 'r1', 'original-scene');
-  const first = options('account-a', 'account-a:old-uuid'), other = options('account-b', first.documentId);
-  const key = await seedLegacy(name, first, original); await seedLegacy(name, other, batch('other', null, 'b1'));
-  const raw = await openRaw(name); await raw.table('outbox').delete([key, 'original']); raw.close();
-  const pending = batch('pending', 'r1', 'r2', 'scene-with-pending');
-  const legacy = await openRaw(name);
-  await legacy.table('documents').put({ key, checkpoint: pending.checkpoint, nextOrdinal: 2 });
-  await legacy.table('outbox').put({ ...pending.outbox[0], documentKey: key, ordinal: 1 }); legacy.close();
-  const locks = new Set();
-  const acquireWriter = async key => { assert.equal(locks.has(key), false); locks.add(key); return () => locks.delete(key); };
-  const store = database.createDocumentDatabase({ databaseName: name, acquireWriter });
-  const canonical = options('account-a', 'account-a:compact-id'); canonical.legacyDocumentId = first.documentId;
-  const session = await store.openSession(canonical);
-  assert.equal(locks.has(JSON.stringify(['account-a', first.documentId])), true);
-  assert.equal(locks.has(JSON.stringify(['account-a', canonical.documentId])), true);
-  assert.deepEqual(await store.readCheckpoint(session), pending.checkpoint);
-  assert.deepEqual(await store.readOutbox(session), pending.outbox);
-  assert.deepEqual(await store.commitBatch(session, original), { batchId: 'original', revision: 'r1' });
-  const changed = structuredClone(original); changed.outbox[0].payload[0]++;
-  await assert.rejects(store.commitBatch(session, changed), { code: 'BatchConflict' });
-  assert.deepEqual(await store.readOutbox(session), pending.outbox);
-  await store.acknowledgeOutbox(session, ['pending']);
-  await store.commitBatch(session, batch('new', 'r2', 'r3'));
-  await store.closeSession(session);
-  assert.equal(locks.size, 0);
-  const reopened = await store.openSession(canonical);
-  assert.deepEqual((await store.readOutbox(reopened)).map(row => row.id), ['new']);
-  await store.deleteDocument(reopened); await store.closeSession(reopened);
-  const deleted = await store.openSession(canonical);
-  assert.equal(await store.readCheckpoint(deleted), null);
-  await store.dispose();
-  const recovery = await openRaw(name);
-  assert.deepEqual((await recovery.table('documents').get(key)).checkpoint, pending.checkpoint);
-  assert.equal(await recovery.table('documents').count(), 2);
-  assert.deepEqual((await recovery.table('outbox').where('documentKey').equals(key).toArray()).map(row => row.id), ['pending']);
-  recovery.close();
+test('v3 ignores retired shared and per-document data while current commits survive reopening and ACK retries', async t => {
+  const prefix = 'fresh-' + crypto.randomUUID(), configuration = options('account/a', 'opaque:document');
+  const retired = await seedRetiredDocumentStores(prefix, configuration);
+  const opened = [], deleted = [], originalOpen = indexedDB.open, originalDelete = indexedDB.deleteDatabase;
+  indexedDB.open = function (name, ...args) {
+    opened.push(name);
+    assert.ok(![retired.sharedName, retired.previousName].includes(name), 'The SDK must not open a retired database.');
+    return originalOpen.call(this, name, ...args);
+  };
+  indexedDB.deleteDatabase = function (name, ...args) { deleted.push(name); return originalDelete.call(this, name, ...args); };
+  t.after(() => { indexedDB.open = originalOpen; indexedDB.deleteDatabase = originalDelete; });
+  const create = () => database.createDocumentDatabase({ databaseName: prefix, acquireWriter: async () => () => {} });
+  let store = create();
+  t.after(() => store.dispose());
+  let session = await store.openSession(configuration);
+  assert.equal(await store.readCheckpoint(session), null);
+  assert.deepEqual(await store.readReplicationState(session), { clock: {}, outbox: [] });
+  const first = batch('first', null, 'r1', 'current-scene'); first.checkpoint.state = bytes('state-1');
+  await store.commitBatch(session, first);
+  const append = batch('append', 'r1', 'r2', '');
+  append.checkpoint.state = bytes('state-2'); append.checkpoint.clock.author = 2;
+  append.journal = [{ id: 'tx-2', payload: bytes('current-transaction') }];
+  await store.commitBatch(session, append);
+  await store.dispose(); store = create(); session = await store.openSession(configuration);
+  assert.deepEqual(await store.readCheckpoint(session), {
+    revision: 'r2', payload: bytes('current-scene'), state: bytes('state-2'), clock: { author: 2 }, journal: append.journal,
+  });
+  assert.deepEqual((await store.readOutbox(session)).map(row => row.id), ['first', 'append']);
+  await store.acknowledgeOutbox(session, ['first', 'append']);
+  const snapshot = batch('snapshot', 'r2', 'r3', 'replacement'); snapshot.outbox = [];
+  await store.commitBatch(session, snapshot);
+  assert.deepEqual(await store.commitBatch(session, first), { batchId: 'first', revision: 'r1' });
+  assert.deepEqual(await store.commitBatch(session, append), { batchId: 'append', revision: 'r2' });
+  assert.deepEqual(await store.readOutbox(session), []);
+  await store.deleteDocument(session); await store.closeSession(session);
+  session = await store.openSession(configuration);
+  assert.equal(await store.readCheckpoint(session), null);
+  assert.deepEqual(await store.readReplicationState(session), { clock: {}, outbox: [] });
+  await store.commitBatch(session, first);
+  await store.closeSession(session); session = await store.openSession(configuration);
+  assert.deepEqual(await store.readCheckpoint(session), first.checkpoint);
+  assert.ok(opened.length > 1);
+  assert.deepEqual([...new Set(opened)], [prefix + ':document-v3:' + encodeURIComponent(JSON.stringify(['account/a', 'opaque:document']))]);
+  assert.deepEqual(deleted, [], 'Opening, closing and explicit document deletion must never delete database files.');
 });
 
-test('canonical identity migration copies a legacy per-document journal without rewriting its recovery source', async () => {
-  const name = 'alias-' + crypto.randomUUID(), store = database.createDocumentDatabase({ databaseName: name, acquireWriter: async () => () => {} });
-  const legacy = options('account', 'account:legacy'), session = await store.openSession(legacy);
-  await store.commitBatch(session, batch('snapshot', null, 'r1', 'scene'));
-  const append = batch('append', 'r1', 'r2', ''); append.journal = [{ id: 'tx', payload: bytes('transaction') }]; append.checkpoint.state = bytes('state');
-  await store.commitBatch(session, append); const expected = await store.readCheckpoint(session);
-  await store.closeSession(session);
-  const canonical = options('account', 'account:canonical'); canonical.legacyDocumentId = legacy.documentId;
-  const migrated = await store.openSession(canonical);
-  assert.deepEqual(await store.readCheckpoint(migrated), expected);
-  await store.acknowledgeOutbox(migrated, ['append']); await store.commitBatch(migrated, append);
-  assert.deepEqual((await store.readOutbox(migrated)).map(row => row.id), ['snapshot']);
-  await store.closeSession(migrated);
-  const source = await store.openSession(legacy);
-  assert.deepEqual((await store.readOutbox(source)).map(row => row.id), ['snapshot', 'append']);
-  await store.dispose();
-});
-
-test('alias migration requires both writer leases and releases earlier locks on conflict', async () => {
-  const held = new Set(), name = 'locked-alias-' + crypto.randomUUID();
-  const configuration = { ...options('account', 'canonical'), legacyDocumentId: 'legacy' };
-  const store = database.createDocumentDatabase({ databaseName: name, acquireWriter: async key => {
-    if (JSON.parse(key)[1] === 'legacy') throw Object.assign(new Error('occupied'), { code: 'StorageConflict' });
-    held.add(key); return () => held.delete(key);
-  } });
-  await assert.rejects(store.openSession(configuration), { code: 'StorageConflict' });
-  assert.equal(held.size, 0);
-  assert.equal((await indexedDB.databases()).some(row => row.name.startsWith(name)), false);
-  await store.dispose();
-});
-
-test('an existing canonical shared checkpoint takes precedence over an older alias database', async () => {
-  const name = 'precedence-' + crypto.randomUUID();
-  const old = options('account', 'legacy'), canonical = { ...options('account', 'canonical'), legacyDocumentId: 'legacy' };
-  const store = database.createDocumentDatabase({ databaseName: name, acquireWriter: async () => () => {} });
-  const source = await store.openSession(old); await store.commitBatch(source, batch('older', null, 'old'));
-  await store.closeSession(source);
-  await seedLegacy(name, canonical, batch('newer', null, 'new'));
-  const session = await store.openSession(canonical);
-  assert.equal((await store.readCheckpoint(session)).revision, 'new');
-  await store.dispose();
-});
+for (const kind of ['dexie', 'memory']) {
+  test(kind + ': obsolete alias options reject before acquiring document ownership', async t => {
+    let locks = 0;
+    const create = kind === 'dexie' ? database.createDocumentDatabase : memory.createMemoryDocumentStore;
+    const store = create({ databaseName: 'rejected-option-' + crypto.randomUUID(), acquireWriter: async () => { locks++; return () => {}; } });
+    t.after(() => store.dispose());
+    await assert.rejects(store.openSession({ ...options(), legacyDocumentId: 'previous' }), { code: 'InvalidDocumentSession' });
+    assert.equal(locks, 0);
+    const session = await store.openSession(options('opaque/account', '5b3e9766-3703-49af-957d-770526da2748'));
+    assert.equal(await store.readCheckpoint(session), null, 'SDK document identities remain opaque.');
+  });
+}
 
 for (const kind of ['dexie', 'memory']) {
   test(kind + ': nullable interop fields normalize to absent metadata and read-only journal fields are ignored', async () => {
