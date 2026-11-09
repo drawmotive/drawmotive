@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 2,
+  "id": "capsule.v2",
+  "minimumAspectRatio": 1,
+  "variables": [
+    "r",
+    "cl.x",
+    "cl.y",
+    "cr.x",
+    "cr.y",
+    "lt.x",
+    "lt.y",
+    "rt.x",
+    "rt.y",
+    "rb.x",
+    "rb.y",
+    "lb.x",
+    "lb.y"
+  ],
+  "points": {
+    "cl": [
+      "cl.x",
+      "cl.y"
+    ],
+    "cr": [
+      "cr.x",
+      "cr.y"
+    ],
+    "lt": [
+      "lt.x",
+      "lt.y"
+    ],
+    "rt": [
+      "rt.x",
+      "rt.y"
+    ],
+    "rb": [
+      "rb.x",
+      "rb.y"
+    ],
+    "lb": [
+      "lb.x",
+      "lb.y"
+    ]
+  },
+  "segments": [
+    {
+      "id": "upper",
+      "kind": "line",
+      "from": "lt",
+      "to": "rt"
+    },
+    {
+      "id": "right-cap",
+      "kind": "arc",
+      "from": "rt",
+      "to": "rb",
+      "center": "cr",
+      "radius": "r",
+      "sweepDegrees": 180
+    },
+    {
+      "id": "lower",
+      "kind": "line",
+      "from": "rb",
+      "to": "lb"
+    },
+    {
+      "id": "left-cap",
+      "kind": "arc",
+      "from": "lb",
+      "to": "lt",
+      "center": "cl",
+      "radius": "r",
+      "sweepDegrees": 180
+    }
+  ],
+  "textSlot": [
+    "lt",
+    "rb"
+  ],
+  "boundaries": {
+    "top": {
+      "start": "lt.x",
+      "end": "rt.x",
+      "segments": [
+        "upper"
+      ]
+    },
+    "right": {
+      "start": "zero",
+      "end": "height",
+      "segments": [
+        "right-cap"
+      ]
+    },
+    "bottom": {
+      "start": "lb.x",
+      "end": "rb.x",
+      "segments": [
+        "lower"
+      ]
+    },
+    "left": {
+      "start": "zero",
+      "end": "height",
+      "segments": [
+        "left-cap"
+      ]
+    }
+  },
+  "$schema": "../Schemas/constraint-shape.schema.json",
+  "relations": [
+    {
+      "id": "construction-0",
+      "kind": "linear",
+      "terms": {
+        "r": 2
+      },
+      "height": 1
+    },
+    {
+      "id": "construction-1",
+      "kind": "linear",
+      "terms": {
+        "cl.x": 1,
+        "r": -1
+      }
+    },
+    {
+      "id": "construction-2",
+      "kind": "linear",
+      "terms": {
+        "cl.y": 1,
+        "r": -1
+      }
+    },
+    {
+      "id": "construction-3",
+      "kind": "linear",
+      "terms": {
+        "cr.x": 1,
+        "r": 1
+      },
+      "width": 1
+    },
+    {
+      "id": "construction-4",
+      "kind": "linear",
+      "terms": {
+        "cr.y": 1,
+        "r": -1
+      }
+    },
+    {
+      "id": "construction-5",
+      "kind": "linear",
+      "terms": {
+        "lt.x": 1,
+        "cl.x": -1
+      }
+    },
+    {
+      "id": "construction-6",
+      "kind": "fixed",
+      "target": "lt.y",
+      "value": 0
+    },
+    {
+      "id": "construction-7",
+      "kind": "linear",
+      "terms": {
+        "rt.x": 1,
+        "cr.x": -1
+      }
+    },
+    {
+      "id": "construction-8",
+      "kind": "fixed",
+      "target": "rt.y",
+      "value": 0
+    },
+    {
+      "id": "construction-9",
+      "kind": "linear",
+      "terms": {
+        "rb.x": 1,
+        "cr.x": -1
+      }
+    },
+    {
+      "id": "construction-10",
+      "kind": "proportional",
+      "target": "rb.y",
+      "source": "height",
+      "ratio": 1
+    },
+    {
+      "id": "construction-11",
+      "kind": "linear",
+      "terms": {
+        "lb.x": 1,
+        "cl.x": -1
+      }
+    },
+    {
+      "id": "construction-12",
+      "kind": "proportional",
+      "target": "lb.y",
+      "source": "height",
+      "ratio": 1
+    }
+  ],
+  "grips": [
+    {
+      "id": "frame",
+      "kind": "frameResize",
+      "roles": [
+        "topLeft",
+        "topRight",
+        "bottomLeft",
+        "bottomRight",
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    }
+  ]
+}

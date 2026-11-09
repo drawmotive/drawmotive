@@ -127,6 +127,48 @@ test('resource audit rejects source names, changed contents, aliases and hidden 
  }
 });
 
+const shapeEntries = () => ['capsule', 'cloud', 'star'].map(name => ({
+ name: `Graphics.Core.Shapes.Resources.${name}.v2.json`,
+ data: readFileSync(new URL(`./fixtures/shapes/${name}.v2.json`, import.meta.url)),
+}));
+
+test('reviewed current shape data passes the same complete WASM resource audit as themes',()=>{
+ for(const wide of [false,true]) {
+  const entries=[...shapeEntries(),...themeEntries()];
+  const fixture=resourceMetadata(entries,{wide,precedingRows:2});
+  assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
+ }
+});
+
+test('shape resource approval rejects changed data, unknown names, aliases and non-owned assemblies',()=>{
+ for(let index=0;index<3;index++) {
+  for(const mutate of [
+   entry=>entry.data=Buffer.concat([entry.data,Buffer.from(' ')]),
+   entry=>entry.name=entry.name.replace('.v2.json','.v3.json'),
+   entry=>entry.name='Graphics.Core.Shapes.Resources.Source.cs',
+   entry=>entry.name=shapeEntries()[(index+1)%3].name,
+  ]) {
+   const entries=[...themeEntries(),...shapeEntries()];mutate(entries[index+2]);
+   const fixture=resourceMetadata(entries);
+   assert.throws(()=>auditWasm(resourceAssembly(fixture),'Graphics.Core.wasm',{publicTheme:standardCss}),/resource|Resource/);
+  }
+ }
+ const fixture=resourceMetadata([...themeEntries(),...shapeEntries()]);
+ assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.wasm',{publicTheme:standardCss}),/approved resource policy/);
+ assert.throws(()=>auditManagedResources(fixture.streams,Buffer.concat([fixture.resources,Buffer.from('hidden source')]),
+  'Graphics.Core.wasm',standardCss),/unaccounted/);
+ for(let index=0;index<2;index++) {
+  const entries=[...themeEntries(),...shapeEntries()];entries.splice(index,1);
+  const missing=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(missing.streams,missing.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
+ }
+ for(let index=0;index<3;index++) {
+  const entries=[...themeEntries(),...shapeEntries()];entries.splice(index+2,1);
+  const missing=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(missing.streams,missing.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
+ }
+});
+
 test('resource approval rejects superseded styling defaults',()=>{
  const withoutShapeDefaults=groupCss.toString().replace(/^    --shape-[^\n]+\n/gm,'');
  const withoutEmojiDefaults=withoutShapeDefaults.replace('Noto-COLRv1','NotoColorEmoji');

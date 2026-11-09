@@ -10,6 +10,13 @@ import { parseNpmPack } from "../.release/release-registry.mjs";
 // declared filename: 96e7d2a95bda0a10ba32f7c650c0f77567d0639f introduced the
 // reviewed 10px shape radius and disabled shadow defaults.
 const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046";
+// Current built-ins are closed declarative runtime data. Approval binds both
+// metadata identity and reviewed bytes; a JSON suffix alone grants no authority.
+const shapeResourceHashes = new Map([
+  ["Graphics.Core.Shapes.Resources.capsule.v2.json", "3c76126c491c2cb209325216c02aa7148ed73fc0cb80b6ba441204563d7a2254"],
+  ["Graphics.Core.Shapes.Resources.cloud.v2.json", "2d2d0ccdef1fc567a41ece334edbabe532e20f86f41ca0db479a4d8c62a1f724"],
+  ["Graphics.Core.Shapes.Resources.star.v2.json", "9d6d7beb20de959599ebdb75f15d8bc8a11b71ac90203805039f35423cb6f087"],
+]);
 const prefix = "Graphics.Core.Styles.Resources.";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 function range(bytes, offset, size) {
@@ -60,13 +67,13 @@ export function readManagedResources(streams, resources) {
   return result;
 }
 
-/** Only reviewed runtime CSS may enter owned assemblies. Reject unknown names,
+/** Only reviewed runtime CSS and complete built-in data may enter owned assemblies. Reject unknown names,
  * changed payloads, duplicate entries and hidden bytes outside resource rows. */
 export function auditManagedResources(streams, resources, filename, publicTheme) {
   if (!/^Graphics\.Core(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename))) throw new Error("Private assembly embeds resources without an approved resource policy");
   const entries = readManagedResources(streams, resources);
   const names = new Set();
-  let end = 0;
+  let end = 0, shapeCount = 0;
   for (const resource of entries.sort((a,b)=>a.offset-b.offset)) {
     if (names.has(resource.name)) throw new Error("Duplicate managed resource name");
     names.add(resource.name);
@@ -75,10 +82,16 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
       if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
     } else if (resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
+    } else if (shapeResourceHashes.has(resource.name)) {
+      if (hash(resource.data) !== shapeResourceHashes.get(resource.name)) throw new Error("Unreviewed shape resource contents: "+resource.name);
+      shapeCount++;
     } else throw new Error("Unapproved managed resource: "+resource.name);
     end = resource.offset+4+resource.data.length;
   }
-  if (names.size !== 2 || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
+  if (!names.has(prefix+"GroupThemeDefaults.css") || !names.has(prefix+"StandardTheme.css") ||
+      (shapeCount !== 0 && shapeCount !== shapeResourceHashes.size) ||
+      resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0))
+    throw new Error("Incomplete or unaccounted managed resources");
 }
 
 const ownedAssembly = /^(?:Editor\.Client|Graphics\.Core|Blazor\.IndexedDB|Math\.Core|RBush)(?:\.[A-Za-z0-9_-]+)?\.wasm$/;
