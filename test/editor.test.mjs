@@ -43,31 +43,6 @@ test('semantic commands are ordered and immutable native events reach subscriber
  const first=editor.replaceDocument('raw'),second=editor.getState();await new Promise(setImmediate);assert.equal(h.calls.length,1);finish(null);await first;assert.equal((await second).revision,'new:1');
  editor.onStateChanged(value=>seen.push(value));h.context.emit('stateChanged',state({revision:'new:2'}));assert.ok(Object.isFrozen(seen.at(-1)));await editor.dispose();
 });
-test('TextGraph import defaults to the model origin and returns an immutable selection',async t=>{
- const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
- const selection={revision:'import:1',token:{session:'selection',version:2},items:[],anchor:null};
- h.behavior(()=>selection);
- const result=await editor.importTextGraph('A -> B');
- assert.deepEqual(h.calls,[{method:'importTextGraph',args:{source:'A -> B',position:{x:0,y:0}}}]);
- assert.deepEqual(result,selection);assert.ok(Object.isFrozen(result.token));assert.ok(Object.isFrozen(result.items));
- selection.token.version=3;assert.equal(result.token.version,2);
-});
-test('TextGraph import captures explicit model placement before queued dispatch',async t=>{
- const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());let finish;
- h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):null);
- const blocking=editor.undo();await new Promise(setImmediate);
- const position={x:-25,y:40};let pending;
- try {pending=editor.importTextGraph('A -> B',position);position.x=900;assert.equal(h.calls.length,1);} finally {finish(null);}
- await blocking;await pending;
- assert.deepEqual(h.calls.at(-1),{method:'importTextGraph',args:{source:'A -> B',position:{x:-25,y:40}}});
-});
-test('TextGraph import rejects invalid source or placement without dispatch',async t=>{
- const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
- for(const source of [undefined,null,42,{}])await assert.rejects(editor.importTextGraph(source),TypeError);
- for(const position of [null,[],{},{x:0},{x:'0',y:0},{x:0,y:'0'},{x:NaN,y:0},{x:0,y:Infinity},{x:0,y:0,z:0}])
-  await assert.rejects(editor.importTextGraph('A -> B',position),TypeError);
- assert.deepEqual(h.calls,[]);
-});
 test('native creation instructions survive state events and reads and clear on retirement',async t=>{
  const h=host(t),editor=await h.mount(),seen=[];t.after(()=>editor.dispose());
  editor.onStateChanged(value=>seen.push(value));

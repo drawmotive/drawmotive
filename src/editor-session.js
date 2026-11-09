@@ -160,12 +160,6 @@ export async function createEditorSession(options = {}, privateOptions) {
     replaceDocument(raw) { return invoke('replaceDocument', () => ({ raw: text(raw,'Document') })); },
     replacePngDocument(base64) { return invoke('replacePngDocument', () => ({ base64: text(base64,'PNG document') })); },
     replaceTextGraph(source) { return invoke('replaceTextGraph', () => ({ source: text(source,'TextGraph source') })); },
-    importTextGraph(source,position = {x:0,y:0}) { return invoke('importTextGraph', () => {
-      text(source,'TextGraph source');
-      keys(position,['x','y'],'position');
-      if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) throw new TypeError('position.x and position.y must be finite numbers');
-      return {source,position:{x:position.x,y:position.y}};
-    }); },
     clearDocument() { return request('clearDocument'); }, exportSnapshot(value) { return invoke('exportSnapshot', () => snapshotOptions(value)); },
     retryPersistence() { return request('retryPersistence'); },
     fitViewport(value) { return invoke('fitViewport', () => viewportOptions(value)); }, setEditingEnabled(enabled) { return invoke('setEditingEnabled', () => ({ enabled: boolean(enabled,'enabled') })); },
