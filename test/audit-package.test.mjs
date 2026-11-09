@@ -80,6 +80,10 @@ const themeEntries = () => [
   {name:'Graphics.Core.Styles.Resources.GroupThemeDefaults.css',data:Buffer.from(groupCss)},
   {name:'Graphics.Core.Styles.Resources.StandardTheme.css',data:Buffer.from(standardCss)},
 ];
+const shapeEntries = () => ['capsule', 'star', 'cloud'].map(shape => ({
+  name: `Graphics.Core.Shapes.Resources.${shape}.v2.json`,
+  data: readFileSync(new URL(`./fixtures/${shape}.v2.json`, import.meta.url)),
+}));
 function resourceAssembly({streams,resources}) {
   const streamEntries=[...streams], headers=streamEntries.map(([name])=>Math.ceil((8+name.length+1)/4)*4);
   const headerSize=24+headers.reduce((a,b)=>a+b,0);
@@ -106,6 +110,44 @@ test('reviewed CSS resources use metadata names and match public theme bytes',()
   assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
   assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.abc.wasm',{publicTheme:standardCss}),/approved resource policy/);
  }
+});
+
+test('reviewed current shape definitions pass the same binary and package resource audit', t => {
+  for (const wide of [false, true]) {
+    const metadata = resourceMetadata([...themeEntries(), ...shapeEntries()], { wide, precedingRows: 2 });
+    assert.doesNotThrow(() => auditManagedResources(metadata.streams, metadata.resources, 'Graphics.Core.abc.wasm', standardCss));
+    const filename = 'generated/editor/_framework/Graphics.Core.abc.wasm', theme = 'generated/editor/static/themes.css';
+    const assembly = resourceAssembly(metadata);
+    assert.deepEqual(auditWasm(assembly, filename, { publicTheme: standardCss }), { managed: true });
+    const root = fixture(t, { [filename]: assembly, [theme]: standardCss });
+    assert.equal(auditPackageFiles(root, [filename, theme]).managedAssemblies, 1);
+  }
+});
+
+test('shape resource approval rejects changed bytes, renamed definitions and unknown shapes', () => {
+  for (let index = 0; index < 3; index++) {
+    for (const mutate of [
+      entry => entry.data = Buffer.concat([entry.data, Buffer.from(' ')]),
+      entry => entry.name = entry.name.replace('.v2.json', '.v1.json'),
+      entry => entry.name = 'Graphics.Core.Shapes.Resources.unknown.v2.json',
+      entry => entry.name = 'Graphics.Core.Source.cs',
+    ]) {
+      const shapes = shapeEntries();
+      mutate(shapes[index]);
+      const { streams, resources } = resourceMetadata([...themeEntries(), ...shapes]);
+      assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Unreviewed|Unapproved/);
+    }
+  }
+});
+
+test('shape catalog approval requires every current definition and both reviewed themes', () => {
+  const entries = [...themeEntries(), ...shapeEntries()];
+  for (let index = 0; index < entries.length; index++) {
+    const { streams, resources } = resourceMetadata(entries.filter((_, position) => position !== index));
+    assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Incomplete/);
+  }
+  const { streams, resources } = resourceMetadata(shapeEntries().slice(0, 2));
+  assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Incomplete/);
 });
 
 test('resource audit rejects source names, changed contents, aliases and hidden payloads',()=>{

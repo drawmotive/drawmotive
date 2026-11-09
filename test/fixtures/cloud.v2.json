@@ -1,0 +1,878 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud.v2",
+  "minimumAspectRatio": 0,
+  "variables": [
+    "p0.x",
+    "p0.y",
+    "p1.x",
+    "p1.y",
+    "p2.x",
+    "p2.y",
+    "p3.x",
+    "p3.y",
+    "p4.x",
+    "p4.y",
+    "p5.x",
+    "p5.y",
+    "p6.x",
+    "p6.y",
+    "p7.x",
+    "p7.y",
+    "p8.x",
+    "p8.y",
+    "p9.x",
+    "p9.y",
+    "c0a.x",
+    "c0a.y",
+    "c0b.x",
+    "c0b.y",
+    "c1a.x",
+    "c1a.y",
+    "c1b.x",
+    "c1b.y",
+    "c2a.x",
+    "c2a.y",
+    "c2b.x",
+    "c2b.y",
+    "c3a.x",
+    "c3a.y",
+    "c3b.x",
+    "c3b.y",
+    "c4a.x",
+    "c4a.y",
+    "c4b.x",
+    "c4b.y",
+    "c5a.x",
+    "c5a.y",
+    "c5b.x",
+    "c5b.y",
+    "c6a.x",
+    "c6a.y",
+    "c6b.x",
+    "c6b.y",
+    "c7a.x",
+    "c7a.y",
+    "c7b.x",
+    "c7b.y",
+    "c8a.x",
+    "c8a.y",
+    "c8b.x",
+    "c8b.y",
+    "c9a.x",
+    "c9a.y",
+    "c9b.x",
+    "c9b.y",
+    "text-start.x",
+    "text-start.y",
+    "text-end.x",
+    "text-end.y",
+    "boundary.top.start",
+    "boundary.top.end",
+    "boundary.right.start",
+    "boundary.right.end",
+    "boundary.bottom.start",
+    "boundary.bottom.end",
+    "boundary.left.start",
+    "boundary.left.end"
+  ],
+  "points": {
+    "p0": [
+      "p0.x",
+      "p0.y"
+    ],
+    "p1": [
+      "p1.x",
+      "p1.y"
+    ],
+    "p2": [
+      "p2.x",
+      "p2.y"
+    ],
+    "p3": [
+      "p3.x",
+      "p3.y"
+    ],
+    "p4": [
+      "p4.x",
+      "p4.y"
+    ],
+    "p5": [
+      "p5.x",
+      "p5.y"
+    ],
+    "p6": [
+      "p6.x",
+      "p6.y"
+    ],
+    "p7": [
+      "p7.x",
+      "p7.y"
+    ],
+    "p8": [
+      "p8.x",
+      "p8.y"
+    ],
+    "p9": [
+      "p9.x",
+      "p9.y"
+    ],
+    "c0a": [
+      "c0a.x",
+      "c0a.y"
+    ],
+    "c0b": [
+      "c0b.x",
+      "c0b.y"
+    ],
+    "c1a": [
+      "c1a.x",
+      "c1a.y"
+    ],
+    "c1b": [
+      "c1b.x",
+      "c1b.y"
+    ],
+    "c2a": [
+      "c2a.x",
+      "c2a.y"
+    ],
+    "c2b": [
+      "c2b.x",
+      "c2b.y"
+    ],
+    "c3a": [
+      "c3a.x",
+      "c3a.y"
+    ],
+    "c3b": [
+      "c3b.x",
+      "c3b.y"
+    ],
+    "c4a": [
+      "c4a.x",
+      "c4a.y"
+    ],
+    "c4b": [
+      "c4b.x",
+      "c4b.y"
+    ],
+    "c5a": [
+      "c5a.x",
+      "c5a.y"
+    ],
+    "c5b": [
+      "c5b.x",
+      "c5b.y"
+    ],
+    "c6a": [
+      "c6a.x",
+      "c6a.y"
+    ],
+    "c6b": [
+      "c6b.x",
+      "c6b.y"
+    ],
+    "c7a": [
+      "c7a.x",
+      "c7a.y"
+    ],
+    "c7b": [
+      "c7b.x",
+      "c7b.y"
+    ],
+    "c8a": [
+      "c8a.x",
+      "c8a.y"
+    ],
+    "c8b": [
+      "c8b.x",
+      "c8b.y"
+    ],
+    "c9a": [
+      "c9a.x",
+      "c9a.y"
+    ],
+    "c9b": [
+      "c9b.x",
+      "c9b.y"
+    ],
+    "text-start": [
+      "text-start.x",
+      "text-start.y"
+    ],
+    "text-end": [
+      "text-end.x",
+      "text-end.y"
+    ]
+  },
+  "segments": [
+    {
+      "id": "lobe-0",
+      "kind": "cubic",
+      "from": "p0",
+      "to": "p1",
+      "control1": "c0a",
+      "control2": "c0b"
+    },
+    {
+      "id": "lobe-1",
+      "kind": "cubic",
+      "from": "p1",
+      "to": "p2",
+      "control1": "c1a",
+      "control2": "c1b"
+    },
+    {
+      "id": "lobe-2",
+      "kind": "cubic",
+      "from": "p2",
+      "to": "p3",
+      "control1": "c2a",
+      "control2": "c2b"
+    },
+    {
+      "id": "lobe-3",
+      "kind": "cubic",
+      "from": "p3",
+      "to": "p4",
+      "control1": "c3a",
+      "control2": "c3b"
+    },
+    {
+      "id": "lobe-4",
+      "kind": "cubic",
+      "from": "p4",
+      "to": "p5",
+      "control1": "c4a",
+      "control2": "c4b"
+    },
+    {
+      "id": "lobe-5",
+      "kind": "cubic",
+      "from": "p5",
+      "to": "p6",
+      "control1": "c5a",
+      "control2": "c5b"
+    },
+    {
+      "id": "lobe-6",
+      "kind": "cubic",
+      "from": "p6",
+      "to": "p7",
+      "control1": "c6a",
+      "control2": "c6b"
+    },
+    {
+      "id": "lobe-7",
+      "kind": "cubic",
+      "from": "p7",
+      "to": "p8",
+      "control1": "c7a",
+      "control2": "c7b"
+    },
+    {
+      "id": "lobe-8",
+      "kind": "cubic",
+      "from": "p8",
+      "to": "p9",
+      "control1": "c8a",
+      "control2": "c8b"
+    },
+    {
+      "id": "lobe-9",
+      "kind": "cubic",
+      "from": "p9",
+      "to": "p0",
+      "control1": "c9a",
+      "control2": "c9b"
+    }
+  ],
+  "textSlot": [
+    "text-start",
+    "text-end"
+  ],
+  "boundaries": {
+    "top": {
+      "start": "boundary.top.start",
+      "end": "boundary.top.end",
+      "segments": [
+        "lobe-0",
+        "lobe-1",
+        "lobe-2",
+        "lobe-3",
+        "lobe-4",
+        "lobe-5",
+        "lobe-6",
+        "lobe-7",
+        "lobe-8",
+        "lobe-9"
+      ]
+    },
+    "right": {
+      "start": "boundary.right.start",
+      "end": "boundary.right.end",
+      "segments": [
+        "lobe-0",
+        "lobe-1",
+        "lobe-2",
+        "lobe-3",
+        "lobe-4",
+        "lobe-5",
+        "lobe-6",
+        "lobe-7",
+        "lobe-8",
+        "lobe-9"
+      ]
+    },
+    "bottom": {
+      "start": "boundary.bottom.start",
+      "end": "boundary.bottom.end",
+      "segments": [
+        "lobe-0",
+        "lobe-1",
+        "lobe-2",
+        "lobe-3",
+        "lobe-4",
+        "lobe-5",
+        "lobe-6",
+        "lobe-7",
+        "lobe-8",
+        "lobe-9"
+      ]
+    },
+    "left": {
+      "start": "boundary.left.start",
+      "end": "boundary.left.end",
+      "segments": [
+        "lobe-0",
+        "lobe-1",
+        "lobe-2",
+        "lobe-3",
+        "lobe-4",
+        "lobe-5",
+        "lobe-6",
+        "lobe-7",
+        "lobe-8",
+        "lobe-9"
+      ]
+    }
+  },
+  "$schema": "../Schemas/constraint-shape.schema.json",
+  "relations": [
+    {
+      "id": "construction-0",
+      "kind": "fixed",
+      "target": "p0.x",
+      "value": 0
+    },
+    {
+      "id": "construction-1",
+      "kind": "proportional",
+      "target": "p0.y",
+      "source": "height",
+      "ratio": 0.57
+    },
+    {
+      "id": "construction-2",
+      "kind": "proportional",
+      "target": "p1.x",
+      "source": "width",
+      "ratio": 0.18
+    },
+    {
+      "id": "construction-3",
+      "kind": "proportional",
+      "target": "p1.y",
+      "source": "height",
+      "ratio": 0.3
+    },
+    {
+      "id": "construction-4",
+      "kind": "proportional",
+      "target": "p2.x",
+      "source": "width",
+      "ratio": 0.42
+    },
+    {
+      "id": "construction-5",
+      "kind": "proportional",
+      "target": "p2.y",
+      "source": "height",
+      "ratio": 0.1
+    },
+    {
+      "id": "construction-6",
+      "kind": "proportional",
+      "target": "p3.x",
+      "source": "width",
+      "ratio": 0.62
+    },
+    {
+      "id": "construction-7",
+      "kind": "fixed",
+      "target": "p3.y",
+      "value": 0
+    },
+    {
+      "id": "construction-8",
+      "kind": "proportional",
+      "target": "p4.x",
+      "source": "width",
+      "ratio": 0.82
+    },
+    {
+      "id": "construction-9",
+      "kind": "proportional",
+      "target": "p4.y",
+      "source": "height",
+      "ratio": 0.25
+    },
+    {
+      "id": "construction-10",
+      "kind": "proportional",
+      "target": "p5.x",
+      "source": "width",
+      "ratio": 1
+    },
+    {
+      "id": "construction-11",
+      "kind": "proportional",
+      "target": "p5.y",
+      "source": "height",
+      "ratio": 0.51
+    },
+    {
+      "id": "construction-12",
+      "kind": "proportional",
+      "target": "p6.x",
+      "source": "width",
+      "ratio": 0.86
+    },
+    {
+      "id": "construction-13",
+      "kind": "proportional",
+      "target": "p6.y",
+      "source": "height",
+      "ratio": 0.78
+    },
+    {
+      "id": "construction-14",
+      "kind": "proportional",
+      "target": "p7.x",
+      "source": "width",
+      "ratio": 0.61
+    },
+    {
+      "id": "construction-15",
+      "kind": "proportional",
+      "target": "p7.y",
+      "source": "height",
+      "ratio": 1
+    },
+    {
+      "id": "construction-16",
+      "kind": "proportional",
+      "target": "p8.x",
+      "source": "width",
+      "ratio": 0.38
+    },
+    {
+      "id": "construction-17",
+      "kind": "proportional",
+      "target": "p8.y",
+      "source": "height",
+      "ratio": 0.89
+    },
+    {
+      "id": "construction-18",
+      "kind": "proportional",
+      "target": "p9.x",
+      "source": "width",
+      "ratio": 0.15
+    },
+    {
+      "id": "construction-19",
+      "kind": "proportional",
+      "target": "p9.y",
+      "source": "height",
+      "ratio": 0.83
+    },
+    {
+      "id": "construction-20",
+      "kind": "fixed",
+      "target": "c0a.x",
+      "value": 0
+    },
+    {
+      "id": "construction-21",
+      "kind": "proportional",
+      "target": "c0a.y",
+      "source": "height",
+      "ratio": 0.38
+    },
+    {
+      "id": "construction-22",
+      "kind": "proportional",
+      "target": "c0b.x",
+      "source": "width",
+      "ratio": 0.1
+    },
+    {
+      "id": "construction-23",
+      "kind": "proportional",
+      "target": "c0b.y",
+      "source": "height",
+      "ratio": 0.24
+    },
+    {
+      "id": "construction-24",
+      "kind": "proportional",
+      "target": "c1a.x",
+      "source": "width",
+      "ratio": 0.16
+    },
+    {
+      "id": "construction-25",
+      "kind": "proportional",
+      "target": "c1a.y",
+      "source": "height",
+      "ratio": 0.12
+    },
+    {
+      "id": "construction-26",
+      "kind": "proportional",
+      "target": "c1b.x",
+      "source": "width",
+      "ratio": 0.35
+    },
+    {
+      "id": "construction-27",
+      "kind": "proportional",
+      "target": "c1b.y",
+      "source": "height",
+      "ratio": 0.03
+    },
+    {
+      "id": "construction-28",
+      "kind": "proportional",
+      "target": "c2a.x",
+      "source": "width",
+      "ratio": 0.46
+    },
+    {
+      "id": "construction-29",
+      "kind": "proportional",
+      "target": "c2a.y",
+      "source": "height",
+      "ratio": 0.02
+    },
+    {
+      "id": "construction-30",
+      "kind": "proportional",
+      "target": "c2b.x",
+      "source": "width",
+      "ratio": 0.54
+    },
+    {
+      "id": "construction-31",
+      "kind": "fixed",
+      "target": "c2b.y",
+      "value": 0
+    },
+    {
+      "id": "construction-32",
+      "kind": "proportional",
+      "target": "c3a.x",
+      "source": "width",
+      "ratio": 0.78
+    },
+    {
+      "id": "construction-33",
+      "kind": "fixed",
+      "target": "c3a.y",
+      "value": 0
+    },
+    {
+      "id": "construction-34",
+      "kind": "proportional",
+      "target": "c3b.x",
+      "source": "width",
+      "ratio": 0.87
+    },
+    {
+      "id": "construction-35",
+      "kind": "proportional",
+      "target": "c3b.y",
+      "source": "height",
+      "ratio": 0.13
+    },
+    {
+      "id": "construction-36",
+      "kind": "proportional",
+      "target": "c4a.x",
+      "source": "width",
+      "ratio": 0.94
+    },
+    {
+      "id": "construction-37",
+      "kind": "proportional",
+      "target": "c4a.y",
+      "source": "height",
+      "ratio": 0.24
+    },
+    {
+      "id": "construction-38",
+      "kind": "proportional",
+      "target": "c4b.x",
+      "source": "width",
+      "ratio": 1
+    },
+    {
+      "id": "construction-39",
+      "kind": "proportional",
+      "target": "c4b.y",
+      "source": "height",
+      "ratio": 0.34
+    },
+    {
+      "id": "construction-40",
+      "kind": "proportional",
+      "target": "c5a.x",
+      "source": "width",
+      "ratio": 1
+    },
+    {
+      "id": "construction-41",
+      "kind": "proportional",
+      "target": "c5a.y",
+      "source": "height",
+      "ratio": 0.68
+    },
+    {
+      "id": "construction-42",
+      "kind": "proportional",
+      "target": "c5b.x",
+      "source": "width",
+      "ratio": 0.96
+    },
+    {
+      "id": "construction-43",
+      "kind": "proportional",
+      "target": "c5b.y",
+      "source": "height",
+      "ratio": 0.8
+    },
+    {
+      "id": "construction-44",
+      "kind": "proportional",
+      "target": "c6a.x",
+      "source": "width",
+      "ratio": 0.86
+    },
+    {
+      "id": "construction-45",
+      "kind": "proportional",
+      "target": "c6a.y",
+      "source": "height",
+      "ratio": 0.94
+    },
+    {
+      "id": "construction-46",
+      "kind": "proportional",
+      "target": "c6b.x",
+      "source": "width",
+      "ratio": 0.75
+    },
+    {
+      "id": "construction-47",
+      "kind": "proportional",
+      "target": "c6b.y",
+      "source": "height",
+      "ratio": 1
+    },
+    {
+      "id": "construction-48",
+      "kind": "proportional",
+      "target": "c7a.x",
+      "source": "width",
+      "ratio": 0.47
+    },
+    {
+      "id": "construction-49",
+      "kind": "proportional",
+      "target": "c7a.y",
+      "source": "height",
+      "ratio": 1
+    },
+    {
+      "id": "construction-50",
+      "kind": "proportional",
+      "target": "c7b.x",
+      "source": "width",
+      "ratio": 0.4
+    },
+    {
+      "id": "construction-51",
+      "kind": "proportional",
+      "target": "c7b.y",
+      "source": "height",
+      "ratio": 0.98
+    },
+    {
+      "id": "construction-52",
+      "kind": "proportional",
+      "target": "c8a.x",
+      "source": "width",
+      "ratio": 0.25
+    },
+    {
+      "id": "construction-53",
+      "kind": "proportional",
+      "target": "c8a.y",
+      "source": "height",
+      "ratio": 1
+    },
+    {
+      "id": "construction-54",
+      "kind": "proportional",
+      "target": "c8b.x",
+      "source": "width",
+      "ratio": 0.08
+    },
+    {
+      "id": "construction-55",
+      "kind": "proportional",
+      "target": "c8b.y",
+      "source": "height",
+      "ratio": 0.95
+    },
+    {
+      "id": "construction-56",
+      "kind": "proportional",
+      "target": "c9a.x",
+      "source": "width",
+      "ratio": 0.04
+    },
+    {
+      "id": "construction-57",
+      "kind": "proportional",
+      "target": "c9a.y",
+      "source": "height",
+      "ratio": 0.84
+    },
+    {
+      "id": "construction-58",
+      "kind": "fixed",
+      "target": "c9b.x",
+      "value": 0
+    },
+    {
+      "id": "construction-59",
+      "kind": "proportional",
+      "target": "c9b.y",
+      "source": "height",
+      "ratio": 0.74
+    },
+    {
+      "id": "construction-60",
+      "kind": "proportional",
+      "target": "text-start.x",
+      "source": "width",
+      "ratio": 0.22
+    },
+    {
+      "id": "construction-61",
+      "kind": "proportional",
+      "target": "text-start.y",
+      "source": "height",
+      "ratio": 0.35
+    },
+    {
+      "id": "construction-62",
+      "kind": "proportional",
+      "target": "text-end.x",
+      "source": "width",
+      "ratio": 0.78
+    },
+    {
+      "id": "construction-63",
+      "kind": "proportional",
+      "target": "text-end.y",
+      "source": "height",
+      "ratio": 0.75
+    },
+    {
+      "id": "construction-64",
+      "kind": "proportional",
+      "target": "boundary.top.start",
+      "source": "width",
+      "ratio": 0.19414021505503096
+    },
+    {
+      "id": "construction-65",
+      "kind": "proportional",
+      "target": "boundary.top.end",
+      "source": "width",
+      "ratio": 0.8330955700570313
+    },
+    {
+      "id": "construction-66",
+      "kind": "proportional",
+      "target": "boundary.right.start",
+      "source": "height",
+      "ratio": 0.16690442994296875
+    },
+    {
+      "id": "construction-67",
+      "kind": "proportional",
+      "target": "boundary.right.end",
+      "source": "height",
+      "ratio": 0.8513408133908442
+    },
+    {
+      "id": "construction-68",
+      "kind": "proportional",
+      "target": "boundary.bottom.start",
+      "source": "width",
+      "ratio": 0.13368459943737726
+    },
+    {
+      "id": "construction-69",
+      "kind": "proportional",
+      "target": "boundary.bottom.end",
+      "source": "width",
+      "ratio": 0.8513408133908442
+    },
+    {
+      "id": "construction-70",
+      "kind": "proportional",
+      "target": "boundary.left.start",
+      "source": "height",
+      "ratio": 0.19414021505503093
+    },
+    {
+      "id": "construction-71",
+      "kind": "proportional",
+      "target": "boundary.left.end",
+      "source": "height",
+      "ratio": 0.8641624376392181
+    }
+  ],
+  "grips": [
+    {
+      "id": "frame",
+      "kind": "frameResize",
+      "roles": [
+        "topLeft",
+        "topRight",
+        "bottomLeft",
+        "bottomRight",
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    }
+  ]
+}

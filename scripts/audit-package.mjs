@@ -11,6 +11,14 @@ import { parseNpmPack } from "../.release/release-registry.mjs";
 // reviewed 10px shape radius and disabled shadow defaults.
 const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046";
 const prefix = "Graphics.Core.Styles.Resources.";
+// The native Editor and TextGraph share these reviewed declarative geometry
+// definitions. Exact names and payload hashes require a fresh review when the
+// maintained catalog changes; arbitrary JSON is not an approved resource.
+const shapeResourceHashes = new Map([
+  ["Graphics.Core.Shapes.Resources.capsule.v2.json", "3c76126c491c2cb209325216c02aa7148ed73fc0cb80b6ba441204563d7a2254"],
+  ["Graphics.Core.Shapes.Resources.star.v2.json", "9d6d7beb20de959599ebdb75f15d8bc8a11b71ac90203805039f35423cb6f087"],
+  ["Graphics.Core.Shapes.Resources.cloud.v2.json", "2d2d0ccdef1fc567a41ece334edbabe532e20f86f41ca0db479a4d8c62a1f724"],
+]);
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 function range(bytes, offset, size) {
   requireBytes(bytes, offset, size);
@@ -60,8 +68,8 @@ export function readManagedResources(streams, resources) {
   return result;
 }
 
-/** Only reviewed runtime CSS may enter owned assemblies. Reject unknown names,
- * changed payloads, duplicate entries and hidden bytes outside resource rows. */
+/** Only reviewed runtime CSS and geometry may enter owned assemblies. Reject
+ * unknown names, changed payloads, duplicates and bytes outside resource rows. */
 export function auditManagedResources(streams, resources, filename, publicTheme) {
   if (!/^Graphics\.Core(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename))) throw new Error("Private assembly embeds resources without an approved resource policy");
   const entries = readManagedResources(streams, resources);
@@ -75,10 +83,17 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
       if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
     } else if (resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
+    } else if (shapeResourceHashes.has(resource.name)) {
+      if (hash(resource.data) !== shapeResourceHashes.get(resource.name)) throw new Error("Unreviewed shape resource contents: "+resource.name);
     } else throw new Error("Unapproved managed resource: "+resource.name);
     end = resource.offset+4+resource.data.length;
   }
-  if (names.size !== 2 || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
+  // Retained releases may contain only themes. Once a shape is present, require
+  // the complete current catalog rather than approving a partial runtime.
+  const required = [prefix+"GroupThemeDefaults.css", prefix+"StandardTheme.css"];
+  const shapeNames = [...shapeResourceHashes.keys()];
+  if (shapeNames.some(name => names.has(name))) required.push(...shapeNames);
+  if (names.size !== required.length || required.some(name => !names.has(name)) || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
 }
 
 const ownedAssembly = /^(?:Editor\.Client|Graphics\.Core|Blazor\.IndexedDB|Math\.Core|RBush)(?:\.[A-Za-z0-9_-]+)?\.wasm$/;
