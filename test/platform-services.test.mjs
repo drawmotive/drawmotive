@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlatformServices } from '../src/platform/services.js';
 
-const checkpoint = { revision: 'v1', payload: new Uint8Array([1, 2, 3]), clock: { author: 1 } };
+const checkpoint = { revision: 'v1', payload: new Uint8Array([1, 2, 3]), clock: { author: 1 }, snapshotAfterJournalId: null };
 
 test('private replication wakes only after successful storage and reads/ACKs without an engine callback', async () => {
   const services = createPlatformServices({ replication: true });
@@ -15,7 +15,7 @@ test('private replication wakes only after successful storage and reads/ACKs wit
   await assert.rejects(services.request('storage.commit', { batch: { ...batch, batchId: 'bad', expectedRevision: null } }), { code: 'StorageConflict' });
   assert.equal(seen.length, 1);
   await services.replication.acknowledge(['author:1']);
-  assert.deepEqual(await services.replication.read(), { clock: { author: 1 }, outbox: [] });
+  assert.deepEqual(await services.replication.read(), { clock: { author: 1 }, outbox: [], snapshotKey: 'origin' });
   assert.deepEqual(await services.request('storage.read'), checkpoint);
   stop(); await services.dispose();
   await assert.rejects(services.replication.read(), { code: 'EditorDisposed' });
@@ -107,4 +107,27 @@ test('preferences bypass document storage and belong to the host', async () => {
   await services.dispose();
   assert.deepEqual(await preferenceStore.read(), { darkTheme: true });
   await assert.rejects(services.request('preferences.get'), { code: 'EditorDisposed' });
+});
+
+test('obsolete persistence aliases reject before creating a document store', () => {
+  for (const mode of ['persistent', 'memory']) assert.throws(() => createPlatformServices({
+    persistence: { mode, namespace: 'account', documentId: 'opaque:document', legacyDocumentId: 'previous' },
+    createDocumentStore() { assert.fail('Invalid options must not acquire storage.'); },
+  }), TypeError);
+});
+
+test('native recovery and private replication read acknowledged original journal without changing pending delivery', async () => {
+  const services = createPlatformServices({ replication: true });
+  const journal = [{ id: '$origin:0123456789abcdef0123456789abcdef', payload: new Uint8Array([5]) },
+    { id: 'tx1', payload: new Uint8Array([7]) }];
+  await services.request('storage.commit', { batch: { batchId: 'original', expectedRevision: null, checkpoint, journal,
+    outbox: [{ id: 'tx1', revision: 'v1', payload: new Uint8Array([7]) }] } });
+  await services.replication.acknowledge(['tx1']);
+  const expected = { revision: 'v1', clock: { author: 1 }, journal };
+  assert.deepEqual(await services.request('storage.journal'), expected);
+  assert.deepEqual(await services.replication.readJournal(), expected);
+  assert.deepEqual(await services.replication.read(), { clock: { author: 1 }, outbox: [], snapshotKey: 'origin' });
+  assert.deepEqual((await services.request('storage.read')).journal.map(row => row.id), ['tx1']);
+  await services.dispose();
+  await assert.rejects(services.replication.readJournal(), { code: 'EditorDisposed' });
 });

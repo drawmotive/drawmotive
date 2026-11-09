@@ -12,10 +12,32 @@ test('a page rejects concurrent mounts and reopening starts with fresh undo hist
  await create(page);const result=await page.evaluate(async()=>{const {createEditor}=await import('/src/core.js');await editor.setSketchyMode(true);const state=await editor.getState();let code;try{await createEditor({container:document.body,assetBaseUrl:'/generated/editor/'});}catch(error){code=error.code;}await editor.dispose();editor=await createEditor({container:document.querySelector('.editor'),assetBaseUrl:'/generated/editor/'});return {code,hadUndo:state.canUndo,next:await editor.getState()};});
  expect(result.code).toBe('EditorAlreadyMounted');expect(result.hadUndo).toBe(true);expect(result.next.canUndo).toBe(false);expect(result.next.sketchyMode).toBe(false);await page.evaluate(()=>editor.dispose());
 });
-test('persistent close and reopen preserves bytes in a fresh document scope',async({page})=>{
+test('persistent close and reopen preserves the editable document in a fresh scope',async({page})=>{
  const persistence={mode:'persistent',namespace:'contract-'+crypto.randomUUID(),documentId:'one'};await create(page,{persistence});
- const result=await page.evaluate(async persistence=>{const {createEditor}=await import('/src/core.js');await editor.replaceTextGraph('One -> Two');const before=await editor.exportSnapshot({formats:['raw']});await editor.dispose();editor=await createEditor({container:document.querySelector('.editor'),assetBaseUrl:'/generated/editor/',persistence});const after=await editor.exportSnapshot({formats:['raw']});const state=await editor.getState();await editor.dispose();return {before,after,canUndo:state.canUndo};},persistence);
- expect(result.after.raw).toBe(result.before.raw);expect(result.canUndo).toBe(false);
+ const result=await page.evaluate(async persistence=>{
+  const {createEditor}=await import('/src/core.js');
+  await editor.replaceTextGraph('One -> Two');
+  const before=await editor.exportSnapshot({formats:['raw','png']});
+  await editor.dispose();
+  editor=await createEditor({container:document.querySelector('.editor'),assetBaseUrl:'/generated/editor/',persistence});
+  const after=await editor.exportSnapshot({formats:['raw','png']});
+  const state=await editor.getState();
+  await editor.replaceDocument(after.raw);
+  const roundTrip=await editor.exportSnapshot({formats:['png']});
+  await editor.setSketchyMode(true);
+  await editor.undo();
+  const edited=await editor.getState();
+  await editor.dispose();
+  return {before,after,roundTrip,canUndo:state.canUndo,edited};
+ },persistence);
+ // Raw maps have no enumeration-order contract. Compare pixels and exercise the
+ // reopened editable payload; immutable storage/journal bytes are tested separately.
+ expect(result.after.raw).toBeTruthy();
+ expect(result.after.png).toEqual(result.before.png);
+ expect(result.roundTrip.png).toEqual(result.before.png);
+ expect(result.canUndo).toBe(false);
+ expect(result.edited.sketchyMode).toBe(false);
+ expect(result.edited.canRedo).toBe(true);
 });
 
 test('standalone edits and persisted Undo/Redo advance durable clocks without delivery records', async ({ page }) => {
