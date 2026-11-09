@@ -14,6 +14,7 @@ export function npmPublisherIdentity(name) {
     '@drawmotive/textgraph-fonts': { id: 'textgraph-fonts', workflow: 'release-fonts.yml', productPrefix: 'language-packs/' },
     '@drawmotive/textgraph': { id: 'textgraph', workflow: 'release.yml', productPrefix: '' },
     '@drawmotive/editor': { id: 'editor', workflow: 'publish.yml', productPrefix: '' },
+    '@drawmotive/editor-ui': { id: 'editor-ui', workflow: 'publish.yml', productPrefix: '' },
     '@drawmotive/markdown-it-textgraph': { id: 'markdown', workflow: 'release.yml', productPrefix: '' },
   };
   const identity = identities[name]; assert.ok(identity, 'Unknown trusted publication product');
