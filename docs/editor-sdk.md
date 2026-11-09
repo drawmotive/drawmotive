@@ -15,6 +15,7 @@ The authoritative declarations are [core.d.ts](../src/core.d.ts). Only package e
 - [Entry points and installation](#entry-points-and-installation)
 - [Mounting recipes](#mounting-recipes)
 - [Creation options](#creation-options)
+- [Licensing and native branding](#licensing-and-native-branding)
 - [Document and snapshot API](#document-and-snapshot-api)
 - [Selection and editing API](#selection-and-editing-api)
 - [Text editing](#text-editing)
@@ -109,6 +110,7 @@ All public entries use EditorCreateOptions. Unknown keys and invalid values are 
 | --- | --- | --- |
 | `container` | Required `HTMLElement` for imperative creation | Owns only the native canvas |
 | `assetBaseUrl` | HTTP(S) string or URL; defaults relative to the SDK's generated assets | Runtime and font resource base; supply explicitly in bundles |
+| `licenseKey` | Optional raw string | Deployment key verified by native code against the actual page origin |
 | `title` | `DrawMotive diagram editor` | Accessible canvas label |
 | textEditing | inline (default), external or disabled | Native text-input policy |
 | `persistence` | Defaults to `{ mode: 'memory' }` | Temporary document or persistent identity |
@@ -119,6 +121,30 @@ All public entries use EditorCreateOptions. Unknown keys and invalid values are 
 | `disposeTimeoutMs` | `5000`, finite and positive | Explicit disposal cleanup deadline |
 
 Persistence configuration is either `{ mode: 'memory', namespace?, documentId? }` or `{ mode: 'persistent', namespace, documentId }`. Persistent identities must be nonempty strings. Memory mode keeps the document temporary, but fonts may still use OPFS and preferences still use localStorage.
+
+## Licensing and native branding
+
+The entire package is MIT and every editing feature is free for personal and commercial use. The native canvas displays `powered by drawmotive.com` by default. The optional official removal service costs **US$1,000 per site per year**; contact [mason@drawmotive.com](mailto:mason@drawmotive.com). This service does not restrict MIT modification or redistribution rights or make payment legally required to modify MIT code. See the [Editor licensing guide](https://textgraph.dev/editor/licensing).
+
+```javascript
+const editor = await createEditor({
+  container,
+  assetBaseUrl: '/editor/',
+  licenseKey: deploymentLicenseKey,
+});
+const status = await editor.getLicenseStatus();
+// { state: 'free', reason?: string } or { state: 'licensed', expiresAt?: string }
+```
+
+All default, browser and core entries accept the same optional key. JS forwards it unchanged; C#/WASM verifies it and paints the branding. `getLicenseStatus(): Promise<EditorLicenseStatus>` reads an immutable native snapshot with `state: 'free' | 'licensed'`, optional `reason` and optional UTC ISO `expiresAt`. It exposes no key or merchant identity. Licensing does not change document health, revisions or preferences. Recreate and await disposal of the old instance to replace a deployment key; there is no mutable licensed flag.
+
+Free reasons are `missing`, `invalid`, `expired`, `notYetValid`, `siteMismatch`, `unsupportedHost` and `verificationUnavailable`. Missing, invalid, expired or unsupported keys retain branding while editing, import, persistence, history, clipboard and export continue to work. Raw documents, PNG, SVG, embedded documents and copied images remain unbranded and contain no license data.
+
+A site covers one explicitly listed production origin plus named aliases and development/staging origins. Paths, documents, instances and users have no separate fee. Complete normalized scheme/host/port origins must match; asset/CDN origins, unlisted subdomains and suffix matches do not qualify. List localhost development origins explicitly. Standard HTTPS browser embeds are the initial paid scope; VS Code and shared-origin Forge embeds remain fully functional and branded.
+
+DrawMotive issues signed keys with local operator tooling backed by Azure Key Vault. Runtime validation is offline, without activation or a license server, once runtime resources are available. Validity is checked against the local clock, including during a running session and on page restoration; expiry restores branding without changing the document. Offline validation cannot provide immediate revocation or a trustworthy remote clock. Keep existing dependency and font notices.
+
+Use a matching SDK and native runtime containing these APIs; previously generated runtime assets do not acquire licensing support from a JS upgrade alone.
 
 ## Document and snapshot API
 

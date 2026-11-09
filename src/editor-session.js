@@ -59,7 +59,7 @@ function viewportOptions(options = {}) {
 
 /** One page owns one canvas. A document switch awaits full native/platform cleanup. */
 export async function createEditorSession(options = {}, privateOptions) {
-  keys(options, ['container','assetBaseUrl','textEditing','persistence','workerFactory','workerUrls','signal','title','startupTimeoutMs','disposeTimeoutMs'], 'editor');
+  keys(options, ['container','assetBaseUrl','licenseKey','textEditing','persistence','workerFactory','workerUrls','signal','title','startupTimeoutMs','disposeTimeoutMs'], 'editor');
   const textEditing = options.textEditing ?? 'inline';
   if (!['inline','external','disabled'].includes(textEditing)) throw new TypeError('textEditing must be inline, external or disabled');
   const { container, signal } = options;
@@ -165,6 +165,7 @@ export async function createEditorSession(options = {}, privateOptions) {
     fitViewport(value) { return invoke('fitViewport', () => viewportOptions(value)); }, setEditingEnabled(enabled) { return invoke('setEditingEnabled', () => ({ enabled: boolean(enabled,'enabled') })); },
     undo() { return request('undo'); }, redo() { return request('redo'); },
     async getState() { const result = await request('getState'); updateState(result); return latestState; },
+    getLicenseStatus() { return request('getLicenseStatus'); },
     onStateChanged(listener) { return subscribe(stateListeners,listener,latestState); },
     onPreferencesChanged(listener) {
       if (typeof listener !== 'function') throw new TypeError('Listener must be a function');
@@ -241,7 +242,8 @@ export async function createEditorSession(options = {}, privateOptions) {
     const runtime = await load(new URL('js/editor-canvas.js',assetBase).href);
     startup.signal.throwIfAborted();
     native = await runtime.mountCanvas({container:canvasRoot,assetBaseUrl:assetBase.href,
-      options:{textEditing,...(privateOptions?.replication ? {initialEditingEnabled:false} : {})},
+      // Licensing decisions belong to native code; preserve the deployment key verbatim.
+      options:{textEditing,...(options.licenseKey === undefined ? {} : {licenseKey:options.licenseKey}),...(privateOptions?.replication ? {initialEditingEnabled:false} : {})},
       drawingId:options.persistence?.documentId ?? hostWindow.crypto.randomUUID(),
       platform:(method,args) => platform.request(method,args),emit,signal:startup.signal});
     startup.signal.throwIfAborted();

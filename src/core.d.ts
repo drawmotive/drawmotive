@@ -1,5 +1,11 @@
 export { EditorError } from './errors.js';
 export type TextEditingMode = 'inline' | 'external' | 'disabled';
+/** Native licensing snapshot, independent of document state and editing rights. */
+export interface EditorLicenseStatus {
+  readonly state: 'free' | 'licensed';
+  readonly reason?: string;
+  readonly expiresAt?: string;
+}
 export interface EditorState {
   readonly revision: string | null;
   readonly health: 'healthy' | 'faulted';
@@ -18,6 +24,8 @@ export type EditorWorkerFactory = (url: string | URL, options?: { name?: string 
 export interface EditorCreateOptions {
   container: HTMLElement;
   assetBaseUrl?: string | URL;
+  /** Optional deployment key, verified by native code against the page origin. Recreate to replace it. */
+  licenseKey?: string;
   title?: string;
   /** Native text input policy; independent of host web controls. Defaults to inline. */
   textEditing?: TextEditingMode;
@@ -111,6 +119,8 @@ export interface EditorInstance {
   fitViewport(options?: ViewportOptions): Promise<void>;
   setEditingEnabled(enabled: boolean): Promise<void>;
   undo(): Promise<void>; redo(): Promise<void>; getState(): Promise<EditorState>;
+  /** Reads native authority without changing the document or exposing the key. */
+  getLicenseStatus(): Promise<EditorLicenseStatus>;
   onStateChanged(listener: (state: EditorState) => void): () => void;
   /** Called once on disposal or a forced close such as pagehide. */
   onDisposed(listener: () => void): () => void;

@@ -1,5 +1,24 @@
 import { test, expect } from '@playwright/test';
 test.use({ launchOptions: { executablePath: process.env.DRAWMOTIVE_CHROMIUM_PATH } });
+test('public entries relay the raw deployment key and immutable native license status',async({page})=>{
+ await page.route('**/stub-runtime/js/editor-canvas.js',route=>route.fulfill({contentType:'text/javascript',body:
+  'import {mountCanvas as mount} from "/test/browser/stub-runtime.js";export async function mountCanvas(context){globalThis.startupKey=context.options.licenseKey;const native=await mount(context);return {...native,request(method,args){if(method==="getLicenseStatus")return {state:"free",reason:"invalid"};return native.request(method,args);}};}'}));
+ await page.goto('/test/browser/host.html');
+ const results=await page.evaluate(async()=>{
+  const results=[];
+  for(const entry of ['/src/index.js','/src/core.js']) {
+   const {createEditor}=await import(entry);const container=document.body.appendChild(document.createElement('div'));
+   const editor=await createEditor({container,assetBaseUrl:'/stub-runtime/',licenseKey:'  opaque.deployment.key  '});
+   const status=await editor.getLicenseStatus();
+   results.push({key:startupKey,status,frozen:Object.isFrozen(status),revision:(await editor.getState()).revision});
+   await editor.dispose();
+   try {await editor.getLicenseStatus();}catch(error){results.at(-1).disposed=error.code;}
+   container.remove();
+  }
+  return results;
+ });
+ expect(results).toEqual(Array(2).fill({key:'  opaque.deployment.key  ',status:{state:'free',reason:'invalid'},frozen:true,revision:'r0',disposed:'EditorDisposed'}));
+});
 test('public default entry mounts only a canvas without fetching private UI assets', async ({ page }) => {
   const requests = []; page.on('request', request => requests.push(request.url()));
   await page.route('**/stub-runtime/js/editor-canvas.js', route => route.fulfill({ contentType: 'text/javascript', body: 'export {mountCanvas} from "/test/browser/stub-runtime.js";' }));

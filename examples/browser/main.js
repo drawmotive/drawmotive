@@ -73,6 +73,7 @@ await run(async () => {
     container: document.querySelector('#editor'),
     // With an unbundled module, package-owned assets resolve relative to it.
     assetBaseUrl: new URL('../../generated/editor/', import.meta.url),
+    // Optional official branding removal: licenseKey: deploymentLicenseKey,
     signal: startup.signal,
   });
   editor.onStateChanged(state => { currentState = state; refreshControls(); });

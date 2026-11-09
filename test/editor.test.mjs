@@ -18,6 +18,36 @@ test('canvas session exposes independent text policy without web chrome',async t
  assert.equal(editor.textEditing,'external');
  for(const name of ['ui','onUiChanged','invokeAction','setActionState'])assert.equal(editor[name],undefined);
 });
+test('deployment license keys reach native startup unchanged and stay out of public state',async t=>{
+ const h=host(t);
+ for(const licenseKey of ['', '  raw.not-a-jwt.key  ', 'x'.repeat(8193)]) {
+  const editor=await h.mount({licenseKey});
+  assert.equal(h.context.options.licenseKey,licenseKey);
+  h.behavior(()=>state());assert.equal((await editor.getState()).licenseKey,undefined);
+  assert.equal(editor.licenseKey,undefined);await editor.dispose();
+ }
+ const editor=await h.mount();assert.equal(Object.hasOwn(h.context.options,'licenseKey'),false);await editor.dispose();
+});
+test('license status reads native authority each time as a detached immutable snapshot',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ let status={state:'free',reason:'invalid'};
+ h.behavior(method=>{assert.equal(method,'getLicenseStatus');return status;});
+ const first=await editor.getLicenseStatus();
+ assert.deepEqual(first,{state:'free',reason:'invalid'});assert.ok(Object.isFrozen(first));assert.notEqual(first,status);
+ status.reason='expired';assert.equal(first.reason,'invalid');
+ assert.deepEqual(await editor.getLicenseStatus(),{state:'free',reason:'expired'});
+ assert.deepEqual(h.calls,[{method:'getLicenseStatus',args:{}},{method:'getLicenseStatus',args:{}}]);
+});
+test('license status respects the document queue and rejects closing or disposed sessions',async t=>{
+ const h=host(t),editor=await h.mount();let finish;
+ h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):{state:'free',reason:'missing'});
+ const edit=editor.undo(),status=editor.getLicenseStatus();await new Promise(setImmediate);
+ assert.deepEqual(h.calls.map(call=>call.method),['undo']);
+ const closing=editor.dispose();await assert.rejects(editor.getLicenseStatus(),{code:'EditorDisposed'});
+ finish(null);await edit;assert.deepEqual(await status,{state:'free',reason:'missing'});await closing;
+ await assert.rejects(editor.getLicenseStatus(),{code:'EditorDisposed'});
+ const next=await h.mount();assert.equal(Object.hasOwn(h.context.options,'licenseKey'),false);await next.dispose();
+});
 test('disposal start notifies host lifetimes synchronously before blocked cleanup',async t=>{
  const h=host(t),editor=await h.mount({disposeTimeoutMs:1000});let release,events=0;
  h.cleanup(()=>new Promise(resolve=>release=resolve));
