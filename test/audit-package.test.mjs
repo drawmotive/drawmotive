@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -131,6 +132,23 @@ const shapeEntries = () => ['capsule', 'cloud', 'star'].map(name => ({
  name: `Graphics.Core.Shapes.Resources.${name}.v2.json`,
  data: readFileSync(new URL(`./fixtures/shapes/${name}.v2.json`, import.meta.url)),
 }));
+
+test('reviewed shape fixture bytes survive a Windows-style Git checkout',t=>{
+ const entries=shapeEntries();
+ const files={'.gitattributes':readFileSync(new URL('../.gitattributes',import.meta.url))};
+ for(const entry of entries) files['test/fixtures/shapes/'+entry.name.split('.Resources.')[1]]=entry.data;
+ const root=fixture(t,files);
+ const git=args=>execFileSync('git',['-c','core.autocrlf=true',...args],{cwd:root,stdio:'pipe'});
+ git(['init','--quiet']);git(['add','--','.gitattributes','test/fixtures/shapes']);
+ for(const file of Object.keys(files).filter(file=>file.endsWith('.json'))) rmSync(path.join(root,file));
+ git(['checkout-index','--all','--force']);
+ for(const file of Object.keys(files).filter(file=>file.endsWith('.json')))
+  assert.deepEqual(readFileSync(path.join(root,file)),files[file],file);
+ const fixtureBytes=resourceMetadata([...themeEntries(),...entries.map(entry=>({
+  ...entry,data:readFileSync(path.join(root,'test/fixtures/shapes',entry.name.split('.Resources.')[1])),
+ }))]);
+ assert.deepEqual(auditWasm(resourceAssembly(fixtureBytes),'Graphics.Core.wasm',{publicTheme:standardCss}),{managed:true});
+});
 
 test('reviewed current shape data passes the same complete WASM resource audit as themes',()=>{
  for(const wide of [false,true]) {
