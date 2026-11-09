@@ -55,6 +55,35 @@ function viewportOptions(options = {}) {
   if ((args.minScale ?? .2) > (args.maxScale ?? 1)) throw new TypeError('viewport.minScale must not exceed maxScale');
   return args;
 }
+/** Match native causal clock identities without treating object prototype names as reserved authors. */
+function replicationClock(value) {
+  return record(value) && Object.prototype.toString.call(value) === '[object Object]' &&
+    Object.entries(value).every(([author, sequence]) => /^[A-Za-z0-9_-]{1,128}$/.test(author) &&
+      Number.isInteger(sequence) && sequence >= 0 && sequence <= 2147483647);
+}
+/** The private transport receives portable native bytes, never a live scene or replica identity. */
+function portableSnapshot(value, decode) {
+  if (!record(value) || typeof value.payload !== 'string' || typeof value.key !== 'string' || !value.key.trim() ||
+      !replicationClock(value.clock))
+    throw new EditorError('InvalidRuntimeResponse', 'Invalid portable replication snapshot');
+  try {
+    const bytes = decode(value.payload);
+    return Object.freeze({ payload: Uint8Array.from(bytes, character => character.charCodeAt(0)), clock: immutableSnapshot(value.clock), key: value.key });
+  } catch (error) { throw new EditorError('InvalidRuntimeResponse', 'Invalid portable replication snapshot bytes', { cause: error }); }
+}
+/** Native proves suffix completeness and causal order; this boundary only owns and validates its DTO bytes. */
+function recoveryJournal(value, decode) {
+  if (!record(value) || !(value.revision === null || typeof value.revision === 'string' && value.revision.trim()) ||
+      !replicationClock(value.clock) || !Array.isArray(value.journal) ||
+      value.journal.some(entry => !record(entry) || typeof entry.id !== 'string' || !entry.id.trim() || typeof entry.payload !== 'string') ||
+      new Set(value.journal.map(entry => entry.id)).size !== value.journal.length)
+    throw new EditorError('InvalidRuntimeResponse', 'Invalid replication recovery journal');
+  try {
+    return Object.freeze({ revision: value.revision, clock: immutableSnapshot(value.clock),
+      journal: Object.freeze(value.journal.map(entry => Object.freeze({ id: entry.id,
+        payload: Uint8Array.from(decode(entry.payload), character => character.charCodeAt(0)) }))) });
+  } catch (error) { throw new EditorError('InvalidRuntimeResponse', 'Invalid replication recovery journal bytes', { cause: error }); }
+}
 
 
 /** One page owns one canvas. A document switch awaits full native/platform cleanup. */
@@ -255,6 +284,14 @@ export async function createEditorSession(options = {}, privateOptions) {
     return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
     read: platform.replication.read,
+    readJournal: async (serverClock = {}) => {
+      if (!replicationClock(serverClock)) throw new TypeError('serverClock must contain valid author identities and nonnegative 32-bit sequences');
+      return recoveryJournal(await request('replica.readJournal', { clock: serverClock }), value => hostWindow.atob(value));
+    },
+    exportSnapshot: async () => portableSnapshot(await request('replica.exportSnapshot'), value => hostWindow.atob(value)),
+    installSnapshot: (payload, expectedClock) => request('replica.installSnapshot', { payload,
+      ...(expectedClock === undefined ? {} : { expectedClock }) }),
+    archive: transactions => request('replica.archive', { transactions }),
     apply: transactions => request('replica.apply', { transactions }),
     acknowledge: platform.replication.acknowledge,
     onChanged: platform.replication.onChanged,

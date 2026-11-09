@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -63,6 +64,10 @@ const themeEntries = () => [
 const catalogName = 'Editor.Client.Licensing.editor-license-public-keys.json';
 const publicCatalog = JSON.parse(readFileSync(new URL('./fixtures/editor-license-public-keys.json',import.meta.url)));
 const catalogEntry = value => ({name:catalogName,data:Buffer.isBuffer(value)?value:Buffer.from(JSON.stringify(value))});
+const shapeEntries = () => ['capsule', 'cloud', 'star'].map(shape => ({
+  name: `Graphics.Core.Shapes.Resources.${shape}.v2.json`,
+  data: readFileSync(new URL(`./fixtures/shapes/${shape}.v2.json`, import.meta.url)),
+}));
 
 test('editor resources accept only public P-256 catalogs and permit explicit key rotation',()=>{
  for(const keys of [[],publicCatalog.keys,[...publicCatalog.keys,{...publicCatalog.keys[0],kid:'rotated public key α'}]]) {
@@ -107,16 +112,13 @@ test('catalog resources retain exact assembly ownership, metadata identity and c
 });
 
 test('graphics resources approve exact reviewed built-ins while rejecting changed or aliased shape payloads',()=>{
- const shapes=['capsule.v2','cloud.v2','star.v2'].map(id=>({name:'Graphics.Core.Shapes.Resources.'+id+'.json',
-  data:readFileSync(new URL('./fixtures/shape-resources/'+id+'.json',import.meta.url))}));
- for(const entries of [shapes,...shapes.map(shape=>[shape])]) {
-  const fixture=resourceMetadata([...themeEntries(),...entries]);
-  assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
- }
+ const shapes=shapeEntries();
+ const complete=resourceMetadata([...themeEntries(),...shapes]);
+ assert.deepEqual(auditWasm(resourceAssembly(complete),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
  for(const shape of shapes) {
   for(const changed of [{...shape,name:shape.name.replace('.v2.','.v3.')},
    {...shape,data:Buffer.from(JSON.stringify({...JSON.parse(shape.data),credentials:'secret'}))}]) {
-   const fixture=resourceMetadata([...themeEntries(),changed]);
+   const fixture=resourceMetadata([...themeEntries(),...shapes.map(entry=>entry===shape?changed:entry)]);
    assert.throws(()=>auditWasm(resourceAssembly(fixture),'Graphics.Core.wasm',{publicTheme:standardCss}),/Unapproved|Unreviewed/);
   }
  }
@@ -131,6 +133,44 @@ test('reviewed CSS resources use metadata names and match public theme bytes',()
   assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
   assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.abc.wasm',{publicTheme:standardCss}),/Unapproved managed resource/);
  }
+});
+
+test('reviewed current shape definitions pass the same binary and package resource audit', t => {
+  for (const wide of [false, true]) {
+    const metadata = resourceMetadata([...themeEntries(), ...shapeEntries()], { wide, precedingRows: 2 });
+    assert.doesNotThrow(() => auditManagedResources(metadata.streams, metadata.resources, 'Graphics.Core.abc.wasm', standardCss));
+    const filename = 'generated/editor/_framework/Graphics.Core.abc.wasm', theme = 'generated/editor/static/themes.css';
+    const assembly = resourceAssembly(metadata);
+    assert.deepEqual(auditWasm(assembly, filename, { publicTheme: standardCss }), { managed: true });
+    const root = fixture(t, { [filename]: assembly, [theme]: standardCss });
+    assert.equal(auditPackageFiles(root, [filename, theme]).managedAssemblies, 1);
+  }
+});
+
+test('shape resource approval rejects changed bytes, renamed definitions and unknown shapes', () => {
+  for (let index = 0; index < 3; index++) {
+    for (const mutate of [
+      entry => entry.data = Buffer.concat([entry.data, Buffer.from(' ')]),
+      entry => entry.name = entry.name.replace('.v2.json', '.v1.json'),
+      entry => entry.name = 'Graphics.Core.Shapes.Resources.unknown.v2.json',
+      entry => entry.name = 'Graphics.Core.Source.cs',
+    ]) {
+      const shapes = shapeEntries();
+      mutate(shapes[index]);
+      const { streams, resources } = resourceMetadata([...themeEntries(), ...shapes]);
+      assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Unreviewed|Unapproved/);
+    }
+  }
+});
+
+test('shape catalog approval requires every current definition and both reviewed themes', () => {
+  const entries = [...themeEntries(), ...shapeEntries()];
+  for (let index = 0; index < entries.length; index++) {
+    const { streams, resources } = resourceMetadata(entries.filter((_, position) => position !== index));
+    assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Incomplete/);
+  }
+  const { streams, resources } = resourceMetadata(shapeEntries().slice(0, 2));
+  assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Incomplete/);
 });
 
 test('resource audit rejects source names, changed contents, aliases and hidden payloads',()=>{
@@ -149,6 +189,60 @@ test('resource audit rejects source names, changed contents, aliases and hidden 
  for(const [name,bytes] of streams) {
   const truncated=new Map(streams);truncated.set(name,bytes.subarray(0,bytes.length-1));
   assert.throws(()=>readManagedResources(truncated,resources),/range|Unterminated/);
+ }
+});
+
+test('reviewed shape fixture bytes survive a Windows-style Git checkout',t=>{
+ const entries=shapeEntries();
+ const files={'.gitattributes':readFileSync(new URL('../.gitattributes',import.meta.url))};
+ for(const entry of entries) files['test/fixtures/shapes/'+entry.name.split('.Resources.')[1]]=entry.data;
+ const root=fixture(t,files);
+ const git=args=>execFileSync('git',['-c','core.autocrlf=true',...args],{cwd:root,stdio:'pipe'});
+ git(['init','--quiet']);git(['add','--','.gitattributes','test/fixtures/shapes']);
+ for(const file of Object.keys(files).filter(file=>file.endsWith('.json'))) rmSync(path.join(root,file));
+ git(['checkout-index','--all','--force']);
+ for(const file of Object.keys(files).filter(file=>file.endsWith('.json')))
+  assert.deepEqual(readFileSync(path.join(root,file)),files[file],file);
+ const fixtureBytes=resourceMetadata([...themeEntries(),...entries.map(entry=>({
+  ...entry,data:readFileSync(path.join(root,'test/fixtures/shapes',entry.name.split('.Resources.')[1])),
+ }))]);
+ assert.deepEqual(auditWasm(resourceAssembly(fixtureBytes),'Graphics.Core.wasm',{publicTheme:standardCss}),{managed:true});
+});
+
+test('reviewed current shape data passes the same complete WASM resource audit as themes',()=>{
+ for(const wide of [false,true]) {
+  const entries=[...shapeEntries(),...themeEntries()];
+  const fixture=resourceMetadata(entries,{wide,precedingRows:2});
+  assert.deepEqual(auditWasm(resourceAssembly(fixture),'Graphics.Core.abc.wasm',{publicTheme:standardCss}),{managed:true});
+ }
+});
+
+test('shape resource approval rejects changed data, unknown names, aliases and non-owned assemblies',()=>{
+ for(let index=0;index<3;index++) {
+  for(const mutate of [
+   entry=>entry.data=Buffer.concat([entry.data,Buffer.from(' ')]),
+   entry=>entry.name=entry.name.replace('.v2.json','.v3.json'),
+   entry=>entry.name='Graphics.Core.Shapes.Resources.Source.cs',
+   entry=>entry.name=shapeEntries()[(index+1)%3].name,
+  ]) {
+   const entries=[...themeEntries(),...shapeEntries()];mutate(entries[index+2]);
+   const fixture=resourceMetadata(entries);
+   assert.throws(()=>auditWasm(resourceAssembly(fixture),'Graphics.Core.wasm',{publicTheme:standardCss}),/resource|Resource/);
+  }
+ }
+ const fixture=resourceMetadata([...themeEntries(),...shapeEntries()]);
+ assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.wasm',{publicTheme:standardCss}),/Unapproved managed resource/);
+ assert.throws(()=>auditManagedResources(fixture.streams,Buffer.concat([fixture.resources,Buffer.from('hidden source')]),
+  'Graphics.Core.wasm',standardCss),/unaccounted/);
+ for(let index=0;index<2;index++) {
+  const entries=[...themeEntries(),...shapeEntries()];entries.splice(index,1);
+  const missing=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(missing.streams,missing.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
+ }
+ for(let index=0;index<3;index++) {
+  const entries=[...themeEntries(),...shapeEntries()];entries.splice(index+2,1);
+  const missing=resourceMetadata(entries);
+  assert.throws(()=>auditManagedResources(missing.streams,missing.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
  }
 });
 
@@ -218,4 +312,23 @@ test("producer source paths fail while third-party toolchain paths and JS licens
   assert.throws(() => auditPackageFiles(root, ["private.js"]), /Private producer source path/);
   assert.throws(() => auditPackageFiles(root, ["private.wide.js"]), /Private producer source path/);
   assert.equal(auditPackageFiles(root, ["native.js"]).files, 1);
+});
+
+test('current shape defaults pass the package audit only with their exact reviewed bytes', t => {
+  const filename = 'generated/editor/_framework/Graphics.Core.current.wasm', theme = 'generated/editor/static/themes.css';
+  const reviewed = readFileSync(new URL('./fixtures/GroupThemeDefaults-shape-defaults.css', import.meta.url));
+  const entries = themeEntries(); entries[0].data = reviewed;
+  const root = fixture(t, { [filename]: resourceAssembly(resourceMetadata(entries)), [theme]: standardCss });
+  assert.deepEqual(auditPackageFiles(root, [filename, theme]), { files: 2, wasmFiles: 1, managedAssemblies: 1 });
+  for (const [before, after] of [
+    ['--shape-corner-radius: 10px', '--shape-corner-radius: 11px'],
+    ['--shape-shadow-sigma: 0', '--shape-shadow-sigma: 1'],
+    ['--shape-shadow-offset-y: 0', '--shape-shadow-offset-y: 1'],
+    ['--shape-shadow-opacity: 0', '--shape-shadow-opacity: 1'],
+    ['}', '} /* unreviewed content */'],
+  ]) {
+    entries[0].data = Buffer.from(reviewed.toString('utf8').replace(before, after));
+    writeFileSync(path.join(root, filename), resourceAssembly(resourceMetadata(entries)));
+    assert.throws(() => auditPackageFiles(root, [filename, theme]), /Unreviewed GroupThemeDefaults.css/);
+  }
 });

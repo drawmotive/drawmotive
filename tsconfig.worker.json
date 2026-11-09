@@ -8,7 +8,8 @@
     "strict": true,
     "allowJs": true,
     "checkJs": false,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/storage/worker/**/*.ts", "src/resources/worker/**/*.ts"]
 }

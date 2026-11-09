@@ -42,3 +42,5 @@ createEditor({});
 createEditor({ container: document.body, ui: { buttons: { save: true } } });
 // @ts-expect-error Product identity is not an editor option.
 createEditor({ container: document.body, product: 'vscode' });
+// @ts-expect-error Persistent storage accepts no previous document identity.
+createEditor({ container: document.body, persistence: { mode: 'persistent', namespace: 'account', documentId: 'opaque:document', legacyDocumentId: 'previous' } });

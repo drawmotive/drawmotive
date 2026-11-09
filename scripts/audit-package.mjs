@@ -13,7 +13,7 @@ const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333
 const prefix = "Graphics.Core.Styles.Resources.";
 // Reviewed schema-v2 public geometry at ec83d2a69. New names or bytes require
 // renewed source/schema review; a JSON suffix alone never grants approval.
-const shapeHashes = new Map([
+const shapeResourceHashes = new Map([
   ["Graphics.Core.Shapes.Resources.capsule.v2.json", "3c76126c491c2cb209325216c02aa7148ed73fc0cb80b6ba441204563d7a2254"],
   ["Graphics.Core.Shapes.Resources.cloud.v2.json", "2d2d0ccdef1fc567a41ece334edbabe532e20f86f41ca0db479a4d8c62a1f724"],
   ["Graphics.Core.Shapes.Resources.star.v2.json", "9d6d7beb20de959599ebdb75f15d8bc8a11b71ac90203805039f35423cb6f087"],
@@ -111,13 +111,17 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
       if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
     } else if (graphics && resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
-    } else if (graphics && shapeHashes.has(resource.name)) {
-      if (hash(resource.data) !== shapeHashes.get(resource.name)) throw new Error("Unreviewed shape resource contents: "+resource.name);
+    } else if (graphics && shapeResourceHashes.has(resource.name)) {
+      if (hash(resource.data) !== shapeResourceHashes.get(resource.name)) throw new Error("Unreviewed shape resource contents: "+resource.name);
     } else if (editor && resource.name === licenseCatalog) auditLicenseCatalog(resource.data);
     else throw new Error("Unapproved managed resource: "+resource.name);
     end = resource.offset+4+resource.data.length;
   }
-  if (required.some(name=>!names.has(name)) || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
+  // Retained releases may contain only themes. A current geometry catalog must
+  // be complete; the Editor assembly independently requires only its public keys.
+  const shapeNames = [...shapeResourceHashes.keys()];
+  if (graphics && shapeNames.some(name => names.has(name))) required.push(...shapeNames);
+  if (names.size !== required.length || required.some(name=>!names.has(name)) || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
 }
 
 const ownedAssembly = /^(?:Editor\.Client|Graphics\.Core|Blazor\.IndexedDB|Math\.Core|RBush)(?:\.[A-Za-z0-9_-]+)?\.wasm$/;

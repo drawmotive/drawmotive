@@ -9,6 +9,7 @@ serveWorkerRequests(self, {
   initialize: ({ databaseName }: { databaseName?: string }) => { store = createDocumentDatabase({ databaseName }); return null; },
   'storage.open': options => store.openSession(options),
   'storage.read': ({ session }) => store.readCheckpoint(session),
+  'storage.journal': ({ session }) => store.readRetainedJournal(session),
   'storage.commit': ({ session, batch }) => store.commitBatch(session, batch),
   'storage.ack': ({ session, ids }) => store.acknowledgeOutbox(session, ids),
   'storage.outbox': ({ session }) => store.readOutbox(session),

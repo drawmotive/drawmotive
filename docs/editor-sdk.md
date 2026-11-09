@@ -476,11 +476,61 @@ There is no CacheStorage or IndexedDB font-cache fallback. Missing offline fonts
 All document IndexedDB operations run in the SDK's static Dexie Worker. Font I/O uses a separate OPFS Worker. Do not open their database or reproduce transactions in application code. Persistent mode requires IndexedDB, Workers and origin-wide Web Locks. Browser storage can be denied or evicted; external backups remain the host's responsibility.
 
 Standalone persistence does not require a synchronization module. Local edits,
-Undo/Redo and reopening retain complete history and clocks without generating
+Undo/Redo and reopening retain bounded active history and clocks without generating
 outgoing delivery records. Checkpoint state and its engine-supplied clock metadata
 are committed atomically. Private application composition may register delivery;
 its offline outbox is distinct from standalone local history and is not a public
 editor API.
+
+Each account namespace and document has its own IndexedDB database. Its name
+encodes the complete identity rather than a hash, and rows do not repeat the
+account/document key. A normal edit appends the original immutable transaction
+bytes, small replica metadata, and a receipt; it does not rewrite the scene or
+previous history. Native owns one opaque checkpoint containing the newest loading
+scene, an older normalized undo anchor, and the bounded history between them. The
+SDK atomically replaces that one blob; it does not rotate or nest opaque snapshots.
+The private storage boundary returns the blob with the retained journal
+suffix after its explicit `snapshotAfterJournalId` cut. A snapshot can precede
+later journal entries committed in the same batch; those entries still replay.
+
+The complete immutable original journal remains available through the private
+atomic `storage.journal` boundary for automatic recovery after a server reset,
+including records already acknowledged by transport. Reserved
+`$origin:<32 lower hex guid>` records archive original scene bytes in journal order.
+They are excluded from checkpoint replay suffixes and rejected from the outbox;
+they do not add another active undo snapshot. Private replication reads a stable
+`snapshotKey` from the durable cut so ordinary appends need not export a full scene.
+The private recovery adapter passes the server clock to native, which proves the
+missing suffix is complete and returns original transaction bytes in causal order.
+The SDK decodes and copies that ordered suffix; it does not infer order from the
+raw storage archive or send archival origin records to transport.
+
+An empty checkpoint payload retains the previous snapshot. Omitted replica
+metadata retains the previous metadata on an append, and clears it when a
+nonempty snapshot replaces the scene. Nonempty writes require an explicit journal
+cut (null means before the entire log); unknown or regressing cuts reject atomically.
+Receipts use SHA-256 over every normalized logical request field and length-framed
+bytes, independent of the current scene. This is cryptographic byte identity, not
+retention of historical snapshot payloads: retired blobs and replica-state bytes
+are not kept in receipts. Matching retries also verify the original immutable
+journal and outbox bytes; missing or changed evidence fails instead of confirming
+a save. Web Crypto SHA-256 is required; there is no weaker identity fallback.
+Outbox acknowledgements
+remove pending membership while retaining immutable identity evidence, so neither
+an identical retry nor a later edit can resurrect an acknowledged record.
+
+Persistent storage uses the fixed `document-v4` database generation. Previous
+shared and per-document formats are ignored: the SDK never opens or imports them,
+and does not remove their database files. Only data written in the current
+generation is restored. Reopening retains that data; explicit document deletion
+clears its snapshot, journal, metadata, receipts and pending delivery records
+atomically, without importing anything on the next open.
+
+Hosts configure only an opaque namespace and document ID. A session holds one
+writer lease for that identity. There is no previous-identity or migration option;
+changing identity starts independent storage. Current-format retries use exact
+cryptographic batch identity and immutable transaction evidence, including after
+acknowledgement or snapshot replacement.
 
 The two build artifacts are `dist/workers/document.worker.js` and `dist/workers/resource.worker.js`. Both are self-contained classic Worker scripts. If the bundler/host does not preserve their module-relative URLs, copy these exact files from the same package version into your static asset pipeline and provide their served locations:
 

@@ -4,7 +4,7 @@ import { createDocumentWorkerClient } from '../storage/worker-client.js';
 import { createResourceWorkerClient } from '../resources/resource-worker-client.js';
 import { createPreferenceStore } from './preferences.js';
 
-export const PLATFORM_METHODS = Object.freeze(['storage.open', 'storage.read', 'storage.commit',
+export const PLATFORM_METHODS = Object.freeze(['storage.open', 'storage.read', 'storage.journal', 'storage.commit',
   'storage.delete', 'fonts.load', 'preferences.get', 'preferences.update']);
 const identifier = value => typeof value === 'string' && !!value.trim();
 
@@ -48,6 +48,7 @@ export function createPlatformServices({ persistence, replication = false,
     switch (method) {
       case 'storage.open': return session;
       case 'storage.read': return store.readCheckpoint(session);
+      case 'storage.journal': return store.readRetainedJournal(session);
       case 'storage.commit': {
         const receipt = await store.commitBatch(session, args.batch);
         // Wakeups follow durable storage, independently of native command/state queues.
@@ -65,6 +66,7 @@ export function createPlatformServices({ persistence, replication = false,
     // Private composition only; never attached to the public editor handle.
     replication: replication ? Object.freeze({
       read: () => track(async () => { await open(); return store.readReplicationState(session); }),
+      readJournal: () => track(async () => { await open(); return store.readRetainedJournal(session); }),
       acknowledge: ids => {
         const copy = Array.isArray(ids) ? [...ids] : ids;
         return track(async () => { await open(); return store.acknowledgeOutbox(session, copy); });
