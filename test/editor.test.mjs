@@ -63,14 +63,39 @@ test('platform callbacks remain independent while a document command awaits stor
 });
 test('private composition supplies replication without extending the public handle',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});assert.equal(editor.replication,undefined);assert.equal(editor.sendCommand,undefined);assert.equal(h.context.options.initialEditingEnabled,false);
- h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[]});await replication.apply([]);await replication.acknowledge([]);
+ h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[],snapshotKey:'origin'});await replication.apply([]);await replication.acknowledge([]);
  let changes=0;replication.onChanged(()=>changes++);h.context.emit('stateChanged',state({revision:'next'}));assert.equal(changes,0);
- await h.context.platform('storage.commit',{batch:{batchId:'one',expectedRevision:null,checkpoint:{revision:'r1',payload:new Uint8Array([1]),clock:{author:1}},outbox:[{id:'author:1',revision:'r1',payload:new Uint8Array([2])}]}});
- assert.equal(changes,1);assert.deepEqual((await replication.read()).clock,{author:1});await replication.acknowledge(['author:1']);assert.deepEqual((await replication.read()).outbox,[]);await editor.dispose();
+ await h.context.platform('storage.commit',{batch:{batchId:'one',expectedRevision:null,checkpoint:{revision:'r1',payload:new Uint8Array([1]),clock:{author:1},snapshotAfterJournalId:null},journal:[{id:'author:1',payload:new Uint8Array([2])}],outbox:[{id:'author:1',revision:'r1',payload:new Uint8Array([2])}]}});
+ assert.equal(changes,1);assert.deepEqual((await replication.read()).clock,{author:1});await replication.acknowledge(['author:1']);assert.deepEqual((await replication.read()).outbox,[]);
+ assert.deepEqual(await replication.readJournal(),{revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:new Uint8Array([2])}]});await editor.dispose();
+ await assert.rejects(replication.readJournal(),{code:'EditorDisposed'});
 });
 test('startup platform preferences and cache status are retained',async t=>{
  const h=host(t);h.dom.window.localStorage.setItem('drawmotive.editor.preferences.v1','{"darkTheme":true}');const editor=await h.mount();assert.deepEqual(await h.context.platform('preferences.get'),{darkTheme:true});
  h.context.emit('fontCacheStatus',{path:'font.ttf',cache:'stored'});assert.deepEqual(editor.getFontCacheStatus(),[{path:'font.ttf',cache:'stored'}]);await editor.dispose();
+});
+test('private replication snapshots own decoded bytes and capture install/archive inputs before dispatch',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ assert.equal(editor.installSnapshot,undefined);assert.equal(editor.archive,undefined);
+ const nativeSnapshot={payload:'AQID',clock:{author:2},key:'tx2'};
+ h.behavior(method=>method==='replica.exportSnapshot'?nativeSnapshot:null);
+ const exported=await replication.exportSnapshot();
+ assert.ok(exported.payload instanceof Uint8Array);assert.deepEqual([...exported.payload],[1,2,3]);
+ assert.deepEqual(exported.clock,{author:2});assert.equal(exported.key,'tx2');
+ nativeSnapshot.clock.author=99;assert.equal(exported.clock.author,2);exported.payload[0]=7;
+ const payload=new Uint8Array([4,5]),transactions=[{id:'one',payload:new Uint8Array([6])}];
+ const installed=replication.installSnapshot(payload),archived=replication.archive(transactions);
+ payload[0]=9;transactions[0].payload[0]=9;await installed;await archived;
+ assert.deepEqual(h.calls,[{method:'replica.exportSnapshot',args:{}},
+  {method:'replica.installSnapshot',args:{payload:new Uint8Array([4,5])}},
+  {method:'replica.archive',args:{transactions:[{id:'one',payload:new Uint8Array([6])}]}}]);
+});
+test('private replication rejects malformed portable snapshot responses',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ for(const response of [null,{payload:'!!!',clock:{},key:'cut'},{payload:'AQ==',clock:null,key:'cut'},
+  {payload:'AQ==',clock:{author:-1},key:'cut'},{payload:'AQ==',clock:{},key:42}]) {
+  h.behavior(()=>response);await assert.rejects(replication.exportSnapshot(),{code:'InvalidRuntimeResponse'});
+ }
 });
 test('disposal waits pending commands and releases ownership only after cleanup',async t=>{
  const h=host(t),editor=await h.mount();let finish,release;h.behavior(()=>new Promise(resolve=>finish=resolve));h.cleanup(()=>new Promise(resolve=>release=resolve));

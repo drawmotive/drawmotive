@@ -1,4 +1,4 @@
-/** Frozen pre-v3 schemas seed disposable test databases; the SDK must never open them. */
+/** Frozen pre-v4 schemas seed disposable test databases; the SDK must never open them. */
 export async function seedRetiredDocumentStores(prefix, configuration) {
   const key = JSON.stringify([configuration.namespace, configuration.documentId]);
   const checkpoint = { revision: 'retired', payload: new Uint8Array([42]), clock: { retired: 1 } };
@@ -19,6 +19,10 @@ export async function seedRetiredDocumentStores(prefix, configuration) {
       receipts: { keyPath: 'batchId', rows: [] },
     }],
   ];
+  const v3Name = prefix + ':document-v3:' + encodeURIComponent(key);
+  const v3Tables = structuredClone(schemas[1][1]);
+  v3Tables.meta.rows = v3Tables.meta.rows.filter(row => row.key !== 'migration');
+  schemas.push([v3Name, v3Tables]);
   for (const [name, tables] of schemas) await new Promise((resolve, reject) => {
     // Dexie schema version 1 uses native IndexedDB version 10.
     const request = indexedDB.open(name, 10);
@@ -37,5 +41,5 @@ export async function seedRetiredDocumentStores(prefix, configuration) {
         for (const row of definition.rows) transaction.objectStore(table).put(row);
     };
   });
-  return { sharedName, previousName };
+  return { sharedName, previousName, v3Name, names: schemas.map(([name]) => name) };
 }

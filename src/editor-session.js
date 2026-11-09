@@ -55,6 +55,16 @@ function viewportOptions(options = {}) {
   if ((args.minScale ?? .2) > (args.maxScale ?? 1)) throw new TypeError('viewport.minScale must not exceed maxScale');
   return args;
 }
+/** The private transport receives portable native bytes, never a live scene or replica identity. */
+function portableSnapshot(value, decode) {
+  if (!record(value) || typeof value.payload !== 'string' || typeof value.key !== 'string' || !value.key.trim() ||
+      !record(value.clock) || Object.entries(value.clock).some(([author, sequence]) => !author.trim() || !Number.isInteger(sequence) || sequence < 0 || sequence > 2147483647))
+    throw new EditorError('InvalidRuntimeResponse', 'Invalid portable replication snapshot');
+  try {
+    const bytes = decode(value.payload);
+    return Object.freeze({ payload: Uint8Array.from(bytes, character => character.charCodeAt(0)), clock: immutableSnapshot(value.clock), key: value.key });
+  } catch (error) { throw new EditorError('InvalidRuntimeResponse', 'Invalid portable replication snapshot bytes', { cause: error }); }
+}
 
 
 /** One page owns one canvas. A document switch awaits full native/platform cleanup. */
@@ -253,6 +263,10 @@ export async function createEditorSession(options = {}, privateOptions) {
     return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
     read: platform.replication.read,
+    readJournal: platform.replication.readJournal,
+    exportSnapshot: async () => portableSnapshot(await request('replica.exportSnapshot'), value => hostWindow.atob(value)),
+    installSnapshot: payload => request('replica.installSnapshot', { payload }),
+    archive: transactions => request('replica.archive', { transactions }),
     apply: transactions => request('replica.apply', { transactions }),
     acknowledge: platform.replication.acknowledge,
     onChanged: platform.replication.onChanged,

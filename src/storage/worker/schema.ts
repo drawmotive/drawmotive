@@ -10,24 +10,20 @@ export interface HeadRow {
   nextJournalOrdinal: number;
   nextOutboxOrdinal: number;
 }
-/** Snapshots and journal payloads remain immutable so historical receipts can compare exact bytes. */
+/** One replaceable opaque snapshot is separate from the immutable original journal. */
 export interface PayloadRow { id: string; payload: Uint8Array; }
 export interface JournalRow extends PayloadRow { ordinal: number; }
 /** Payload identity survives ACKs; pending membership is stored separately without rewriting bytes. */
 export interface OutboxRow extends DocumentOutboxEntry {}
 export interface PendingRow { id: string; ordinal: number; }
-/** Receipts reference immutable payload rows instead of persisting another copy of each transaction. */
-export interface ExactReceiptRow {
-  batchId: string; revision: string; expectedRevision: string | null;
-  checkpoint: Omit<DocumentCheckpoint, 'payload' | 'journal'>;
-  snapshotId?: string;
-  outbox: string[];
-  journal?: string[];
+/** SHA-256 attests the complete original batch without retaining retired snapshot bytes. */
+export interface BatchReceiptRow {
+  batchId: string; revision: string; digest: string;
 }
 /** A fixed fresh generation never imports previous formats. Full encoded identities
  * avoid hash collisions and keep account/document keys out of every row. */
 export function databaseName(prefix: string | undefined, key: string): string {
-  return (prefix ?? 'drawmotive-documents') + ':document-v3:' + encodeURIComponent(key);
+  return (prefix ?? 'drawmotive-documents') + ':document-v4:' + encodeURIComponent(key);
 }
 
 /** Private per-document schema. The document Worker is its sole production owner. */
@@ -37,7 +33,7 @@ export class DocumentDatabase extends Dexie {
   readonly journal: Table<JournalRow, string>;
   readonly outbox: Table<OutboxRow, string>;
   readonly pending: Table<PendingRow, string>;
-  readonly receipts: Table<ExactReceiptRow, string>;
+  readonly receipts: Table<BatchReceiptRow, string>;
   constructor(name: string) {
     super(name);
     this.version(1).stores({ meta: 'key', snapshots: 'id', journal: 'id, &ordinal', outbox: 'id', pending: 'id, &ordinal', receipts: 'batchId' });

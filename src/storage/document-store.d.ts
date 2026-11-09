@@ -13,10 +13,14 @@ export interface DocumentSessionOptions {
   documentId: string;
   persistence: DocumentPersistenceMode;
 }
-/** An opaque scene snapshot plus the latest engine replica metadata. */
+/** One opaque native checkpoint plus the latest engine replica metadata.
+ * Native owns its two normalized scenes and bounded undo history; storage never nests snapshots. */
 export interface DocumentCheckpoint {
   readonly revision: string;
   readonly payload: Uint8Array;
+  /** Required on nonempty writes: last included original journal ID, or null before the log.
+   * Reads return the active snapshot cut. Empty append writes omit it (interop null is normalized). */
+  readonly snapshotAfterJournalId?: string | null;
   /** Engine-supplied delivery metadata, committed atomically with the opaque payload. */
   readonly clock: Readonly<Record<string, number>>;
   /** Small engine metadata. Omission retains it on append and clears it on snapshot replacement. */
@@ -24,7 +28,8 @@ export interface DocumentCheckpoint {
   /** Read result only: ordered immutable transactions accepted after the returned snapshot. */
   readonly journal?: readonly DocumentJournalEntry[];
 }
-/** Stable causal identity and original serialized engine transaction bytes. */
+/** Stable identity and original native bytes. Reserved $origin:<32 lower hex guid>
+ * records archive noncausal scene origins; they never enter replay suffixes or delivery. */
 export interface DocumentJournalEntry {
   readonly id: string;
   readonly payload: Uint8Array;
@@ -36,9 +41,11 @@ export interface DocumentOutboxEntry {
 }
 /** Snapshot/metadata, journal, outbox and the durable batch receipt commit atomically.
  * An empty checkpoint payload retains the previous snapshot and appends the journal.
- * A nonempty payload replaces the snapshot, including this batch's journal entries.
+ * A nonempty payload replaces the single opaque blob at its explicit journal cut;
+ * later entries from the same batch remain in the replay suffix.
  * expectedRevision mismatches reject without writing any part. A repeated batchId
- * with identical content returns its original receipt; different content rejects. */
+ * with the same SHA-256 canonical byte identity returns its original receipt;
+ * different content rejects without retaining historical snapshot payloads. */
 export interface DocumentCommitBatch {
   readonly batchId: string;
   readonly expectedRevision: string | null;
@@ -56,6 +63,14 @@ export interface DocumentCommitReceipt {
 export interface DocumentDeliveryState {
   readonly clock: Readonly<Record<string, number>>;
   readonly outbox: readonly { readonly id: string; readonly payload: Uint8Array }[];
+  /** Periodic native snapshot cut, stable across ordinary journal-only edits. */
+  readonly snapshotKey: string;
+}
+/** One atomic read of the entire immutable archive, including acknowledged records and origins. */
+export interface DocumentRetainedJournal {
+  readonly revision: string | null;
+  readonly clock: Readonly<Record<string, number>>;
+  readonly journal: readonly DocumentJournalEntry[];
 }
 /** A Dedicated Worker owns this boundary; no IndexedDB access occurs on the UI thread.
  * Storage identity is namespace + documentId. Only one document may be open in a
@@ -64,6 +79,7 @@ export interface DocumentDeliveryState {
 export interface DocumentStore {
   openSession(options: DocumentSessionOptions): Promise<DocumentSession>;
   readCheckpoint(session: DocumentSession): Promise<DocumentCheckpoint | null>;
+  readRetainedJournal(session: DocumentSession): Promise<DocumentRetainedJournal>;
   commitBatch(session: DocumentSession, batch: DocumentCommitBatch): Promise<DocumentCommitReceipt>;
   /** Atomically removes only the named entries; does not rewrite a checkpoint. */
   acknowledgeOutbox(session: DocumentSession, ids: readonly string[]): Promise<void>;

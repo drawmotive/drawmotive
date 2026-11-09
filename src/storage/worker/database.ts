@@ -1,6 +1,6 @@
-import type { DocumentCheckpoint, DocumentJournalEntry, DocumentOutboxEntry, DocumentSession, DocumentSessionOptions, DocumentStore, DocumentCommitBatch } from '../document-store.js';
-import { createDocumentOwner, prepareBatch, storageError, equalBytes, equalOutbox, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata } from '../store-operations.js';
-import { databaseName, DocumentDatabase, type ExactReceiptRow, type HeadRow } from './schema.ts';
+import type { DocumentCheckpoint, DocumentSession, DocumentSessionOptions, DocumentStore, DocumentCommitBatch } from '../document-store.js';
+import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId } from '../store-operations.js';
+import { databaseName, DocumentDatabase, type HeadRow } from './schema.ts';
 
 interface DatabaseOptions { databaseName?: string; acquireWriter?: (key: string) => Promise<() => void>; }
 
@@ -21,7 +21,8 @@ async function readCheckpoint(db: DocumentDatabase): Promise<DocumentCheckpoint 
     if (!head) return null;
     const snapshot = head.snapshotId ? await db.snapshots.get(head.snapshotId) : undefined;
     if (head.snapshotId && !snapshot) throw storageError('StorageUnavailable', 'The document snapshot is missing.');
-    const journal = (await db.journal.where('ordinal').above(head.snapshotOrdinal).sortBy('ordinal')).map(({ id, payload }) => ({ id, payload }));
+    const journal = (await db.journal.where('ordinal').above(head.snapshotOrdinal).sortBy('ordinal'))
+      .filter(({ id }) => !isOriginJournalId(id)).map(({ id, payload }) => ({ id, payload }));
     return { ...head.checkpoint, payload: snapshot?.payload ?? new Uint8Array(), ...(journal.length ? { journal } : {}) };
   });
 }
@@ -33,28 +34,15 @@ async function pendingOutbox(db: DocumentDatabase) {
   return rows.map(row => ({ id: row!.id, revision: row!.revision, payload: row!.payload }));
 }
 
-/** Resolve only this request's immutable payloads; a retry never compares against a newer head. */
-async function originalBatch(db: DocumentDatabase, receipt: ExactReceiptRow): Promise<DocumentCommitBatch> {
-  const snapshot = receipt.snapshotId ? await db.snapshots.get(receipt.snapshotId) : undefined;
-  const outbox: DocumentOutboxEntry[] = [];
-  for (const id of receipt.outbox) {
-    const entry = await db.outbox.get(id);
-    if (!entry) throw storageError('StorageUnavailable', 'Immutable outbox evidence is missing.');
-    outbox.push({ id, revision: entry.revision, payload: entry.payload });
-  }
-  let journal: DocumentJournalEntry[] | undefined;
-  if (receipt.journal !== undefined) {
-    journal = [];
-    for (const id of receipt.journal) {
-      const entry = await db.journal.get(id);
-      if (!entry) throw storageError('StorageUnavailable', 'Immutable journal evidence is missing.');
-      journal.push({ id, payload: entry.payload });
-    }
-  }
-  if (receipt.snapshotId && !snapshot) throw storageError('StorageUnavailable', 'Immutable snapshot evidence is missing.');
-  return { batchId: receipt.batchId, expectedRevision: receipt.expectedRevision,
-    checkpoint: { ...receipt.checkpoint, payload: snapshot?.payload ?? new Uint8Array() },
-    outbox, ...(journal === undefined ? {} : { journal }) };
+/** Digest matches do not excuse missing or changed immutable transaction evidence. */
+async function batchRecords(db: DocumentDatabase, batch: DocumentCommitBatch, receipt = false) {
+  const journal = batch.journal ?? [];
+  const [storedOutbox, storedJournal] = await Promise.all([
+    db.outbox.bulkGet(batch.outbox.map(entry => entry.id)), db.journal.bulkGet(journal.map(entry => entry.id)),
+  ]);
+  batch.outbox.forEach((entry, index) => checkImmutableRecord(storedOutbox[index], entry, 'outbox', receipt));
+  journal.forEach((entry, index) => checkImmutableRecord(storedJournal[index], entry, 'journal', receipt));
+  return { outbox: batch.outbox.filter((_, index) => !storedOutbox[index]), journal: journal.filter((_, index) => !storedJournal[index]) };
 }
 
 /** Imported only by document.worker.ts (Node imports are test-only). One document owns one DB. */
@@ -86,42 +74,49 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
       finally { opening = false; }
     },
     async readCheckpoint(session: DocumentSession) { return readCheckpoint(database(session)); },
+    async readRetainedJournal(session: DocumentSession) {
+      const currentDb = database(session);
+      return currentDb.transaction('r', currentDb.meta, currentDb.journal, async () => {
+        const head = await currentDb.head();
+        return { revision: head?.checkpoint.revision ?? null, clock: head?.checkpoint.clock ?? {},
+          journal: (await currentDb.journal.orderBy('ordinal').toArray()).map(({ id, payload }) => ({ id, payload })) };
+      });
+    },
     async commitBatch(session: DocumentSession, value: DocumentCommitBatch) {
       const currentDb = database(session);
-      const { batch }: { batch: DocumentCommitBatch } = await prepareBatch(value);
+      const { batch, digest }: { batch: DocumentCommitBatch; digest: string } = await prepareBatch(value);
       owner.get(session);
       return currentDb.transaction('rw', currentDb.tables, async () => {
         owner.get(session);
         const receipt = await currentDb.receipts.get(batch.batchId);
-        if (receipt) return checkReceipt(receipt, batch, await originalBatch(currentDb, receipt));
+        if (receipt) {
+          const confirmed = checkReceipt(receipt, digest);
+          await batchRecords(currentDb, batch, true);
+          return confirmed;
+        }
         const current = await currentDb.head();
         if ((current?.checkpoint.revision ?? null) !== batch.expectedRevision) throw storageError('StorageConflict', 'Checkpoint revision changed.');
         let nextOutboxOrdinal = current?.nextOutboxOrdinal ?? 0, nextJournalOrdinal = current?.nextJournalOrdinal ?? 0;
-        for (const entry of batch.outbox) {
-          const existing = await currentDb.outbox.get(entry.id);
-          if (existing && !equalOutbox(existing, entry)) throw storageError('BatchConflict', 'Outbox identities cannot change.');
-          if (!existing) {
-            await currentDb.outbox.put(entry);
-            await currentDb.pending.put({ id: entry.id, ordinal: nextOutboxOrdinal++ });
-          }
+        const records = await batchRecords(currentDb, batch);
+        for (const entry of records.outbox) {
+          await currentDb.outbox.put(entry);
+          await currentDb.pending.put({ id: entry.id, ordinal: nextOutboxOrdinal++ });
         }
-        for (const entry of batch.journal ?? []) {
-          const existing = await currentDb.journal.get(entry.id);
-          if (existing && !equalBytes(existing.payload, entry.payload)) throw storageError('BatchConflict', 'Journal identities cannot change.');
-          if (!existing) await currentDb.journal.put({ ...entry, ordinal: nextJournalOrdinal++ });
+        for (const entry of records.journal) {
+          await currentDb.journal.put({ ...entry, ordinal: nextJournalOrdinal++ });
         }
         const replacesSnapshot = batch.checkpoint.payload.length > 0;
-        const snapshotId = replacesSnapshot ? JSON.stringify(['batch', batch.batchId]) : undefined;
+        const boundary = replacesSnapshot && batch.checkpoint.snapshotAfterJournalId !== null
+          ? await currentDb.journal.get(batch.checkpoint.snapshotAfterJournalId!) : undefined;
+        const snapshotOrdinal = snapshotCut(current?.snapshotOrdinal, batch.checkpoint, boundary?.ordinal);
+        const snapshotId = replacesSnapshot ? 'current' : undefined;
         if (snapshotId) await currentDb.snapshots.put({ id: snapshotId, payload: batch.checkpoint.payload });
         const head: HeadRow = { key: 'head', checkpoint: checkpointMetadata(current?.checkpoint, batch.checkpoint),
           snapshotId: snapshotId ?? current?.snapshotId,
-          snapshotOrdinal: replacesSnapshot ? nextJournalOrdinal - 1 : current?.snapshotOrdinal ?? -1,
+          snapshotOrdinal,
           nextJournalOrdinal, nextOutboxOrdinal };
         await currentDb.meta.put(head);
-        await currentDb.receipts.put({ batchId: batch.batchId, revision: batch.checkpoint.revision,
-          expectedRevision: batch.expectedRevision, checkpoint: checkpointMetadata(undefined, batch.checkpoint),
-          ...(snapshotId ? { snapshotId } : {}), outbox: batch.outbox.map(entry => entry.id),
-          ...(batch.journal === undefined ? {} : { journal: batch.journal.map(entry => entry.id) }) });
+        await currentDb.receipts.put({ batchId: batch.batchId, revision: batch.checkpoint.revision, digest });
         return { batchId: batch.batchId, revision: batch.checkpoint.revision };
       });
     },
@@ -135,10 +130,11 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
     },
     async readReplicationState(session: DocumentSession) {
       const currentDb = database(session);
-      return currentDb.transaction('r', currentDb.meta, currentDb.pending, currentDb.outbox, async () => ({
-        clock: (await currentDb.head())?.checkpoint.clock ?? {},
-        outbox: (await pendingOutbox(currentDb)).map(({ id, payload }) => ({ id, payload })),
-      }));
+      return currentDb.transaction('r', currentDb.meta, currentDb.pending, currentDb.outbox, async () => {
+        const head = await currentDb.head();
+        return { clock: head?.checkpoint.clock ?? {}, snapshotKey: head?.checkpoint.snapshotAfterJournalId ?? 'origin',
+          outbox: (await pendingOutbox(currentDb)).map(({ id, payload }) => ({ id, payload })) };
+      });
     },
     async closeSession(session: DocumentSession) { owner.close(session); },
     async deleteDocument(session: DocumentSession) {
