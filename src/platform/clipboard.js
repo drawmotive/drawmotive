@@ -1,5 +1,6 @@
 import { EditorError } from '../errors.js';
 const prefix = 'drawmotive/selection:1\n';
+const windowsPrefix = prefix.replace('\n', '\r\n');
 const invalid = () => new EditorError('ClipboardFormatUnsupported', 'The clipboard does not contain a DrawMotive selection.');
 function selection(value) {
   if (!value || value.version !== 1 || typeof value.data !== 'string' || !value.data.length || value.data.length > 32 * 1024 * 1024
@@ -8,8 +9,12 @@ function selection(value) {
 }
 export const encodeSelection = payload => prefix + selection(payload).data;
 export function decodeSelection(text) {
-  if (typeof text !== 'string' || !text.startsWith(prefix)) throw invalid();
-  return selection({version:1,data:text.slice(prefix.length)});
+  if (typeof text !== 'string') throw invalid();
+  // Windows clipboard text normalizes the envelope separator to CRLF. Accept
+  // that transport change without relaxing validation of the opaque graph bytes.
+  const length = text.startsWith(prefix) ? prefix.length : text.startsWith(windowsPrefix) ? windowsPrefix.length : 0;
+  if (!length) throw invalid();
+  return selection({version:1,data:text.slice(length)});
 }
 function pngBytes(value) {
   if (typeof value !== 'string' || !value.length) throw new EditorError('ClipboardImageUnavailable', 'The engine did not provide a PNG selection image.');
