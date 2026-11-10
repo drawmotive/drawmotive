@@ -200,11 +200,11 @@ test('stale notifications cannot affect a reopened document',async t=>{
  const h=host(t),first=await h.mount(),old=h.context;await first.dispose();const second=await h.mount();let seen;second.onStateChanged(value=>seen=value);old.emit('stateChanged',state({revision:'old'}));assert.equal(seen.revision,null);await second.dispose();
 });
 test('clipboard stays in JS and semantic payloads remain opaque',async t=>{
- const h=host(t),payload={version:1,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
+ const h=host(t),payload={version:2,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
 });
 test('clipboard is retired before blocked native disposal completes',async t=>{
  const h=host(t);let release,access=0;
- Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){access++;return Promise.resolve('drawmotive/selection:1\nAQID');},writeText(){access++;return Promise.resolve();}}});
+ Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){access++;return Promise.resolve('drawmotive/selection:2\nAQID');},writeText(){access++;return Promise.resolve();}}});
  const editor=await h.mount({disposeTimeoutMs:1000});h.cleanup(()=>new Promise(resolve=>release=resolve));
  const closing=editor.dispose();await new Promise(setImmediate);
  try {
@@ -219,7 +219,7 @@ test('a pending copy provider cannot supply bytes after disposal begins',async t
  Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{write(items){provider=items[0].data['text/plain'];return provider.then(()=>{});}}});
  h.behavior(()=>new Promise(resolve=>finish=resolve));const editor=await h.mount();
  const copying=editor.copyToClipboard({});void copying.catch(()=>{});await new Promise(setImmediate);
- const closing=editor.dispose();finish({version:1,data:'AQID'});
+ const closing=editor.dispose();finish({version:2,data:'AQID'});
  await assert.rejects(copying,{code:'EditorDisposed'});await assert.rejects(provider,{code:'EditorDisposed'});await closing;
 });
 test('a pending paste cannot dispatch into a disposed or recreated editor',async t=>{
@@ -227,7 +227,7 @@ test('a pending paste cannot dispatch into a disposed or recreated editor',async
  Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText:()=>new Promise(resolve=>read=resolve)}});
  h.behavior(method=>method==='getPointerPosition'?{x:1,y:2}:null);
  const first=await h.mount(),pending=first.pasteFromClipboard();void pending.catch(()=>{});await new Promise(setImmediate);await first.dispose();
- const second=await h.mount();read('drawmotive/selection:1\nAQID');await assert.rejects(pending,{code:'EditorDisposed'});
+ const second=await h.mount();read('drawmotive/selection:2\nAQID');await assert.rejects(pending,{code:'EditorDisposed'});
  assert.equal(h.calls.some(call=>call.method==='pasteSelection'),false);await second.dispose();
 });
 test('interaction methods dispatch semantic intent without native keyboard events',async t=>{
@@ -238,8 +238,8 @@ test('interaction methods dispatch semantic intent without native keyboard event
  await assert.rejects(editor.updateInteractionModifiers({alt:'true',shift:false}),TypeError);
 });
 test('clipboard read starts before resolving native pointer placement',async t=>{
- const h=host(t),payload={version:1,data:'AQID'},order=[];
- Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){order.push('system-read');return Promise.resolve('drawmotive/selection:1\nAQID');}}});
+ const h=host(t),payload={version:2,data:'AQID'},order=[];
+ Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){order.push('system-read');return Promise.resolve('drawmotive/selection:2\nAQID');}}});
  h.behavior(method=>{order.push(method);return method==='getPointerPosition'?{x:12,y:34}:null;});
  const editor=await h.mount();t.after(()=>editor.dispose());
  const paste=editor.pasteFromClipboard();void paste.catch(()=>{});assert.deepEqual(order,['system-read']);await paste;
