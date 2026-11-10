@@ -231,6 +231,7 @@ The document API exposes generated values from scene metadata and every live gra
 | `applyText(token, targetItemId, content)` | Commits host-supplied text without entering inline input |
 | `copySelection(token)` | Returns opaque `{ version: 2, data: string }` |
 | `pasteSelection(payload, { x, y })` | Clones/remaps the opaque graph through the engine; returns the pasted selection |
+| `pasteImage(data, { x, y })` | Inserts Base64 encoded image bytes as a self-contained image; returns the pasted selection |
 
 Selection transfer payloads use version `2`, and system clipboard text uses the `drawmotive/selection:2` envelope. Version `1` payloads and envelopes are rejected. The selection token version is an independent counter.
 
@@ -389,7 +390,17 @@ C# owns object cloning, ID/reference remapping, bound labels, connectors and the
 
 Copy returns `{ internal: true, system: 'written' \| 'denied' \| 'unavailable' \| 'skipped' }`. A denied system write can still leave a successful internal copy. The internal buffer is per instance, survives neither disposal nor reload, and is not a document snapshot.
 
-`internal` never reads the system clipboard. `system` requires a successful system read and a recognized DrawMotive selection. `auto` tries the system first and uses the internal buffer when system access is unavailable/denied. A successful read of unrelated text reports `ClipboardFormatUnsupported`; it never resurrects an older internal copy. Arbitrary text/image paste is not implemented by these selection APIs.
+`internal` never reads the system clipboard. `system` requires a successful system read containing a DrawMotive selection or supported image. `auto` tries the system first and uses the internal buffer when system access is unavailable/denied. A successful read of unrelated content reports `ClipboardFormatUnsupported`; it never resurrects an older internal copy. Arbitrary text paste is not implemented by these selection APIs.
+
+Where `navigator.clipboard.read()` is available, paste reads rich items and prefers a valid versioned DrawMotive graph over accompanying pixels, including a graph in a different item. Malformed or unsupported graph envelopes reject rather than flatten into an image. Otherwise, external `image/*` bytes become self-contained image objects, even when accompanied by unrelated text. Image representations retain the provider's advertised order, so an earlier JPEG is preserved when a PNG alternative is also available. Native decoding determines supported formats. Browsers exposing only `readText()` retain graph-only paste.
+
+Hosts can also call `pasteImage(base64ImageBytes, { x, y })` without accessing the system clipboard. Pass the encoded bytes without a data-URL prefix. Native decoding validates image data before changing selection or history; image insertion uses the document queue and returns `EditorSelectionSnapshot`. The image begins at its intrinsic pixel dimensions in drawing/model coordinates and supports selection, movement, resizing, rotation, Undo, persistence and graph copy. Resizing the drawing object retains its stored pixels.
+
+Native insertion preserves the exact original encoded bytes for every supported format, including JPEG, PNG and WebP, when they fit the 4,000,000-byte resource limit. Only oversized inputs are resized; JPEG encoding uses quality 80. Source input is limited to 16 MiB, 16384 pixels per side and 16777216 total pixels. An unavailable native decoder reports `UnsupportedImageFormat`; only that error permits browser decoding and conversion to the smaller of PNG and JPEG at quality 0.8. The browser tries bitmap decoding, then an Image element where needed for SVG. If neither browser decoder supports the source, paste rejects with `UnsupportedImageFormat`. Malformed native-recognized data never enters browser conversion. Conversion and native retry remain in the same queued operation with the original placement.
+
+Validated encoded bytes become immutable resources in the same document/account persistence scope. The image transaction contains a SHA-256 reference to those exact bytes rather than the pixels. Resources commit atomically with their referencing history and remain available after offline reload, Undo and Redo. Graph copies and raw or embedded-PNG document exports include the resources so they remain self-contained.
+
+The pasted selection transaction, including image references, other pasted objects and derived changes, must fit the existing 1 MiB document transaction limit. Oversized transactions reject with `SelectionTooLarge` before changing the document, history or selection, and the editor remains usable. Reduce selection content before retrying. Raster resource limits apply independently of that transaction limit.
 
 Invoke system operations directly from a browser user gesture. Keep the current token from selection notifications so that you do not await another operation before initiating privileged clipboard access:
 
@@ -407,7 +418,7 @@ pasteButton.addEventListener('click', () => {
 });
 ```
 
-Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. Host shortcuts and menus can use this JS clipboard service. Native inline text retains browser text copy/paste.
+Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write or a clipboard read during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. Host shortcuts and menus can use this JS clipboard service. Native inline text retains browser text copy/paste.
 
 Each editor keeps its own opaque internal copy in JS. Paste snapshots that fallback when invoked; a newer copy cannot replace an earlier pending paste. When no position is supplied, paste starts system access first and immediately requests the native model-space pointer position, preserving placement while permission handling is pending. Disposal immediately clears and retires the clipboard, including both deferred MIME providers and pending pastes. The C# transfer service retains no clipboard buffer; it freezes the closed graph and displayed line geometry into bytes, then remaps identities and applies placement and transactions on insertion.
 
@@ -569,6 +580,8 @@ Public methods validate basic shapes in JS and semantic constraints in C#. Inval
 | `PreferenceReadFailed`, `PreferenceWriteFailed`, `InvalidPreferences` | Report preference storage failure |
 | `ResourceUnavailable`, `ResourceHashMismatch`, `ResourceWorkerFailed` | Restore valid matching resources/connectivity; do not use corrupt cache bytes |
 | `ClipboardEmpty`, `ClipboardUnavailable`, `ClipboardPermissionDenied`, `ClipboardFormatUnsupported` | Ask for a supported source/access or use an explicit internal operation |
+| `UnsupportedImageFormat` | Neither native nor browser decoding supports the source; provide another encoded image format |
+| `SelectionTooLarge` | Reduce selection content to fit the 1 MiB reference-transaction limit; document, history and selection remain unchanged and the editor remains usable |
 | `EditorDisposed` | Stop using this instance |
 | `DisposeCleanupUnconfirmed` | Cleanup was not confirmed; reload the page before opening a successor |
 

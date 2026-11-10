@@ -15,6 +15,8 @@ export async function createDocumentWorkerClient({
     openSession: options => channel.request('storage.open', options),
     readCheckpoint: session => channel.request('storage.read', { session }),
     readRetainedJournal: session => channel.request('storage.journal', { session }),
+    readAssets: (session, hashes) => channel.request('storage.assets.read', { session, hashes }),
+    writeAssets: (session, assets) => channel.request('storage.assets.write', { session, assets }),
     commitBatch: (session, batch) => channel.request('storage.commit', { session, batch }),
     acknowledgeOutbox: (session, ids) => channel.request('storage.ack', { session, ids }),
     readOutbox: session => channel.request('storage.outbox', { session }),

@@ -1,9 +1,10 @@
-import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId } from './store-operations.js';
+import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId, prepareAssets, copyAssetHashes, checkImmutableAsset } from './store-operations.js';
 
 /** File/temporary hosts keep immutable history in memory; no browser storage is touched. */
 export function createMemoryDocumentStore() {
   const owner = createDocumentOwner();
   let document;
+  const assets = new Map();
   let tail = Promise.resolve();
   let closing = false;
   const serial = action => {
@@ -41,6 +42,7 @@ export function createMemoryDocumentStore() {
           const confirmed = checkReceipt(receipt, digest);
           for (const entry of batch.outbox) checkImmutableRecord(current.outbox.get(entry.id), entry, 'outbox', true);
           for (const entry of batch.journal ?? []) checkImmutableRecord(current.journal.get(entry.id), entry, 'journal', true);
+          for (const asset of batch.assets ?? []) checkImmutableAsset(assets.get(asset.hash), asset, true);
           return confirmed;
         }
         if ((current.checkpoint?.revision ?? null) !== batch.expectedRevision) throw storageError('StorageConflict', 'Checkpoint revision changed.');
@@ -52,12 +54,14 @@ export function createMemoryDocumentStore() {
         for (const entry of batch.journal ?? []) {
           checkImmutableRecord(current.journal.get(entry.id), entry, 'journal');
         }
+        for (const asset of batch.assets ?? []) checkImmutableAsset(assets.get(asset.hash), asset);
         let nextJournalOrdinal = current.nextJournalOrdinal;
         const newJournal = (batch.journal ?? []).filter(entry => !current.journal.has(entry.id))
           .map(entry => ({ ...entry, ordinal: nextJournalOrdinal++ }));
         const boundary = current.journal.get(batch.checkpoint.snapshotAfterJournalId)
           ?? newJournal.find(entry => entry.id === batch.checkpoint.snapshotAfterJournalId);
         const cut = snapshotCut(current.snapshotOrdinal, batch.checkpoint, boundary?.ordinal);
+        for (const asset of batch.assets ?? []) if (!assets.has(asset.hash)) assets.set(asset.hash, asset);
         for (const entry of batch.outbox) if (!current.outbox.has(entry.id)) {
           current.outbox.set(entry.id, entry); current.pending.set(entry.id, entry);
         }
@@ -76,6 +80,18 @@ export function createMemoryDocumentStore() {
         return { batchId: batch.batchId, revision: batch.checkpoint.revision };
       });
     },
+    async readAssets(session, value) {
+      const hashes = copyAssetHashes(value); await tail; owner.get(session);
+      return structuredClone((hashes ?? [...assets.keys()].sort()).flatMap(hash => assets.has(hash) ? [assets.get(hash)] : []));
+    },
+    writeAssets(session, value) {
+      const prepared = prepareAssets(value); void prepared.catch(() => {});
+      return serial(async () => {
+        owner.get(session); const additions = await prepared; owner.get(session);
+        for (const asset of additions) checkImmutableAsset(assets.get(asset.hash), asset);
+        for (const asset of additions) if (!assets.has(asset.hash)) assets.set(asset.hash, asset);
+      });
+    },
     async acknowledgeOutbox(session, ids) {
       const acknowledged = copyAcknowledgements(ids);
       return serial(() => {
@@ -89,8 +105,8 @@ export function createMemoryDocumentStore() {
       return structuredClone({ clock: document?.checkpoint?.clock ?? {}, snapshotKey: document?.checkpoint?.snapshotAfterJournalId ?? 'origin',
         outbox: pendingOutbox().map(({ id, payload }) => ({ id, payload })) });
     },
-    closeSession(session) { return serial(() => { owner.close(session); document = undefined; }); },
-    deleteDocument(session) { return serial(() => { owner.get(session); document = undefined; }); },
-    async dispose() { closing = true; await tail; owner.dispose(); document = undefined; },
+    closeSession(session) { return serial(() => { owner.close(session); document = undefined; assets.clear(); }); },
+    deleteDocument(session) { return serial(() => { owner.get(session); document = undefined; assets.clear(); }); },
+    async dispose() { closing = true; await tail; owner.dispose(); document = undefined; assets.clear(); },
   });
 }

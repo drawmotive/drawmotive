@@ -202,6 +202,16 @@ test('stale notifications cannot affect a reopened document',async t=>{
 test('clipboard stays in JS and semantic payloads remain opaque',async t=>{
  const h=host(t),payload={version:2,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
 });
+test('image insertion shares the native document queue and freezes placement',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());let finish;
+ const selection={token:{session:'s',version:2},items:[]};
+ h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):selection);
+ const edit=editor.undo(),position={x:4,y:8},paste=editor.pasteImage('AQID',position);position.x=90;
+ await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['undo']);
+ finish(null);await edit;const result=await paste;assert.deepEqual(result,selection);assert.ok(Object.isFrozen(result));
+ assert.deepEqual(h.calls.at(-1),{method:'pasteImage',args:{data:'AQID',position:{x:4,y:8}}});
+ await editor.dispose();await assert.rejects(editor.pasteImage('AQID',{x:0,y:0}),{code:'EditorDisposed'});
+});
 test('clipboard is retired before blocked native disposal completes',async t=>{
  const h=host(t);let release,access=0;
  Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){access++;return Promise.resolve('drawmotive/selection:2\nAQID');},writeText(){access++;return Promise.resolve();}}});
@@ -285,4 +295,52 @@ test('one scene edit forwards a detached batch without a property command vocabu
  assert.equal(h.calls.length,1);assert.equal(h.calls[0].method,'editScene');
  assert.equal(h.calls[0].args.changes[0].value,37);assert.equal(h.calls[0].args.changes[3].arguments[1].label,'Example');
  assert.ok(Object.isFrozen(h.calls[0].args.changes));
+});
+test('private image resources retain binary ownership, use the native queue and retire with the editor',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ const data=Uint8Array.of(1,2,3),hash=Buffer.from(await crypto.subtle.digest('SHA-256',data)).toString('hex');
+ await h.context.platform('storage.assets.write',{assets:[{hash,data}]});
+ const assets=await replication.readAssets([hash]);assert.deepEqual(assets,[{hash,data}]);assets[0].data[0]=9;
+ assert.deepEqual(await replication.readAssets(),[{hash,data}]);
+ let finish;h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):method==='replica.describeAssets'?[hash]:null);
+ const undo=editor.undo(),payload=Uint8Array.of(7),describe=replication.describeAssets({transactions:[{id:'a:1',payload}],snapshot:payload});
+ const install=replication.installAssets([{hash,data}]);payload[0]=8;data[0]=9;
+ await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['undo']);finish(null);await undo;
+ assert.deepEqual(await describe,[hash]);await install;
+ assert.deepEqual(h.calls.slice(-2),[{method:'replica.describeAssets',args:{transactions:[{id:'a:1',payload:Uint8Array.of(7)}],snapshot:Uint8Array.of(7)}},{method:'replica.installAssets',args:{assets:[{hash,data:Uint8Array.of(1,2,3)}]}}]);
+ await editor.dispose();await assert.rejects(replication.readAssets(),{code:'EditorDisposed'});
+ await assert.rejects(replication.describeAssets({}),{code:'EditorDisposed'});await assert.rejects(replication.installAssets([]),{code:'EditorDisposed'});
+});
+
+test('native unsupported image conversion stays inside one queued insertion and preserves frozen placement',async t=>{
+ const h=host(t);let convert,closed=false;
+ h.dom.window.createImageBitmap=()=>new Promise(resolve=>convert=resolve);
+ h.dom.window.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){}});
+ h.dom.window.HTMLCanvasElement.prototype.toBlob=function(done,type,quality){assert.equal(quality,type==='image/jpeg'?0.8:undefined);done(new Blob([type==='image/png'?Uint8Array.of(1,2,3):Uint8Array.of(4)],{type}));};
+ const editor=await h.mount();t.after(()=>editor.dispose());let pastes=0;
+ h.behavior(method=>{if(method==='pasteImage'&&++pastes===1)throw Object.assign(new Error('Decoder unavailable'),{code:'UnsupportedImageFormat'});return null;});
+ const position={x:5,y:7},pending=editor.pasteImage('CQgH',position);position.x=90;const undo=editor.undo();
+ await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['pasteImage']);
+ convert({width:8,height:4,close(){closed=true;}});await pending;await undo;
+ assert.deepEqual(h.calls.map(call=>call.method),['pasteImage','pasteImage','undo']);assert.deepEqual(h.calls[1].args,{data:'BA==',position:{x:5,y:7}});assert.equal(closed,true);
+});
+test('supported native bytes and malformed native images never start browser conversion',async t=>{
+ const h=host(t);h.dom.window.createImageBitmap=()=>assert.fail('Only an unsupported native decoder permits conversion');const editor=await h.mount();t.after(()=>editor.dispose());
+ await editor.pasteImage('AQID',{x:1,y:2});assert.equal(h.calls[0].args.data,'AQID');
+ h.behavior(()=>{throw Object.assign(new Error('Malformed raster'),{code:'InvalidArgument'});});await assert.rejects(editor.pasteImage('BAUG',{x:1,y:2}),{code:'InvalidArgument'});
+});
+test('oversized image source rejects before native dispatch and respects disposal',async t=>{
+ const h=host(t),editor=await h.mount(),data='A'.repeat(Math.ceil(16*1024*1024/3)*4+4);
+ await assert.rejects(editor.pasteImage(data,{x:1,y:2}),{code:'InvalidArgument'});assert.equal(h.calls.length,0);
+ await editor.dispose();await assert.rejects(editor.pasteImage(data,{x:1,y:2}),{code:'EditorDisposed'});
+});
+test('disposal drains entered browser fallback and prevents the native retry',async t=>{
+ const h=host(t);let convert,closed=false,cleaned=false;
+ h.dom.window.createImageBitmap=()=>new Promise(resolve=>convert=resolve);
+ const editor=await h.mount({disposeTimeoutMs:1000});h.cleanup(async()=>{cleaned=true;});
+ h.behavior(()=>{throw Object.assign(new Error('Decoder unavailable'),{code:'UnsupportedImageFormat'});});
+ const pending=editor.pasteImage('AQID',{x:1,y:2});void pending.catch(()=>{});await new Promise(setImmediate);
+ const disposing=editor.dispose();await new Promise(setImmediate);assert.equal(cleaned,false);
+ convert({width:8,height:4,close(){closed=true;}});await assert.rejects(pending,{code:'EditorDisposed'});await disposing;
+ assert.equal(closed,true);assert.equal(cleaned,true);assert.equal(h.calls.length,1);
 });

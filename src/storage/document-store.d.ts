@@ -39,7 +39,9 @@ export interface DocumentOutboxEntry {
   readonly revision: string;
   readonly payload: Uint8Array;
 }
-/** Snapshot/metadata, journal, outbox and the durable batch receipt commit atomically.
+/** Immutable encoded image bytes, capped at 4,000,000 bytes; SHA-256 identity and access remain document scoped. */
+export interface DocumentImageAsset { readonly hash: string; readonly data: Uint8Array; }
+/** Snapshot/metadata, journal, outbox, image resources and the durable batch receipt commit atomically.
  * An empty checkpoint payload retains the previous snapshot and appends the journal.
  * A nonempty payload replaces the single opaque blob at its explicit journal cut;
  * later entries from the same batch remain in the replay suffix.
@@ -55,6 +57,8 @@ export interface DocumentCommitBatch {
   readonly outbox: readonly DocumentOutboxEntry[];
   /** New immutable transactions only; existing IDs must retain exactly the same bytes. */
   readonly journal?: readonly DocumentJournalEntry[];
+  /** New resources commit atomically with every referencing journal/outbox record. */
+  readonly assets?: readonly DocumentImageAsset[];
 }
 export interface DocumentCommitReceipt {
   readonly batchId: string;
@@ -80,6 +84,9 @@ export interface DocumentStore {
   openSession(options: DocumentSessionOptions): Promise<DocumentSession>;
   readCheckpoint(session: DocumentSession): Promise<DocumentCheckpoint | null>;
   readRetainedJournal(session: DocumentSession): Promise<DocumentRetainedJournal>;
+  readAssets(session: DocumentSession, hashes?: readonly string[] | null): Promise<DocumentImageAsset[]>;
+  /** Immutable persistence only; no revision, clock or history changes. */
+  writeAssets(session: DocumentSession, assets: readonly DocumentImageAsset[]): Promise<void>;
   commitBatch(session: DocumentSession, batch: DocumentCommitBatch): Promise<DocumentCommitReceipt>;
   /** Atomically removes only the named entries; does not rewrite a checkpoint. */
   acknowledgeOutbox(session: DocumentSession, ids: readonly string[]): Promise<void>;

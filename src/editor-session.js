@@ -2,6 +2,8 @@ import { EditorError, fromErrorDescriptor, immutableSnapshot } from './errors.js
 import { createPlatformServices } from './platform/services.js';
 import { createPreferenceStore, validatePreferences } from './platform/preferences.js';
 import { createEditorClipboard } from './platform/clipboard.js';
+import { convertUnsupportedImage, MAX_IMAGE_INPUT_BYTES } from './platform/browser-image.js';
+import { copyAssetHashes } from './storage/store-operations.js';
 export { EditorError };
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 function keys(value, allowed, name) {
@@ -165,15 +167,30 @@ export async function createEditorSession(options = {}, privateOptions) {
     for (const listener of disposalListeners) { try { listener(); } catch(error) { report(error); } }
     disposalListeners.clear();
   }
-  function request(method,args = {}) {
+  function request(method,args = {}, recover) {
     if (lifecycle !== 'ready') return Promise.reject(disposedError());
     const copy = immutableSnapshot(args);
-    const result = queue.then(() => native.request(method,copy)).then(immutableSnapshot).catch(error => {
+    // Recovery belongs to this queue entry, so conversion cannot admit a later edit before retry.
+    const result = queue.then(async () => {
+      try { return await native.request(method,copy); }
+      catch (error) { if (!recover) throw error; return recover(error,copy); }
+    }).then(immutableSnapshot).catch(error => {
       if (error instanceof EditorError) throw error;
       throw new EditorError(error?.code ?? 'RuntimeError',error?.message ?? String(error),{cause:error});
     });
     queue = result.catch(() => {});
     return result;
+  }
+  function pasteImage(data, position, type) {
+    if (lifecycle !== 'ready') return Promise.reject(disposedError());
+    if (typeof data === 'string' && data.length > Math.ceil(MAX_IMAGE_INPUT_BYTES / 3) * 4)
+      return Promise.reject(new EditorError('InvalidArgument', 'The image input exceeds the supported size.'));
+    return request('pasteImage', { data, position }, async (error, copy) => {
+      if (error?.code !== 'UnsupportedImageFormat') throw error;
+      const active = () => { if (lifecycle !== 'ready') throw disposedError(); };
+      const converted = await convertUnsupportedImage(copy.data, type, { window:hostWindow, active });
+      active(); return native.request('pasteImage', { ...copy, data:converted });
+    });
   }
   function invoke(method,prepare) { try { return request(method,prepare()); } catch(error) { return Promise.reject(error); } }
   const pagehide = event => { if (!event.persisted) void instance.dispose().catch(report); };
@@ -231,6 +248,7 @@ export async function createEditorSession(options = {}, privateOptions) {
       return {token,...(options.png === undefined ? {} : {png:boolean(options.png,'png')})};
     }); },
     pasteSelection(payload,position) { return request('pasteSelection',{ payload,position }); },
+    pasteImage(data,position) { return pasteImage(data,position); },
     copyToClipboard(token,options) { return clipboard.copy(token,options); },
     pasteFromClipboard(position,options) { return clipboard.paste(position,options); },
     async getPreferences() { const value = await request('getPreferences'); updatePreferences(value); return latestPreferences; },
@@ -262,7 +280,7 @@ export async function createEditorSession(options = {}, privateOptions) {
   const clipboardOptions = {};
   try { clipboardOptions.clipboard = hostWindow.navigator.clipboard; clipboardOptions.ClipboardItem = hostWindow.ClipboardItem; clipboardOptions.Blob = hostWindow.Blob; }
   catch { /* The internal clipboard remains usable when the host denies system access. */ }
-  clipboard = createEditorClipboard(instance, {...clipboardOptions,getPastePosition:()=>request('getPointerPosition')});
+  clipboard = createEditorClipboard(instance, {...clipboardOptions,getPastePosition:()=>request('getPointerPosition'),pasteImage});
   const startupTimer = setTimeout(() => startup.abort(new EditorError('StartupTimeout','Editor initialization timed out.')),deadlines.startup);
   let starting;
   try {
@@ -283,6 +301,19 @@ export async function createEditorSession(options = {}, privateOptions) {
     clearTimeout(startupTimer); signal?.removeEventListener('abort',abort);
     return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
+    describeAssets: async (args = {}) => {
+      const hashes = await request('replica.describeAssets', args);
+      try {
+        if (!Array.isArray(hashes)) throw new TypeError();
+        return Object.freeze(copyAssetHashes(hashes));
+      } catch { throw new EditorError('InvalidRuntimeResponse', 'Invalid image asset dependencies.'); }
+    },
+    readAssets: hashes => {
+      if (lifecycle !== 'ready') return Promise.reject(disposedError());
+      try { return platform.request('storage.assets.read', { hashes:copyAssetHashes(hashes) }).then(immutableSnapshot); }
+      catch(error) { return Promise.reject(error); }
+    },
+    installAssets: assets => request('replica.installAssets', { assets }),
     read: platform.replication.read,
     readJournal: async (serverClock = {}) => {
       if (!replicationClock(serverClock)) throw new TypeError('serverClock must contain valid author identities and nonnegative 32-bit sequences');

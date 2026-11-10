@@ -1,4 +1,5 @@
 import { EditorError } from '../errors.js';
+import { imageBase64, MAX_IMAGE_INPUT_BYTES } from './browser-image.js';
 const prefix = 'drawmotive/selection:2\n';
 const windowsPrefix = prefix.replace('\n', '\r\n');
 const invalid = () => new EditorError('ClipboardFormatUnsupported', 'The clipboard does not contain a DrawMotive selection.');
@@ -22,9 +23,36 @@ function pngBytes(value) {
   if (![137,80,78,71,13,10,26,10].every((byte,index) => bytes[index] === byte)) throw new EditorError('ClipboardImageUnavailable', 'The selection image is not PNG.');
   return bytes;
 }
+/** Graph envelopes own editable content; inspect every text item before choosing pixels. */
+async function clipboardContent(items, active) {
+  let graph;
+  for (const item of items) {
+    if (!item.types.includes('text/plain')) continue;
+    const blob = await item.getType('text/plain'); active();
+    const text = await blob.text(); active();
+    if (text.startsWith('drawmotive/selection:')) {
+      const payload = decodeSelection(text);
+      graph ??= payload;
+    }
+  }
+  if (graph) return {kind:'graph',data:graph};
+  // Provider order is the available representation preference; do not replace
+  // an advertised original format with its PNG companion.
+  const types = [...new Set(items.flatMap(item => item.types).filter(type => /^image\//i.test(type)))];
+  for (const type of types) {
+    const item = items.find(item => item.types.includes(type));
+    if (!item) continue;
+    const blob = await item.getType(type); active();
+    if (blob.size > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
+    const bytes = new Uint8Array(await blob.arrayBuffer()); active();
+    if (bytes.length > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
+    return {kind:'image',data:imageBase64(bytes),type};
+  }
+  throw invalid();
+}
 
 /** Host JS owns both system access and the instance-local copy. Engine bytes stay opaque. */
-export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob = globalThis.Blob, getPastePosition } = {}) {
+export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob = globalThis.Blob, getPastePosition, pasteImage = (data, point) => editor.pasteImage(data, point) } = {}) {
   let internal, disposed = false, copyGeneration = 0;
   const active = () => { if (disposed) throw new EditorError('EditorDisposed', 'Editor has been disposed'); };
   return Object.freeze({
@@ -70,9 +98,12 @@ export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob =
       const fallback = internal;
       let reading;
       if (source !== 'internal') {
-        if (clipboard?.readText) {
+        if (clipboard?.read || clipboard?.readText) {
           const denied = () => { if(source === 'system') throw new EditorError('ClipboardPermissionDenied','System clipboard permission was denied.'); };
-          try { reading = Promise.resolve(clipboard.readText()).then(text => ({text}), denied); }
+          // Start privileged access synchronously during the paste gesture. Only
+          // access failure permits fallback; content/conversion failures reject.
+          try { reading = clipboard.read ? Promise.resolve(clipboard.read()).then(items => ({items}), denied)
+            : Promise.resolve(clipboard.readText()).then(text => ({text}), denied); }
           catch { reading = Promise.resolve().then(denied); }
         } else if(source === 'system') throw new EditorError('ClipboardUnavailable','The system clipboard is unavailable.');
       }
@@ -82,11 +113,12 @@ export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob =
       void placement.catch(() => {});
       const result = await reading;
       active();
-      // A successful read of unrelated text must never resurrect an old copy.
-      const payload = result ? decodeSelection(result.text) : fallback;
-      if (!payload) throw new EditorError('ClipboardEmpty','Copy a selection first.');
+      // A successful unrelated read must never resurrect an old copy.
+      const content = result ? (result.items ? await clipboardContent(result.items, active) : {kind:'graph',data:decodeSelection(result.text)})
+        : {kind:'graph',data:fallback};
+      if (!content.data && content.kind === 'graph') throw new EditorError('ClipboardEmpty','Copy a selection first.');
       const resolved = await placement;
-      active();return editor.pasteSelection(payload,resolved);
+      active();return content.kind === 'image' ? pasteImage(content.data,resolved,content.type) : editor.pasteSelection(content.data,resolved);
     },
     dispose() { disposed = true; internal = undefined; },
   });

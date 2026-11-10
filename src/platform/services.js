@@ -5,7 +5,7 @@ import { createResourceWorkerClient } from '../resources/resource-worker-client.
 import { createPreferenceStore } from './preferences.js';
 
 export const PLATFORM_METHODS = Object.freeze(['storage.open', 'storage.read', 'storage.journal', 'storage.commit',
-  'storage.delete', 'fonts.load', 'preferences.get', 'preferences.update']);
+  'storage.delete', 'storage.assets.read', 'storage.assets.write', 'fonts.load', 'preferences.get', 'preferences.update']);
 const identifier = value => typeof value === 'string' && !!value.trim();
 
 /** Host configuration owns the one active document and its account namespace. */
@@ -49,6 +49,8 @@ export function createPlatformServices({ persistence, replication = false,
       case 'storage.open': return session;
       case 'storage.read': return store.readCheckpoint(session);
       case 'storage.journal': return store.readRetainedJournal(session);
+      case 'storage.assets.read': return store.readAssets(session, args.hashes);
+      case 'storage.assets.write': return store.writeAssets(session, args.assets);
       case 'storage.commit': {
         const receipt = await store.commitBatch(session, args.batch);
         // Wakeups follow durable storage, independently of native command/state queues.
