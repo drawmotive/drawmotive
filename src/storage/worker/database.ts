@@ -1,5 +1,5 @@
 import type { DocumentCheckpoint, DocumentSession, DocumentSessionOptions, DocumentStore, DocumentCommitBatch } from '../document-store.js';
-import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId } from '../store-operations.js';
+import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId, prepareAssets, copyAssetHashes, checkImmutableAsset } from '../store-operations.js';
 import { databaseName, DocumentDatabase, type HeadRow } from './schema.ts';
 
 interface DatabaseOptions { databaseName?: string; acquireWriter?: (key: string) => Promise<() => void>; }
@@ -37,12 +37,15 @@ async function pendingOutbox(db: DocumentDatabase) {
 /** Digest matches do not excuse missing or changed immutable transaction evidence. */
 async function batchRecords(db: DocumentDatabase, batch: DocumentCommitBatch, receipt = false) {
   const journal = batch.journal ?? [];
-  const [storedOutbox, storedJournal] = await Promise.all([
+  const [storedOutbox, storedJournal, storedAssets] = await Promise.all([
     db.outbox.bulkGet(batch.outbox.map(entry => entry.id)), db.journal.bulkGet(journal.map(entry => entry.id)),
+    db.assets.bulkGet((batch.assets ?? []).map(asset => asset.hash)),
   ]);
   batch.outbox.forEach((entry, index) => checkImmutableRecord(storedOutbox[index], entry, 'outbox', receipt));
   journal.forEach((entry, index) => checkImmutableRecord(storedJournal[index], entry, 'journal', receipt));
-  return { outbox: batch.outbox.filter((_, index) => !storedOutbox[index]), journal: journal.filter((_, index) => !storedJournal[index]) };
+  (batch.assets ?? []).forEach((asset, index) => checkImmutableAsset(storedAssets[index], asset, receipt));
+  return { outbox: batch.outbox.filter((_, index) => !storedOutbox[index]), journal: journal.filter((_, index) => !storedJournal[index]),
+    assets: (batch.assets ?? []).filter((_, index) => !storedAssets[index]) };
 }
 
 /** Imported only by document.worker.ts (Node imports are test-only). One document owns one DB. */
@@ -98,6 +101,7 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
         if ((current?.checkpoint.revision ?? null) !== batch.expectedRevision) throw storageError('StorageConflict', 'Checkpoint revision changed.');
         let nextOutboxOrdinal = current?.nextOutboxOrdinal ?? 0, nextJournalOrdinal = current?.nextJournalOrdinal ?? 0;
         const records = await batchRecords(currentDb, batch);
+        if (records.assets.length) await currentDb.assets.bulkPut(records.assets);
         for (const entry of records.outbox) {
           await currentDb.outbox.put(entry);
           await currentDb.pending.put({ id: entry.id, ordinal: nextOutboxOrdinal++ });
@@ -118,6 +122,20 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
         await currentDb.meta.put(head);
         await currentDb.receipts.put({ batchId: batch.batchId, revision: batch.checkpoint.revision, digest });
         return { batchId: batch.batchId, revision: batch.checkpoint.revision };
+      });
+    },
+    async readAssets(session: DocumentSession, value?: readonly string[] | null) {
+      const hashes = copyAssetHashes(value), currentDb = database(session);
+      return hashes === undefined ? currentDb.assets.orderBy('hash').toArray()
+        : (await currentDb.assets.bulkGet(hashes)).filter((asset): asset is NonNullable<typeof asset> => !!asset);
+    },
+    async writeAssets(session: DocumentSession, value: readonly import('../document-store.js').DocumentImageAsset[]) {
+      const currentDb = database(session), assets = await prepareAssets(value); owner.get(session);
+      await currentDb.transaction('rw', currentDb.assets, async () => {
+        owner.get(session); const previous = await currentDb.assets.bulkGet(assets.map(asset => asset.hash));
+        assets.forEach((asset, index) => checkImmutableAsset(previous[index], asset));
+        const additions = assets.filter((_, index) => !previous[index]);
+        if (additions.length) await currentDb.assets.bulkPut(additions);
       });
     },
     async acknowledgeOutbox(session: DocumentSession, ids: readonly string[]) {

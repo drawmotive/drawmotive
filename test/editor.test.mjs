@@ -296,3 +296,18 @@ test('one scene edit forwards a detached batch without a property command vocabu
  assert.equal(h.calls[0].args.changes[0].value,37);assert.equal(h.calls[0].args.changes[3].arguments[1].label,'Example');
  assert.ok(Object.isFrozen(h.calls[0].args.changes));
 });
+test('private image resources retain binary ownership, use the native queue and retire with the editor',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ const data=Uint8Array.of(1,2,3),hash=Buffer.from(await crypto.subtle.digest('SHA-256',data)).toString('hex');
+ await h.context.platform('storage.assets.write',{assets:[{hash,data}]});
+ const assets=await replication.readAssets([hash]);assert.deepEqual(assets,[{hash,data}]);assets[0].data[0]=9;
+ assert.deepEqual(await replication.readAssets(),[{hash,data}]);
+ let finish;h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):method==='replica.describeAssets'?[hash]:null);
+ const undo=editor.undo(),payload=Uint8Array.of(7),describe=replication.describeAssets({transactions:[{id:'a:1',payload}],snapshot:payload});
+ const install=replication.installAssets([{hash,data}]);payload[0]=8;data[0]=9;
+ await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['undo']);finish(null);await undo;
+ assert.deepEqual(await describe,[hash]);await install;
+ assert.deepEqual(h.calls.slice(-2),[{method:'replica.describeAssets',args:{transactions:[{id:'a:1',payload:Uint8Array.of(7)}],snapshot:Uint8Array.of(7)}},{method:'replica.installAssets',args:{assets:[{hash,data:Uint8Array.of(1,2,3)}]}}]);
+ await editor.dispose();await assert.rejects(replication.readAssets(),{code:'EditorDisposed'});
+ await assert.rejects(replication.describeAssets({}),{code:'EditorDisposed'});await assert.rejects(replication.installAssets([]),{code:'EditorDisposed'});
+});

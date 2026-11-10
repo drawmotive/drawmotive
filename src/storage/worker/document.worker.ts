@@ -10,6 +10,8 @@ serveWorkerRequests(self, {
   'storage.open': options => store.openSession(options),
   'storage.read': ({ session }) => store.readCheckpoint(session),
   'storage.journal': ({ session }) => store.readRetainedJournal(session),
+  'storage.assets.read': ({ session, hashes }) => store.readAssets(session, hashes),
+  'storage.assets.write': ({ session, assets }) => store.writeAssets(session, assets),
   'storage.commit': ({ session, batch }) => store.commitBatch(session, batch),
   'storage.ack': ({ session, ids }) => store.acknowledgeOutbox(session, ids),
   'storage.outbox': ({ session }) => store.readOutbox(session),

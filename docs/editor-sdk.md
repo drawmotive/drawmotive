@@ -393,7 +393,9 @@ Where `navigator.clipboard.read()` is available, paste reads rich items and pref
 
 Hosts can also call `pasteImage(base64RasterBytes, { x, y })` without accessing the system clipboard. Pass the encoded bytes without a data-URL prefix. Native decoding validates raster data before changing selection or history; image insertion uses the document queue and returns `EditorSelectionSnapshot`. The image begins at its intrinsic pixel dimensions in drawing/model coordinates and supports selection, movement, resizing, rotation, Undo, persistence and graph copy. Resizing retains its original pixels.
 
-The entire pasted selection transaction, including all images, other pasted objects and derived changes, must fit the existing 1 MiB document transaction limit. Passing raster validation does not guarantee that the transaction fits. Oversized pastes reject with `SelectionTooLarge` before changing the document, history or selection, and the editor remains usable. Reduce image data or selection content before retrying; resizing an existing image does not reduce its retained bytes.
+Native insertion stores validated raster content as immutable PNG resources in the same document/account persistence scope. The image transaction contains a SHA-256 reference rather than the pixels. Resources commit atomically with their referencing history and remain available after offline reload, Undo and Redo. Graph copies and raw or embedded-PNG document exports include the pixels so they remain self-contained. Each canonical PNG is limited to 16 MiB, 16384 pixels per side and 16777216 total pixels. Resizing retains the original pixels.
+
+The pasted selection transaction, including image references, other pasted objects and derived changes, must fit the existing 1 MiB document transaction limit. Oversized transactions reject with `SelectionTooLarge` before changing the document, history or selection, and the editor remains usable. Reduce selection content before retrying. Raster resource limits apply independently of that transaction limit.
 
 Invoke system operations directly from a browser user gesture. Keep the current token from selection notifications so that you do not await another operation before initiating privileged clipboard access:
 
@@ -573,7 +575,7 @@ Public methods validate basic shapes in JS and semantic constraints in C#. Inval
 | `PreferenceReadFailed`, `PreferenceWriteFailed`, `InvalidPreferences` | Report preference storage failure |
 | `ResourceUnavailable`, `ResourceHashMismatch`, `ResourceWorkerFailed` | Restore valid matching resources/connectivity; do not use corrupt cache bytes |
 | `ClipboardEmpty`, `ClipboardUnavailable`, `ClipboardPermissionDenied`, `ClipboardFormatUnsupported` | Ask for a supported source/access or use an explicit internal operation |
-| `SelectionTooLarge` | Reduce image data or selection content to fit the 1 MiB transaction limit; document, history and selection remain unchanged and the editor remains usable |
+| `SelectionTooLarge` | Reduce selection content to fit the 1 MiB reference-transaction limit; document, history and selection remain unchanged and the editor remains usable |
 | `EditorDisposed` | Stop using this instance |
 | `DisposeCleanupUnconfirmed` | Cleanup was not confirmed; reload the page before opening a successor |
 

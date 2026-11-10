@@ -2,6 +2,7 @@ import { EditorError, fromErrorDescriptor, immutableSnapshot } from './errors.js
 import { createPlatformServices } from './platform/services.js';
 import { createPreferenceStore, validatePreferences } from './platform/preferences.js';
 import { createEditorClipboard } from './platform/clipboard.js';
+import { copyAssetHashes } from './storage/store-operations.js';
 export { EditorError };
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 function keys(value, allowed, name) {
@@ -284,6 +285,19 @@ export async function createEditorSession(options = {}, privateOptions) {
     clearTimeout(startupTimer); signal?.removeEventListener('abort',abort);
     return privateOptions?.replication ? Object.freeze({ editor: instance, replication: Object.freeze({
     establish: () => request('replica.establish'),
+    describeAssets: async (args = {}) => {
+      const hashes = await request('replica.describeAssets', args);
+      try {
+        if (!Array.isArray(hashes)) throw new TypeError();
+        return Object.freeze(copyAssetHashes(hashes));
+      } catch { throw new EditorError('InvalidRuntimeResponse', 'Invalid image asset dependencies.'); }
+    },
+    readAssets: hashes => {
+      if (lifecycle !== 'ready') return Promise.reject(disposedError());
+      try { return platform.request('storage.assets.read', { hashes:copyAssetHashes(hashes) }).then(immutableSnapshot); }
+      catch(error) { return Promise.reject(error); }
+    },
+    installAssets: assets => request('replica.installAssets', { assets }),
     read: platform.replication.read,
     readJournal: async (serverClock = {}) => {
       if (!replicationClock(serverClock)) throw new TypeError('serverClock must contain valid author identities and nonnegative 32-bit sequences');

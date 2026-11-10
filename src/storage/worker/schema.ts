@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DocumentCheckpoint, DocumentOutboxEntry } from '../document-store.js';
+import type { DocumentCheckpoint, DocumentOutboxEntry, DocumentImageAsset } from '../document-store.js';
 
 /** A document's mutable head contains only small replica metadata and immutable-log offsets. */
 export interface HeadRow {
@@ -32,11 +32,14 @@ export class DocumentDatabase extends Dexie {
   readonly snapshots: Table<PayloadRow, string>;
   readonly journal: Table<JournalRow, string>;
   readonly outbox: Table<OutboxRow, string>;
+  readonly assets: Table<DocumentImageAsset, string>;
   readonly pending: Table<PendingRow, string>;
   readonly receipts: Table<BatchReceiptRow, string>;
   constructor(name: string) {
     super(name);
     this.version(1).stores({ meta: 'key', snapshots: 'id', journal: 'id, &ordinal', outbox: 'id', pending: 'id, &ordinal', receipts: 'batchId' });
+    this.version(2).stores({ assets: 'hash' });
+    this.assets = this.table('assets');
     this.meta = this.table('meta'); this.snapshots = this.table('snapshots'); this.journal = this.table('journal');
     this.outbox = this.table('outbox'); this.receipts = this.table('receipts');
     this.pending = this.table('pending');

@@ -4,6 +4,30 @@ const validClock = value => value !== null && typeof value === 'object' && !Arra
   Object.entries(value).every(([author, sequence]) => id(author) && Number.isInteger(sequence) && sequence >= 0 && sequence <= 2147483647);
 export const isOriginJournalId = value => typeof value === 'string' && /^\$origin:[0-9a-f]{32}$/.test(value);
 const reservedOrigin = value => typeof value === 'string' && value.startsWith('$origin:');
+export const validAssetHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+export function copyAssetHashes(hashes) {
+  if (hashes == null) return undefined;
+  if (!Array.isArray(hashes) || hashes.some(hash => !validAssetHash(hash)))
+    throw storageError('InvalidImageAsset', 'Image assets require canonical SHA-256 identities.');
+  return [...new Set(hashes)];
+}
+/** Image resources are mandatory immutable document evidence, independent of render caches. */
+export async function prepareAssets(value) {
+  if (!Array.isArray(value) || value.some(asset => !validAssetHash(asset?.hash) || !(asset.data instanceof Uint8Array) ||
+      !asset.data.length || asset.data.length > 16 * 1024 * 1024) || new Set(value.map(asset => asset.hash)).size !== value.length)
+    throw storageError('InvalidImageAsset', 'Distinct image assets require bounded bytes and canonical SHA-256 identities.');
+  const assets = value.map(({hash,data}) => ({hash,data:new Uint8Array(data)}));
+  for (const asset of assets) {
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', asset.data)), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (hash !== asset.hash) throw storageError('InvalidImageAsset', 'Image bytes do not match their SHA-256 identity.');
+  }
+  return assets;
+}
+export function checkImmutableAsset(existing, asset, receipt = false) {
+  const equal = existing && equalBytes(existing.data, asset.data);
+  if (receipt && !equal) throw storageError('StorageUnavailable', 'Immutable image asset evidence is missing or changed.');
+  if (existing && !equal) throw storageError('BatchConflict', 'Image asset identities cannot change.');
+}
 
 export function documentKey(options) {
   if (!options || !['namespace', 'documentId'].every(key => id(options[key])) ||
@@ -48,6 +72,7 @@ export async function prepareBatch(value) {
   if (batch?.checkpoint?.state === null) delete batch.checkpoint.state;
   if (batch?.checkpoint?.payload?.length === 0 && batch.checkpoint.snapshotAfterJournalId === null) delete batch.checkpoint.snapshotAfterJournalId;
   if (batch?.journal === null) delete batch.journal;
+  if (batch?.assets === null) delete batch.assets;
   if (batch?.checkpoint) delete batch.checkpoint.journal;
   const validEntries = entries => Array.isArray(entries) && entries.every(entry => id(entry?.id) && entry.payload instanceof Uint8Array) &&
     new Set(entries.map(entry => entry.id)).size === entries.length;
@@ -63,6 +88,7 @@ export async function prepareBatch(value) {
   batch.checkpoint.payload = new Uint8Array(batch.checkpoint.payload);
   if (batch.checkpoint.state !== undefined) batch.checkpoint.state = new Uint8Array(batch.checkpoint.state);
   for (const entry of [...batch.outbox, ...(batch.journal ?? [])]) entry.payload = new Uint8Array(entry.payload);
+  if (batch.assets !== undefined) batch.assets = await prepareAssets(batch.assets);
   return { batch, digest: await batchDigest(batch) };
 }
 /** Hash the complete normalized request with explicit byte lengths and field presence.
@@ -76,9 +102,11 @@ async function batchDigest(batch) {
     checkpoint.payload.length, checkpoint.state?.length ?? null,
     batch.outbox.map(entry => [entry.id, entry.revision, entry.payload.length]),
     batch.journal === undefined ? null : batch.journal.map(entry => [entry.id, entry.payload.length])];
+  // Additive resource support preserves receipt identities for pre-assets requests.
+  if (batch.assets !== undefined) metadata.push(batch.assets.map(asset => [asset.hash, asset.data.length]));
   const header = new TextEncoder().encode(JSON.stringify(metadata));
   const parts = [checkpoint.payload, ...(checkpoint.state === undefined ? [] : [checkpoint.state]),
-    ...batch.outbox.map(entry => entry.payload), ...(batch.journal ?? []).map(entry => entry.payload)];
+    ...batch.outbox.map(entry => entry.payload), ...(batch.journal ?? []).map(entry => entry.payload), ...(batch.assets ?? []).map(asset => asset.data)];
   const encoded = new Uint8Array(4 + header.length + parts.reduce((length, part) => length + part.length, 0));
   new DataView(encoded.buffer).setUint32(0, header.length);
   encoded.set(header, 4);
