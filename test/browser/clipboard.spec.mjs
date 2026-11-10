@@ -43,16 +43,23 @@ for (const [name,text,kind] of [
   else expect(result.code).toBe('ClipboardFormatUnsupported');
 });
 
-for (const kind of ['solid','noise']) test(`simulated SVG clipboard fallback chooses smaller real browser ${kind==='solid'?'PNG':'JPEG80'} bytes`,async({page})=>{
+for (const {kind='solid',prolog='',name} of [
+  {name:'simulated SVG clipboard fallback chooses smaller real browser PNG bytes'},
+  {kind:'noise',name:'simulated SVG clipboard fallback chooses smaller real browser JPEG80 bytes'},
+  {prolog:'<?xml version="1.0"?><!-- exported -->',name:'public SVG paste decodes an XML comment prolog'},
+  {prolog:'<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">',name:'public SVG paste decodes a DOCTYPE prolog'},
+  {prolog:'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY note "quoted > and [ ]">]><!-- <svg is only a comment -->',name:'public SVG paste decodes an internal DOCTYPE subset'},
+  {prolog:'<?xml version="1.0"?><!--'+ 'x'.repeat(1024*1024)+'-->',name:'public SVG paste decodes a root after a one MiB XML comment'},
+]) test(name,async({page})=>{
   await page.goto('/test/browser/host.html');
-  const result=await page.evaluate(async kind=>{
+  const result=await page.evaluate(async({kind,prolog})=>{
     const {createEditorSession}=await import('/src/editor-session.js');
     const width=64,height=64;let content='<rect width="64" height="64" fill="red"/>';
     if(kind==='noise'){
       let seed=1;const next=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed>>>24;};
       content=Array.from({length:width*height},(_,index)=>`<rect x="${index%width}" y="${Math.floor(index/width)}" width="1" height="1" fill="rgb(${next()},${next()},${next()})"/>`).join('');
     }
-    const svg=new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${content}</svg>`],{type:'image/svg+xml'});
+    const svg=new Blob([`${prolog}<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${content}</svg>`],{type:'image/svg+xml'});
     const base64=async blob=>{const bytes=new Uint8Array(await blob.arrayBuffer()),chunks=[];for(let index=0;index<bytes.length;index+=32768)chunks.push(String.fromCharCode(...bytes.subarray(index,index+32768)));return btoa(chunks.join(''));};
     const original=await base64(svg);
     // Chromium cannot write SVG to the OS clipboard. Simulate only its read;
@@ -73,7 +80,7 @@ for (const kind of ['solid','noise']) test(`simulated SVG clipboard fallback cho
       await editor.pasteImage(original,{x:56,y:78});
       return {mime:expected.type,pngBytes:png.size,jpegBytes:jpeg.size,exact:requests[1].args.data===await base64(expected)&&requests[3].args.data===await base64(expected),positions:requests.map(value=>value.args.position),methods:requests.map(value=>value.method)};
     } finally {await editor.dispose();canvas.width=0;canvas.height=0;}
-  },kind);
+  },{kind,prolog});
   expect(result.mime).toBe(kind==='solid'?'image/png':'image/jpeg');expect(result.exact).toBe(true);
   expect(result.positions).toEqual([{x:12,y:34},{x:12,y:34},{x:56,y:78},{x:56,y:78}]);
   expect(result.methods).toEqual(['pasteImage','pasteImage','pasteImage','pasteImage']);

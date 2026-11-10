@@ -30,6 +30,23 @@ test('public fallback recognizes SVG XML without changing its source bytes',asyn
  const h=fixture(),svg='<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>';
  await h.run(b64(Buffer.from(svg)),'');assert.deepEqual(h.calls[0],['decode','image/svg+xml',[...Buffer.from(svg)]]);
 });
+for(const [name,prolog] of [
+ ['comment','<?xml version="1.0"?><!-- exported -->'],
+ ['DOCTYPE','<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'],
+ ['internal subset','<!DOCTYPE svg [<!ENTITY note "quoted > and [ ]">]><!-- <svg is only a comment -->'],
+ ['processing instruction','<?xml version="1.0"?><?export sample?>'],
+ ['long comment','<!--'+'x'.repeat(1024*1024)+'-->'],
+]) test(`public SVG fallback infers MIME after a ${name} without rewriting source bytes`,async()=>{
+ const h=fixture(),bytes=Buffer.from(prolog+'<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4"/>');
+ await h.run(b64(bytes),'');assert.equal(h.calls[0][1],'image/svg+xml');assert.deepEqual(h.calls[0][2],[...bytes]);
+});
+for(const [name,source] of [
+ ['different root','<!-- <svg/> --><!DOCTYPE svg [<!ENTITY sample "<svg/>">]><other/>'],
+ ['unterminated comment','<!-- <svg xmlns="http://www.w3.org/2000/svg"/>'],
+ ['unterminated DOCTYPE','<!DOCTYPE svg [<!ENTITY note "<svg/>">'],
+]) test(`public fallback leaves ${name} data untyped rather than finding SVG inside declarations`,async()=>{
+ const h=fixture();await h.run(b64(Buffer.from(source)),'');assert.equal(h.calls[0][1],'');
+});
 test('browser Image decoding recovers a rejected bitmap and releases its Blob URL',async()=>{
  const h=fixture({decode(){throw new Error('Bitmap cannot decode SVG');}}),urls=[];let image;
  h.window.URL={createObjectURL(blob){assert.equal(blob.type,'image/svg+xml');urls.push('created');return 'blob:svg';},revokeObjectURL(url){urls.push(url);}};

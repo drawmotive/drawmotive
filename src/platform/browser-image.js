@@ -9,6 +9,46 @@ export function imageBase64(bytes, encode = btoa) {
   return encode(chunks.join(''));
 }
 const unsupported = cause => new EditorError('UnsupportedImageFormat', 'Neither the native engine nor this browser can decode this image format.', { cause });
+const xmlSpace = value => value === ' ' || value === '\t' || value === '\r' || value === '\n';
+
+/** Identify only the XML root for Blob MIME. Skip declarations without resolving
+ * entities or external resources; browser decoding remains the format validator. */
+function isSvgSource(bytes) {
+  const source = new TextDecoder().decode(bytes);
+  let offset = 0;
+  while (offset < source.length) {
+    while (xmlSpace(source[offset])) offset++;
+    if (source.startsWith('<!--', offset) || source.startsWith('<?', offset)) {
+      const comment = source.startsWith('<!--', offset), end = comment ? '-->' : '?>';
+      const next = source.indexOf(end, offset + (comment ? 4 : 2));
+      if (next < 0) return false;
+      offset = next + end.length;
+      continue;
+    }
+    if (source.startsWith('<!DOCTYPE', offset) && xmlSpace(source[offset + 9])) {
+      let quote, brackets = 0, closed = false;
+      for (offset += 10; offset < source.length; offset++) {
+        const value = source[offset];
+        if (quote) { if (value === quote) quote = undefined; continue; }
+        if (value === '"' || value === "'") { quote = value; continue; }
+        if (source.startsWith('<!--', offset) || source.startsWith('<?', offset)) {
+          const comment = source.startsWith('<!--', offset), end = comment ? '-->' : '?>';
+          const next = source.indexOf(end, offset + (comment ? 4 : 2));
+          if (next < 0) return false;
+          offset = next + end.length - 1;
+          continue;
+        }
+        if (value === '[') brackets++;
+        else if (value === ']') { if (--brackets < 0) return false; }
+        else if (value === '>' && brackets === 0) { offset++; closed = true; break; }
+      }
+      if (!closed) return false;
+      continue;
+    }
+    return source.startsWith('<svg', offset) && (xmlSpace(source[offset + 4]) || source[offset + 4] === '>' || source[offset + 4] === '/');
+  }
+  return false;
+}
 
 /** Only a native decoder rejection permits conversion. Supported source bytes never enter canvas.
  * Canvas supplies the smaller PNG/JPEG-80 carrier; native code still owns output sizing and validation. */
@@ -21,7 +61,7 @@ export async function convertUnsupportedImage(data, type, { window, active }) {
     if (!bytes.length || bytes.length > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
     // Public pasteImage has no MIME parameter. Give browser-only SVG decoding its
     // required media type when the caller supplied self-describing XML bytes.
-    const svg = !type && /^(?:\s*<\?xml[^>]*>)*\s*<svg[\s>]/i.test(new TextDecoder().decode(bytes.subarray(0, 1024)));
+    const svg = !type && isSvgSource(bytes);
     const blob = new window.Blob([bytes], { type: type || (svg ? 'image/svg+xml' : '') });
     try { if (window.createImageBitmap) bitmap = await window.createImageBitmap(blob); }
     catch { active(); /* Some browsers decode SVG only through an Image element. */ }
