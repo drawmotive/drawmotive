@@ -393,6 +393,8 @@ Where `navigator.clipboard.read()` is available, paste reads rich items and pref
 
 Hosts can also call `pasteImage(base64RasterBytes, { x, y })` without accessing the system clipboard. Pass the encoded bytes without a data-URL prefix. Native decoding validates raster data before changing selection or history; image insertion uses the document queue and returns `EditorSelectionSnapshot`. The image begins at its intrinsic pixel dimensions in drawing/model coordinates and supports selection, movement, resizing, rotation, Undo, persistence and graph copy. Resizing retains its original pixels.
 
+The entire pasted selection transaction, including all images, other pasted objects and derived changes, must fit the existing 1 MiB document transaction limit. Passing raster validation does not guarantee that the transaction fits. Oversized pastes reject with `SelectionTooLarge` before changing the document, history or selection, and the editor remains usable. Reduce image data or selection content before retrying; resizing an existing image does not reduce its retained bytes.
+
 Invoke system operations directly from a browser user gesture. Keep the current token from selection notifications so that you do not await another operation before initiating privileged clipboard access:
 
 ```javascript
@@ -571,6 +573,7 @@ Public methods validate basic shapes in JS and semantic constraints in C#. Inval
 | `PreferenceReadFailed`, `PreferenceWriteFailed`, `InvalidPreferences` | Report preference storage failure |
 | `ResourceUnavailable`, `ResourceHashMismatch`, `ResourceWorkerFailed` | Restore valid matching resources/connectivity; do not use corrupt cache bytes |
 | `ClipboardEmpty`, `ClipboardUnavailable`, `ClipboardPermissionDenied`, `ClipboardFormatUnsupported` | Ask for a supported source/access or use an explicit internal operation |
+| `SelectionTooLarge` | Reduce image data or selection content to fit the 1 MiB transaction limit; document, history and selection remain unchanged and the editor remains usable |
 | `EditorDisposed` | Stop using this instance |
 | `DisposeCleanupUnconfirmed` | Cleanup was not confirmed; reload the page before opening a successor |
 
