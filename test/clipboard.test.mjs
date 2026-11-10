@@ -8,6 +8,17 @@ function fixture(options={}) {
  const editor={async copySelection(token,options){calls.push(['copy',token]);return {...payload,...(options?.png?{png}:{})};},async pasteSelection(data,point){calls.push(['paste',data,point]);return 'selection';},async deleteSelection(token){calls.push(['delete',token]);}};
  return {calls,editor,clipboard:createEditorClipboard(editor,options)};
 }
+test('selection decoding accepts the Windows CRLF envelope separator without changing graph bytes',()=>{
+ assert.deepEqual(decodeSelection('drawmotive/selection:1\r\nAQID'),payload);
+});
+for(const source of ['auto','system']) test(`${source} paste in another editor accepts a system copy with native CRLF conversion`,async()=>{
+ let text;const system={async writeText(value){text=value.replaceAll('\n','\r\n');},async readText(){return text;}};
+ const first=fixture({clipboard:system}),second=fixture({clipboard:system});
+ assert.equal((await first.clipboard.copy({})).system,'written');
+ assert.equal(await first.clipboard.paste({x:1,y:2},{source}),'selection');
+ assert.equal(await second.clipboard.paste({x:3,y:4},{source}),'selection');
+ assert.deepEqual(second.calls.at(-1),['paste',payload,{x:3,y:4}]);
+});
 test('system copy publishes PNG pixels and the lossless graph from one deferred capture',async()=>{
  let finish,written;const requests=[];
  const h=fixture({clipboard:{async write(items){written=items[0].data;}},ClipboardItem:class{constructor(data){this.data=data;}},Blob});
@@ -45,7 +56,10 @@ test('permission denial retains internal copy; unrelated OS text cannot paste an
  assert.equal(h.calls.filter(call=>call[0]==='paste').length,2);
 });
 test('malformed payloads and in-flight copy after disposal never become an internal clipboard',async()=>{
- for(const raw of ['', 'drawmotive/selection:1\n!', encodeSelection(payload)+'\n']) assert.throws(()=>decodeSelection(raw),{code:'ClipboardFormatUnsupported'});
+ for(const raw of ['', 'drawmotive/selection:1\n!', encodeSelection(payload)+'\n',
+  'drawmotive/selection:2\r\nAQID','drawmotive/selection:1\rAQID',
+  'drawmotive/selection:1\r\n!','drawmotive/selection:1\r\nAQID\r\n',
+  'drawmotive/selection:1\r\nAQ ID','drawmotive/selection:1\r\nAQ=ID']) assert.throws(()=>decodeSelection(raw),{code:'ClipboardFormatUnsupported'});
  const h=fixture();let finish;h.editor.copySelection=()=>new Promise(resolve=>finish=resolve);
  const pending=h.clipboard.copy({}, {system:false});h.clipboard.dispose();finish(payload);await assert.rejects(pending,{code:'EditorDisposed'});
 });
