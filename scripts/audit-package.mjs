@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { createHash, createPublicKey } from "node:crypto";
 import { parseNpmPack } from "../.release/release-registry.mjs";
 
-// StandardTheme has a public byte-for-byte counterpart; additive defaults do not.
-// Approve only the current payload after source review, independently of its
+// Current builds embed only StandardTheme, checked against its public counterpart.
+// Retained dual-resource builds still require exact reviewed additive bytes, independently of the
 // declared filename: 96e7d2a95bda0a10ba32f7c650c0f77567d0639f introduced the
 // reviewed 10px shape radius and disabled shadow defaults.
 const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046";
@@ -99,7 +99,7 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
   const graphics = /^Graphics\.Core(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename));
   const editor = /^Editor\.Client(?:\.[A-Za-z0-9_-]+)?\.wasm$/.test(path.basename(filename));
   if (!graphics && !editor) throw new Error("Private assembly embeds resources without an approved resource policy");
-  const required = graphics ? [prefix+"GroupThemeDefaults.css", prefix+"StandardTheme.css"] : [licenseCatalog];
+  const required = graphics ? [prefix+"StandardTheme.css"] : [licenseCatalog];
   const entries = readManagedResources(streams, resources);
   const names = new Set();
   let end = 0;
@@ -109,6 +109,7 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
     if (resource.offset < end || resource.offset-end > 7 || range(resources,end,resource.offset-end).some(byte=>byte!==0)) throw new Error("Unaccounted managed resource bytes");
     if (graphics && resource.name === prefix+"GroupThemeDefaults.css") {
       if (hash(resource.data) !== groupDefaultsHash) throw new Error("Unreviewed GroupThemeDefaults.css resource contents");
+      required.push(resource.name);
     } else if (graphics && resource.name === prefix+"StandardTheme.css") {
       if (!publicTheme || !resource.data.equals(publicTheme)) throw new Error("StandardTheme.css resource differs from the shipped public theme");
     } else if (graphics && shapeResourceHashes.has(resource.name)) {
@@ -117,10 +118,10 @@ export function auditManagedResources(streams, resources, filename, publicTheme)
     else throw new Error("Unapproved managed resource: "+resource.name);
     end = resource.offset+4+resource.data.length;
   }
-  // Retained releases may contain only themes. A current geometry catalog must
-  // be complete; the Editor assembly independently requires only its public keys.
+  // Only retained dual-theme releases may omit geometry. Unified-theme builds
+  // require the complete catalog, even when every shape row is missing.
   const shapeNames = [...shapeResourceHashes.keys()];
-  if (graphics && shapeNames.some(name => names.has(name))) required.push(...shapeNames);
+  if (graphics && (!names.has(prefix+"GroupThemeDefaults.css") || shapeNames.some(name => names.has(name)))) required.push(...shapeNames);
   if (names.size !== required.length || required.some(name=>!names.has(name)) || resources.length-end > 7 || range(resources,end,resources.length-end).some(byte=>byte!==0)) throw new Error("Incomplete or unaccounted managed resources");
 }
 

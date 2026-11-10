@@ -163,8 +163,8 @@ test('shape resource approval rejects changed bytes, renamed definitions and unk
   }
 });
 
-test('shape catalog approval requires every current definition and both reviewed themes', () => {
-  const entries = [...themeEntries(), ...shapeEntries()];
+test('shape catalog approval requires every current definition and the shipped theme', () => {
+  const entries = [themeEntries()[1], ...shapeEntries()];
   for (let index = 0; index < entries.length; index++) {
     const { streams, resources } = resourceMetadata(entries.filter((_, position) => position !== index));
     assert.throws(() => auditManagedResources(streams, resources, 'Graphics.Core.wasm', standardCss), /Incomplete/);
@@ -234,11 +234,8 @@ test('shape resource approval rejects changed data, unknown names, aliases and n
  assert.throws(()=>auditWasm(resourceAssembly(fixture),'Editor.Client.wasm',{publicTheme:standardCss}),/Unapproved managed resource/);
  assert.throws(()=>auditManagedResources(fixture.streams,Buffer.concat([fixture.resources,Buffer.from('hidden source')]),
   'Graphics.Core.wasm',standardCss),/unaccounted/);
- for(let index=0;index<2;index++) {
-  const entries=[...themeEntries(),...shapeEntries()];entries.splice(index,1);
-  const missing=resourceMetadata(entries);
-  assert.throws(()=>auditManagedResources(missing.streams,missing.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
- }
+ const missingTheme=resourceMetadata([themeEntries()[0],...shapeEntries()]);
+ assert.throws(()=>auditManagedResources(missingTheme.streams,missingTheme.resources,'Graphics.Core.wasm',standardCss),/Incomplete/);
  for(let index=0;index<3;index++) {
   const entries=[...themeEntries(),...shapeEntries()];entries.splice(index+2,1);
   const missing=resourceMetadata(entries);
@@ -312,6 +309,24 @@ test("producer source paths fail while third-party toolchain paths and JS licens
   assert.throws(() => auditPackageFiles(root, ["private.js"]), /Private producer source path/);
   assert.throws(() => auditPackageFiles(root, ["private.wide.js"]), /Private producer source path/);
   assert.equal(auditPackageFiles(root, ["native.js"]).files, 1);
+});
+
+test('a unified theme resource passes only when it matches the shipped public theme', t => {
+  const filename = 'generated/editor/_framework/Graphics.Core.current.wasm', theme = 'generated/editor/static/themes.css';
+  const entries = [themeEntries()[1], ...shapeEntries()];
+  const root = fixture(t, { [filename]: resourceAssembly(resourceMetadata(entries)), [theme]: standardCss });
+  assert.deepEqual(auditPackageFiles(root, [filename, theme]), { files: 2, wasmFiles: 1, managedAssemblies: 1 });
+  writeFileSync(path.join(root, theme), Buffer.from('different public theme'));
+  assert.throws(() => auditPackageFiles(root, [filename, theme]), /differs from the shipped public theme/);
+  writeFileSync(path.join(root, filename), resourceAssembly(resourceMetadata(shapeEntries())));
+  assert.throws(() => auditPackageFiles(root, [filename, theme]), /Incomplete or unaccounted managed resources/);
+});
+
+test('a unified theme requires its shape catalog while retained dual-resource builds remain auditable', () => {
+  const retained = resourceMetadata(themeEntries());
+  assert.doesNotThrow(() => auditManagedResources(retained.streams, retained.resources, 'Graphics.Core.wasm', standardCss));
+  const unified = resourceMetadata([themeEntries()[1]]);
+  assert.throws(() => auditManagedResources(unified.streams, unified.resources, 'Graphics.Core.wasm', standardCss), /Incomplete/);
 });
 
 test('current shape defaults pass the package audit only with their exact reviewed bytes', t => {
