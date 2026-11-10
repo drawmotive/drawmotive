@@ -25,9 +25,11 @@ test('a graph in a later clipboard item takes precedence over earlier PNG pixels
  assert.equal(await h.clipboard.paste({x:3,y:7}),'selection');
  assert.deepEqual(h.calls,[['paste',payload,{x:3,y:7}]]);
 });
-test('rich paste prefers PNG over another supported raster format across items',async()=>{
- const h=fixture({clipboard:{async read(){return [item({'image/jpeg':new Blob([new Uint8Array([1,2,3])])}),item({'image/png':image()})];}}});
- await h.clipboard.paste({x:3,y:7});assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
+for(const separateItems of [false,true]) test(`rich paste preserves advertised JPEG bytes before a PNG alternative ${separateItems?'across items':'in the same item'}`,async()=>{
+ const jpeg=new Blob([Uint8Array.of(1,2,3)],{type:'image/jpeg'});
+ const items=separateItems?[item({'image/jpeg':jpeg}),item({'image/png':image()})]:[item({'image/jpeg':jpeg,'image/png':image()})];
+ const h=fixture({clipboard:{async read(){return items;}}});
+ await h.clipboard.paste({x:3,y:7});assert.deepEqual(h.calls,[['image','AQID',{x:3,y:7}]]);
 });
 test('external images remain importable with unrelated clipboard text',async()=>{
  const h=fixture({clipboard:{async read(){return [item({'text/plain':new Blob(['copied from another application']),'image/png':image()})];}}});

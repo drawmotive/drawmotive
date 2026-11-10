@@ -36,8 +36,9 @@ async function clipboardContent(items, active) {
     }
   }
   if (graph) return {kind:'graph',data:graph};
+  // Provider order is the available representation preference; do not replace
+  // an advertised original format with its PNG companion.
   const types = [...new Set(items.flatMap(item => item.types).filter(type => /^image\//i.test(type)))];
-  types.sort((a,b) => Number(b === 'image/png') - Number(a === 'image/png'));
   for (const type of types) {
     const item = items.find(item => item.types.includes(type));
     if (!item) continue;
