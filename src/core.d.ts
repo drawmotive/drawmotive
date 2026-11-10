@@ -148,7 +148,7 @@ export interface EditorInstance {
   /** Optional PNG is rendered from the same native selection capture as the graph. */
   copySelection(token: EditorSelectionToken, options?: EditorSelectionCopyOptions): Promise<EditorSelectionPayload>;
   pasteSelection(payload: EditorSelectionPayload, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
-  /** Inserts Base64 raster bytes as a self-contained image at a drawing/model position. */
+  /** Inserts Base64 encoded image bytes as a self-contained image at a drawing/model position. */
   pasteImage(data: string, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
   copyToClipboard(token:EditorSelectionToken,options?:EditorClipboardCopyOptions):Promise<EditorClipboardCopyResult>;
   /** Omitted position uses the native canvas pointer in drawing/model coordinates. */

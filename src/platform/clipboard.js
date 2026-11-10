@@ -1,4 +1,5 @@
 import { EditorError } from '../errors.js';
+import { imageBase64, MAX_IMAGE_INPUT_BYTES } from './browser-image.js';
 const prefix = 'drawmotive/selection:1\n';
 const windowsPrefix = prefix.replace('\n', '\r\n');
 const invalid = () => new EditorError('ClipboardFormatUnsupported', 'The clipboard does not contain a DrawMotive selection.');
@@ -35,21 +36,22 @@ async function clipboardContent(items, active) {
     }
   }
   if (graph) return {kind:'graph',data:graph};
-  for (const type of ['image/png','image/jpeg','image/webp']) {
+  const types = [...new Set(items.flatMap(item => item.types).filter(type => /^image\//i.test(type)))];
+  types.sort((a,b) => Number(b === 'image/png') - Number(a === 'image/png'));
+  for (const type of types) {
     const item = items.find(item => item.types.includes(type));
     if (!item) continue;
     const blob = await item.getType(type); active();
+    if (blob.size > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
     const bytes = new Uint8Array(await blob.arrayBuffer()); active();
-    // Bounded chunks avoid argument-count limits for ordinary clipboard images.
-    const chunks = [];
-    for (let offset = 0; offset < bytes.length; offset += 32768) chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
-    return {kind:'image',data:btoa(chunks.join(''))};
+    if (bytes.length > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
+    return {kind:'image',data:imageBase64(bytes),type};
   }
   throw invalid();
 }
 
 /** Host JS owns both system access and the instance-local copy. Engine bytes stay opaque. */
-export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob = globalThis.Blob, getPastePosition } = {}) {
+export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob = globalThis.Blob, getPastePosition, pasteImage = (data, point) => editor.pasteImage(data, point) } = {}) {
   let internal, disposed = false, copyGeneration = 0;
   const active = () => { if (disposed) throw new EditorError('EditorDisposed', 'Editor has been disposed'); };
   return Object.freeze({
@@ -115,7 +117,7 @@ export function createEditorClipboard(editor, { clipboard, ClipboardItem, Blob =
         : {kind:'graph',data:fallback};
       if (!content.data && content.kind === 'graph') throw new EditorError('ClipboardEmpty','Copy a selection first.');
       const resolved = await placement;
-      active();return content.kind === 'image' ? editor.pasteImage(content.data,resolved) : editor.pasteSelection(content.data,resolved);
+      active();return content.kind === 'image' ? pasteImage(content.data,resolved,content.type) : editor.pasteSelection(content.data,resolved);
     },
     dispose() { disposed = true; internal = undefined; },
   });

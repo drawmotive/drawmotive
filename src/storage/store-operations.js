@@ -14,7 +14,7 @@ export function copyAssetHashes(hashes) {
 /** Image resources are mandatory immutable document evidence, independent of render caches. */
 export async function prepareAssets(value) {
   if (!Array.isArray(value) || value.some(asset => !validAssetHash(asset?.hash) || !(asset.data instanceof Uint8Array) ||
-      !asset.data.length || asset.data.length > 16 * 1024 * 1024) || new Set(value.map(asset => asset.hash)).size !== value.length)
+      !asset.data.length || asset.data.length > 4_000_000) || new Set(value.map(asset => asset.hash)).size !== value.length)
     throw storageError('InvalidImageAsset', 'Distinct image assets require bounded bytes and canonical SHA-256 identities.');
   const assets = value.map(({hash,data}) => ({hash,data:new Uint8Array(data)}));
   for (const asset of assets) {

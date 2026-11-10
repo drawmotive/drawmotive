@@ -42,3 +42,39 @@ for (const [name,text,kind] of [
   else if(kind==='graph')expect(result).toEqual({kind,payload:{version:1,data:'AQID'},position:{x:12,y:34}});
   else expect(result.code).toBe('ClipboardFormatUnsupported');
 });
+
+for (const kind of ['solid','noise']) test(`simulated SVG clipboard fallback chooses smaller real browser ${kind==='solid'?'PNG':'JPEG80'} bytes`,async({page})=>{
+  await page.goto('/test/browser/host.html');
+  const result=await page.evaluate(async kind=>{
+    const {createEditorSession}=await import('/src/editor-session.js');
+    const width=64,height=64;let content='<rect width="64" height="64" fill="red"/>';
+    if(kind==='noise'){
+      let seed=1;const next=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed>>>24;};
+      content=Array.from({length:width*height},(_,index)=>`<rect x="${index%width}" y="${Math.floor(index/width)}" width="1" height="1" fill="rgb(${next()},${next()},${next()})"/>`).join('');
+    }
+    const svg=new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${content}</svg>`],{type:'image/svg+xml'});
+    const base64=async blob=>{const bytes=new Uint8Array(await blob.arrayBuffer()),chunks=[];for(let index=0;index<bytes.length;index+=32768)chunks.push(String.fromCharCode(...bytes.subarray(index,index+32768)));return btoa(chunks.join(''));};
+    const original=await base64(svg);
+    // Chromium cannot write SVG to the OS clipboard. Simulate only its read;
+    // decoding, pixels and both competing encoders are real browser APIs.
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{async read(){return [{types:['image/svg+xml'],async getType(){return svg;}}];}}});
+    const image=new Image(),url=URL.createObjectURL(svg);image.src=url;await image.decode();
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;canvas.getContext('2d').drawImage(image,0,0);image.src='';URL.revokeObjectURL(url);
+    const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    const jpeg=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.8));
+    const expected=png.size<=jpeg.size?png:jpeg,requests=[];
+    const container=document.createElement('div');container.className='editor';document.body.append(container);
+    const editor=await createEditorSession({container,assetBaseUrl:'/runtime/'},{runtimeLoader:async()=>({mountCanvas:async context=>{
+      context.emit('ready',{state:{revision:null,health:'healthy',editingEnabled:true,busy:false,canUndo:false,canRedo:false}});
+      return {async request(method,args){requests.push({method,args});if(args.data===original)throw Object.assign(new Error('Native SVG decoder unavailable'),{code:'UnsupportedImageFormat'});return null;},async dispose(){}};
+    }})});
+    try {
+      await editor.pasteFromClipboard({x:12,y:34},{source:'system'});
+      await editor.pasteImage(original,{x:56,y:78});
+      return {mime:expected.type,pngBytes:png.size,jpegBytes:jpeg.size,exact:requests[1].args.data===await base64(expected)&&requests[3].args.data===await base64(expected),positions:requests.map(value=>value.args.position),methods:requests.map(value=>value.method)};
+    } finally {await editor.dispose();canvas.width=0;canvas.height=0;}
+  },kind);
+  expect(result.mime).toBe(kind==='solid'?'image/png':'image/jpeg');expect(result.exact).toBe(true);
+  expect(result.positions).toEqual([{x:12,y:34},{x:12,y:34},{x:56,y:78},{x:56,y:78}]);
+  expect(result.methods).toEqual(['pasteImage','pasteImage','pasteImage','pasteImage']);
+});

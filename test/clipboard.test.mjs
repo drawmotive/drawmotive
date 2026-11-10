@@ -15,7 +15,7 @@ function item(data) {
  return {types:Object.keys(data),async getType(type){assert.ok(Object.hasOwn(data,type));return data[type];}};
 }
 function image(type='image/png') {return new Blob([Buffer.from(png,'base64')],{type});}
-for(const type of ['image/png','image/jpeg','image/webp']) test(`rich system paste imports ${type} bytes without reading text`,async()=>{
+for(const type of ['image/png','image/jpeg','image/webp','image/gif','image/bmp','image/avif','image/svg+xml']) test(`rich system paste imports ${type} bytes without reading text`,async()=>{
  const h=fixture({clipboard:{async read(){return [item({[type]:image(type)})];},readText(){assert.fail('Rich access must own this read');}}});
  assert.equal(await h.clipboard.paste({x:3,y:7},{source:'system'}),'image selection');
  assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
@@ -53,6 +53,14 @@ test('image conversion preserves bytes across encoding chunks',async()=>{
  const h=fixture({clipboard:{async read(){return [item({'image/png':new Blob([bytes])})];}}});
  await h.clipboard.paste({x:1,y:2});
  assert.deepEqual(new Uint8Array(Buffer.from(h.calls[0][1],'base64')),bytes);
+});
+test('oversized clipboard images reject before allocating their byte buffer',async()=>{
+ const h=fixture({clipboard:{async read(){return [item({'image/avif':{size:16*1024*1024+1,arrayBuffer(){assert.fail('The source size must be bounded before reading');}}})];}}});
+ await assert.rejects(h.clipboard.paste({x:1,y:2}),{code:'InvalidArgument'});assert.deepEqual(h.calls,[]);
+});
+test('rich clipboard preserves the source MIME for private browser fallback',async()=>{
+ const calls=[],h=fixture({clipboard:{async read(){return [item({'image/svg+xml':new Blob(['<svg/>'],{type:'image/svg+xml'})})];}},pasteImage(...args){calls.push(args);}});
+ await h.clipboard.paste({x:1,y:2});assert.deepEqual(calls,[[Buffer.from('<svg/>').toString('base64'),{x:1,y:2},'image/svg+xml']]);
 });
 test('a denied rich read uses the frozen automatic fallback and reports explicit system failure',async()=>{
  let deny;const h=fixture({clipboard:{read(){return new Promise((_,reject)=>deny=reject);},readText(){assert.fail('Denied rich reads must not start another system read');}}});

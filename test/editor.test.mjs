@@ -311,3 +311,36 @@ test('private image resources retain binary ownership, use the native queue and 
  await editor.dispose();await assert.rejects(replication.readAssets(),{code:'EditorDisposed'});
  await assert.rejects(replication.describeAssets({}),{code:'EditorDisposed'});await assert.rejects(replication.installAssets([]),{code:'EditorDisposed'});
 });
+
+test('native unsupported image conversion stays inside one queued insertion and preserves frozen placement',async t=>{
+ const h=host(t);let convert,closed=false;
+ h.dom.window.createImageBitmap=()=>new Promise(resolve=>convert=resolve);
+ h.dom.window.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){}});
+ h.dom.window.HTMLCanvasElement.prototype.toBlob=function(done,type,quality){assert.equal(quality,type==='image/jpeg'?0.8:undefined);done(new Blob([type==='image/png'?Uint8Array.of(1,2,3):Uint8Array.of(4)],{type}));};
+ const editor=await h.mount();t.after(()=>editor.dispose());let pastes=0;
+ h.behavior(method=>{if(method==='pasteImage'&&++pastes===1)throw Object.assign(new Error('Decoder unavailable'),{code:'UnsupportedImageFormat'});return null;});
+ const position={x:5,y:7},pending=editor.pasteImage('CQgH',position);position.x=90;const undo=editor.undo();
+ await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['pasteImage']);
+ convert({width:8,height:4,close(){closed=true;}});await pending;await undo;
+ assert.deepEqual(h.calls.map(call=>call.method),['pasteImage','pasteImage','undo']);assert.deepEqual(h.calls[1].args,{data:'BA==',position:{x:5,y:7}});assert.equal(closed,true);
+});
+test('supported native bytes and malformed native images never start browser conversion',async t=>{
+ const h=host(t);h.dom.window.createImageBitmap=()=>assert.fail('Only an unsupported native decoder permits conversion');const editor=await h.mount();t.after(()=>editor.dispose());
+ await editor.pasteImage('AQID',{x:1,y:2});assert.equal(h.calls[0].args.data,'AQID');
+ h.behavior(()=>{throw Object.assign(new Error('Malformed raster'),{code:'InvalidArgument'});});await assert.rejects(editor.pasteImage('BAUG',{x:1,y:2}),{code:'InvalidArgument'});
+});
+test('oversized image source rejects before native dispatch and respects disposal',async t=>{
+ const h=host(t),editor=await h.mount(),data='A'.repeat(Math.ceil(16*1024*1024/3)*4+4);
+ await assert.rejects(editor.pasteImage(data,{x:1,y:2}),{code:'InvalidArgument'});assert.equal(h.calls.length,0);
+ await editor.dispose();await assert.rejects(editor.pasteImage(data,{x:1,y:2}),{code:'EditorDisposed'});
+});
+test('disposal drains entered browser fallback and prevents the native retry',async t=>{
+ const h=host(t);let convert,closed=false,cleaned=false;
+ h.dom.window.createImageBitmap=()=>new Promise(resolve=>convert=resolve);
+ const editor=await h.mount({disposeTimeoutMs:1000});h.cleanup(async()=>{cleaned=true;});
+ h.behavior(()=>{throw Object.assign(new Error('Decoder unavailable'),{code:'UnsupportedImageFormat'});});
+ const pending=editor.pasteImage('AQID',{x:1,y:2});void pending.catch(()=>{});await new Promise(setImmediate);
+ const disposing=editor.dispose();await new Promise(setImmediate);assert.equal(cleaned,false);
+ convert({width:8,height:4,close(){closed=true;}});await assert.rejects(pending,{code:'EditorDisposed'});await disposing;
+ assert.equal(closed,true);assert.equal(cleaned,true);assert.equal(h.calls.length,1);
+});

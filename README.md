@@ -120,9 +120,11 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 | `getState()` / `onStateChanged(listener)` | Current state / subscription with immediate replay |
 | `dispose()` | Releases this instance and its writer lease; persistent documents remain |
 | `copyToClipboard(token, { system? })` | Copies an opaque graph; reports system success separately from the internal copy |
-| `pasteFromClipboard(position, { source? })` | Pastes a DrawMotive graph or external raster image; source is `auto`, `system` or `internal` |
-| `pasteImage(data, { x, y })` | Inserts Base64 raster bytes as a self-contained, scalable image through the engine |
+| `pasteFromClipboard(position, { source? })` | Pastes a DrawMotive graph or external image; source is `auto`, `system` or `internal` |
+| `pasteImage(data, { x, y })` | Inserts Base64 encoded image bytes as a self-contained, scalable image through the engine |
 | `onDisposed(listener)` | Releases host UI on disposal or forced page closure |
+
+Image insertion preserves supported original encoded bytes up to 4,000,000 bytes; larger inputs are resized by the engine. Source input is capped at 16 MiB. Only an unsupported native format enters browser conversion, which chooses the smaller PNG or JPEG at quality 0.8.
 
 State contains `revision`, `health` (`healthy` or `faulted`), `editingEnabled`, `busy`, `canUndo` and `canRedo`. Revisions are opaque and instance-local. Document changes advance the revision; selection, zoom and pan do not. External save success confirms only its snapshot revision, so a delayed acknowledgment must not clear later edits. Undo may conservatively produce a new dirty revision even when content matches an earlier save.
 

@@ -39,7 +39,7 @@ export interface DocumentOutboxEntry {
   readonly revision: string;
   readonly payload: Uint8Array;
 }
-/** Canonical immutable PNG bytes; identity and access remain document scoped. */
+/** Immutable encoded image bytes, capped at 4,000,000 bytes; SHA-256 identity and access remain document scoped. */
 export interface DocumentImageAsset { readonly hash: string; readonly data: Uint8Array; }
 /** Snapshot/metadata, journal, outbox, image resources and the durable batch receipt commit atomically.
  * An empty checkpoint payload retains the previous snapshot and appends the journal.

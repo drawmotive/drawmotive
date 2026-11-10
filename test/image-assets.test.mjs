@@ -108,3 +108,11 @@ test('persistent exact receipts reject missing and corrupted immutable image evi
   await assert.rejects(store.commitBatch(session, request), { code:'StorageUnavailable' });
   await assert.rejects(store.writeAssets(session, [image]), { code:'BatchConflict' });
 });
+
+for (const [kind, create] of [['memory',createMemoryDocumentStore],['dexie',createDocumentDatabase]]) test(kind+': immutable binary resource storage enforces the decimal 4 MB output limit',async t=>{
+ const store=create({databaseName:'bounded-format-'+crypto.randomUUID(),acquireWriter:async()=>()=>{}});t.after(()=>store.dispose());const session=await store.openSession(configuration);
+ const bytes=new Uint8Array(4_000_001),hash=Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex');
+ await assert.rejects(store.writeAssets(session,[{hash,data:bytes}]),{code:'InvalidImageAsset'});assert.deepEqual(await store.readAssets(session),[]);
+ const boundary=bytes.slice(0,4_000_000),identity=Buffer.from(await crypto.subtle.digest('SHA-256',boundary)).toString('hex');
+ await store.writeAssets(session,[{hash:identity,data:boundary}]);assert.deepEqual(await store.readAssets(session),[{hash:identity,data:boundary}]);
+});
