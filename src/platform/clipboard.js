@@ -1,12 +1,12 @@
 import { EditorError } from '../errors.js';
 import { imageBase64, MAX_IMAGE_INPUT_BYTES } from './browser-image.js';
-const prefix = 'drawmotive/selection:1\n';
+const prefix = 'drawmotive/selection:2\n';
 const windowsPrefix = prefix.replace('\n', '\r\n');
 const invalid = () => new EditorError('ClipboardFormatUnsupported', 'The clipboard does not contain a DrawMotive selection.');
 function selection(value) {
-  if (!value || value.version !== 1 || typeof value.data !== 'string' || !value.data.length || value.data.length > 32 * 1024 * 1024
+  if (!value || value.version !== 2 || typeof value.data !== 'string' || !value.data.length || value.data.length > 32 * 1024 * 1024
       || /[^A-Za-z0-9+/=]/.test(value.data) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data)) throw invalid();
-  return Object.freeze({version:1,data:value.data});
+  return Object.freeze({version:2,data:value.data});
 }
 export const encodeSelection = payload => prefix + selection(payload).data;
 export function decodeSelection(text) {
@@ -15,7 +15,7 @@ export function decodeSelection(text) {
   // that transport change without relaxing validation of the opaque graph bytes.
   const length = text.startsWith(prefix) ? prefix.length : text.startsWith(windowsPrefix) ? windowsPrefix.length : 0;
   if (!length) throw invalid();
-  return selection({version:1,data:text.slice(length)});
+  return selection({version:2,data:text.slice(length)});
 }
 function pngBytes(value) {
   if (typeof value !== 'string' || !value.length) throw new EditorError('ClipboardImageUnavailable', 'The engine did not provide a PNG selection image.');

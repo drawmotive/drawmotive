@@ -2,14 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEditorClipboard, encodeSelection, decodeSelection } from '../src/platform/clipboard.js';
 import { png } from './fixtures/clipboard-image.mjs';
-const payload={version:1,data:'AQID'};
+const payload={version:2,data:'AQID'};
+test('selection encoding rejects the obsolete graph payload version',()=>{
+ assert.throws(()=>encodeSelection({version:1,data:'AQID'}),{code:'ClipboardFormatUnsupported'});
+});
+test('selection decoding rejects obsolete graph envelopes with LF or CRLF separators',()=>{
+ for(const text of ['drawmotive/selection:1\nAQID','drawmotive/selection:1\r\nAQID'])
+  assert.throws(()=>decodeSelection(text),{code:'ClipboardFormatUnsupported'});
+});
 function fixture(options={}) {
  const calls=[];
  const editor={async copySelection(token,options){calls.push(['copy',token]);return {...payload,...(options?.png?{png}:{})};},async pasteSelection(data,point){calls.push(['paste',data,point]);return 'selection';},async pasteImage(data,point){calls.push(['image',data,point]);return 'image selection';},async deleteSelection(token){calls.push(['delete',token]);}};
  return {calls,editor,clipboard:createEditorClipboard(editor,options)};
 }
 test('selection decoding accepts the Windows CRLF envelope separator without changing graph bytes',()=>{
- assert.deepEqual(decodeSelection('drawmotive/selection:1\r\nAQID'),payload);
+ assert.deepEqual(decodeSelection('drawmotive/selection:2\r\nAQID'),payload);
 });
 function item(data) {
  return {types:Object.keys(data),async getType(type){assert.ok(Object.hasOwn(data,type));return data[type];}};
@@ -21,7 +28,7 @@ for(const type of ['image/png','image/jpeg','image/webp','image/gif','image/bmp'
  assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
 });
 test('a graph in a later clipboard item takes precedence over earlier PNG pixels',async()=>{
- const h=fixture({clipboard:{async read(){return [item({'image/png':image()}),item({'text/plain':new Blob(['drawmotive/selection:1\r\nAQID'])})];}}});
+ const h=fixture({clipboard:{async read(){return [item({'image/png':image()}),item({'text/plain':new Blob(['drawmotive/selection:2\r\nAQID'])})];}}});
  assert.equal(await h.clipboard.paste({x:3,y:7}),'selection');
  assert.deepEqual(h.calls,[['paste',payload,{x:3,y:7}]]);
 });
@@ -35,7 +42,7 @@ test('external images remain importable with unrelated clipboard text',async()=>
  const h=fixture({clipboard:{async read(){return [item({'text/plain':new Blob(['copied from another application']),'image/png':image()})];}}});
  await h.clipboard.paste({x:3,y:7});assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
 });
-for(const text of ['drawmotive/selection:1\n!','drawmotive/selection:2\nAQID']) test(`a rejected graph envelope cannot flatten into its PNG companion: ${JSON.stringify(text)}`,async()=>{
+for(const text of ['drawmotive/selection:2\n!','drawmotive/selection:1\nAQID','drawmotive/selection:1\r\nAQID','drawmotive/selection:3\nAQID']) test(`a rejected graph envelope cannot flatten into its PNG companion: ${JSON.stringify(text)}`,async()=>{
  const h=fixture({clipboard:{async read(){return [item({'image/png':image()}),item({'text/plain':new Blob([text])})];}}});
  await h.clipboard.copy({}, {system:false});
  await assert.rejects(h.clipboard.paste({x:1,y:2}),{code:'ClipboardFormatUnsupported'});
@@ -47,7 +54,7 @@ for(const [name,items] of [['empty',[]],['text',[item({'text/plain':new Blob(['u
  assert.equal(h.calls.some(call=>call[0]==='paste'||call[0]==='image'),false);
 });
 test('malformed graph data in a later text item still rejects when another graph is valid',async()=>{
- const h=fixture({clipboard:{async read(){return [item({'text/plain':new Blob(['drawmotive/selection:1\nAQID'])}),item({'text/plain':new Blob(['drawmotive/selection:2\nAQID']),'image/png':image()})];}}});
+ const h=fixture({clipboard:{async read(){return [item({'text/plain':new Blob(['drawmotive/selection:2\nAQID'])}),item({'text/plain':new Blob(['drawmotive/selection:3\nAQID']),'image/png':image()})];}}});
  await assert.rejects(h.clipboard.paste({x:1,y:2}),{code:'ClipboardFormatUnsupported'});assert.deepEqual(h.calls,[]);
 });
 test('image conversion preserves bytes across encoding chunks',async()=>{
@@ -67,7 +74,7 @@ test('rich clipboard preserves the source MIME for private browser fallback',asy
 test('a denied rich read uses the frozen automatic fallback and reports explicit system failure',async()=>{
  let deny;const h=fixture({clipboard:{read(){return new Promise((_,reject)=>deny=reject);},readText(){assert.fail('Denied rich reads must not start another system read');}}});
  await h.clipboard.copy(1,{system:false});const pending=h.clipboard.paste({x:1,y:2});
- h.editor.copySelection=async()=>({version:1,data:'BAUG'});await h.clipboard.copy(2,{system:false});
+ h.editor.copySelection=async()=>({version:2,data:'BAUG'});await h.clipboard.copy(2,{system:false});
  deny(new Error('Denied'));await pending;assert.deepEqual(h.calls.at(-1),['paste',payload,{x:1,y:2}]);
  const system=h.clipboard.paste({x:1,y:2},{source:'system'});deny(new Error('Denied'));
  await assert.rejects(system,{code:'ClipboardPermissionDenied'});
@@ -145,15 +152,15 @@ test('permission denial retains internal copy; unrelated OS text cannot paste an
  assert.equal(h.calls.filter(call=>call[0]==='paste').length,2);
 });
 test('malformed payloads and in-flight copy after disposal never become an internal clipboard',async()=>{
- for(const raw of ['', 'drawmotive/selection:1\n!', encodeSelection(payload)+'\n',
-  'drawmotive/selection:2\r\nAQID','drawmotive/selection:1\rAQID',
-  'drawmotive/selection:1\r\n!','drawmotive/selection:1\r\nAQID\r\n',
-  'drawmotive/selection:1\r\nAQ ID','drawmotive/selection:1\r\nAQ=ID']) assert.throws(()=>decodeSelection(raw),{code:'ClipboardFormatUnsupported'});
+ for(const raw of ['', 'drawmotive/selection:2\n!', encodeSelection(payload)+'\n',
+  'drawmotive/selection:3\r\nAQID','drawmotive/selection:2\rAQID',
+  'drawmotive/selection:2\r\n!','drawmotive/selection:2\r\nAQID\r\n',
+  'drawmotive/selection:2\r\nAQ ID','drawmotive/selection:2\r\nAQ=ID']) assert.throws(()=>decodeSelection(raw),{code:'ClipboardFormatUnsupported'});
  const h=fixture();let finish;h.editor.copySelection=()=>new Promise(resolve=>finish=resolve);
  const pending=h.clipboard.copy({}, {system:false});h.clipboard.dispose();finish(payload);await assert.rejects(pending,{code:'EditorDisposed'});
 });
 test('a late first copy cannot replace the most recently requested internal selection',async()=>{
- const h=fixture();let first;h.editor.copySelection=token=>token===1?new Promise(resolve=>first=resolve):Promise.resolve({version:1,data:'BAUG'});
+ const h=fixture();let first;h.editor.copySelection=token=>token===1?new Promise(resolve=>first=resolve):Promise.resolve({version:2,data:'BAUG'});
  const older=h.clipboard.copy(1,{system:false});await h.clipboard.copy(2,{system:false});first(payload);await older;
  await h.clipboard.paste({x:0,y:0},{source:'internal'});assert.equal(h.calls.at(-1)[1].data,'BAUG');
 });
@@ -166,7 +173,7 @@ test('automatic paste retains the fallback captured before a newer copy',async()
  let deny;const h=fixture({clipboard:{readText:()=>new Promise((_,reject)=>deny=reject)}});
  await h.clipboard.copy(1,{system:false});
  const pending=h.clipboard.paste({x:1,y:2});
- h.editor.copySelection=async()=>({version:1,data:'BAUG'});await h.clipboard.copy(2,{system:false});
+ h.editor.copySelection=async()=>({version:2,data:'BAUG'});await h.clipboard.copy(2,{system:false});
  deny(new Error('Denied'));await pending;assert.equal(h.calls.at(-1)[1].data,payload.data);
  await h.clipboard.paste({x:1,y:2},{source:'internal'});assert.equal(h.calls.at(-1)[1].data,'BAUG');
 });
@@ -179,7 +186,7 @@ test('default target is captured after system access starts and before its delay
 test('failed and malformed captures preserve the last successful internal copy',async()=>{
  const h=fixture();await h.clipboard.copy(1,{system:false});
  h.editor.copySelection=async()=>{throw new Error('Failed');};await assert.rejects(h.clipboard.copy(2,{system:false}),{message:'Failed'});
- h.editor.copySelection=async()=>({version:1,data:'!'});await assert.rejects(h.clipboard.copy(3,{system:false}),{code:'ClipboardFormatUnsupported'});
+ h.editor.copySelection=async()=>({version:2,data:'!'});await assert.rejects(h.clipboard.copy(3,{system:false}),{code:'ClipboardFormatUnsupported'});
  await h.clipboard.paste({x:0,y:0},{source:'internal'});assert.deepEqual(h.calls.at(-1)[1],payload);
 });
 test('an early position rejection is consumed even when clipboard decoding fails',async()=>{

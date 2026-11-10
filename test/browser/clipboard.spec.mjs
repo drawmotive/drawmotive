@@ -3,8 +3,9 @@ import { test, expect } from '@playwright/test';
 for (const [name,text,kind] of [
   ['image only',null,'image'],
   ['image with unrelated text','Copied from another application','image'],
-  ['editable graph with PNG companion','drawmotive/selection:1\nAQID','graph'],
-  ['future graph with PNG companion','drawmotive/selection:2\nAQID','error'],
+  ['editable graph with PNG companion','drawmotive/selection:2\nAQID','graph'],
+  ['obsolete graph with PNG companion','drawmotive/selection:1\nAQID','error'],
+  ['future graph with PNG companion','drawmotive/selection:3\nAQID','error'],
 ]) test(`system clipboard paste preserves ${name}`,async({page,context})=>{
   await context.grantPermissions(['clipboard-read','clipboard-write']);
   await page.goto('/test/browser/host.html');
@@ -39,7 +40,7 @@ for (const [name,text,kind] of [
   const result=await page.evaluate(()=>window.pasteResult);
   expect(result.kind).toBe(kind);
   if(kind==='image')expect(result).toEqual({kind,position:{x:12,y:34},width:2,height:1,pixels:[255,0,0,255,0,0,255,255]});
-  else if(kind==='graph')expect(result).toEqual({kind,payload:{version:1,data:'AQID'},position:{x:12,y:34}});
+  else if(kind==='graph')expect(result).toEqual({kind,payload:{version:2,data:'AQID'},position:{x:12,y:34}});
   else expect(result.code).toBe('ClipboardFormatUnsupported');
 });
 

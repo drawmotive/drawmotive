@@ -229,9 +229,11 @@ The document API exposes generated values from scene metadata and every live gra
 | `deleteSelection(token)` | Deletes the validated selection through the engine |
 | `beginTextEditing(targetItemId?)` | Begins text input for an explicit item or the selected target |
 | `applyText(token, targetItemId, content)` | Commits host-supplied text without entering inline input |
-| `copySelection(token)` | Returns opaque `{ version: 1, data: string }` |
+| `copySelection(token)` | Returns opaque `{ version: 2, data: string }` |
 | `pasteSelection(payload, { x, y })` | Clones/remaps the opaque graph through the engine; returns the pasted selection |
 | `pasteImage(data, { x, y })` | Inserts Base64 encoded image bytes as a self-contained image; returns the pasted selection |
+
+Selection transfer payloads use version `2`, and system clipboard text uses the `drawmotive/selection:2` envelope. Version `1` payloads and envelopes are rejected. The selection token version is an independent counter.
 
 ### Discover objects, properties and operations
 
@@ -247,7 +249,7 @@ for (const item of scene.items) {
 }
 ```
 
-Property names use camel case. Enums use native names, such as `"Solid"` or `"Orthogonal"`. Signed and unsigned 64-bit integers use decimal strings to preserve precision. Colors use numeric unsigned ARGB values; vectors use `{ x, y }`. Arrays are replaced as a complete leaf value. A nested tracked object is patched through its existing children, preserving their identity. Unsupported value types and lifecycle-sensitive state remain readable where possible and explicitly read-only. Read the schema before building generic controls: IDs, ownership, tombstones, group membership and derived routing geometry are not ordinary writable properties.
+Property names use camel case. Enums use native names, such as `"Solid"` or `"Orthogonal"`. Signed and unsigned 64-bit integers use decimal strings to preserve precision. Persisted style colors are scalar decimal strings: nonnegative values encode unsigned ARGB, and negative values identify theme roles. Font sizes, stroke widths and corner radii are integer thousandths of a drawing unit; negative values identify theme roles. Font families are strings, with an empty string following the theme. Vectors use `{ x, y }`. Arrays are replaced as a complete leaf value. A nested tracked object is patched through its existing children, preserving their identity. Unsupported value types and lifecycle-sensitive state remain readable where possible and explicitly read-only. Read the schema before building generic controls: IDs, ownership, tombstones, group membership and derived routing geometry are not ordinary writable properties.
 
 ### Batch contract
 
@@ -293,15 +295,16 @@ if (shapes.length) {
     revision: selection.revision,
     token: selection.token,
     description: 'Change fill color',
-    changes: shapes.flatMap(item => [
-      { itemId: item.id, path: ['data', 'paintStyle', 'fillColor', 'colorClass'], value: 'PrimaryFill' },
-      { itemId: item.id, path: ['data', 'paintStyle', 'fillColor', 'colorValue'], value: null },
-    ]),
+    changes: shapes.map(item => ({
+      itemId: item.id,
+      path: ['data', 'paintStyle', 'fillColor'],
+      value: item.resolved.themeValues.colors.PrimaryFill,
+    })),
   });
 }
 ```
 
-Clear the explicit `colorValue` when choosing a theme role. Likewise, `widthValue: null` and `sizeValue: null` restore theme-derived width and font size. An explicit ARGB color or numeric width/size can be set through the same generated graph.
+Each appearance value occupies one leaf: assign either a theme token or an explicit value to that same path. Read native role tokens from `item.resolved.themeValues`: `colors`, `fontSizes`, `lineWidths` and `corners` contain the available roles, and `scale` is `1000`. For example, `fontSizes.Body` restores the body font size, and `lineWidths.Normal` selects the normal theme stroke. An explicit 16-unit font size is `16000`; an explicit opaque red color is the decimal string `"4294901760"`. Null does not reset these scalar leaves.
 
 ### Use model operations and dictionaries
 
@@ -328,7 +331,7 @@ Endpoint styles use integers `0` none, `1` simple arrow, `2` filled arrow, `3` o
 
 `EditorSelectionSnapshot` contains `revision`, `token`, `items` and nullable `anchor`. A token contains opaque `session` and numeric `version`; reselection can invalidate it even when the IDs are unchanged. Keep the token associated with the control shown to the user.
 
-Each selected item exposes its generated `model`, small `resolved` presentation values, `id`, `kind`, `bindingItemId`, `textId`, `screenBounds`, capabilities and optional `text`/`boundText`/`startAttachment`/`endAttachment`. Kinds are `Shape`, `Line`, `Group`, `IndependentText` and `BoundText`. Capabilities report `stroke`, `fill`, `cornerRadius`, `editText`, `text`, `verticalTextAlignment`, `line`, `connectorRouting`, `group` and `groupTitle`. `resolved` contains the effective corner radius, generated effective font style for text, and group theme/header values where applicable. Mixed-value aggregation belongs to the UI; the public scene API has no property-specific aggregate DTO.
+Each selected item exposes its generated `model`, small `resolved` presentation values, `id`, `kind`, `bindingItemId`, `textId`, `screenBounds`, capabilities and optional `text`/`boundText`/`startAttachment`/`endAttachment`. Kinds are `Shape`, `Line`, `Group`, `IndependentText` and `BoundText`. Capabilities report `stroke`, `fill`, `cornerRadius`, `editText`, `text`, `verticalTextAlignment`, `line`, `connectorRouting`, `group` and `groupTitle`. `resolved` contains the effective corner radius, effective font style for text (with `size` in drawing units), native `themeValues` tokens and group theme/header values where applicable. Mixed-value aggregation belongs to the UI; the public scene API has no property-specific aggregate DTO.
 
 Attachment observations contain `{ attachment: { kind, ownerId, boundaryId }, boundaryIds, unresolved }`. `routingUnavailable` reports unresolved routing failure. Screen anchors remain native observations, so custom controls do not need to reconstruct canvas geometry.
 

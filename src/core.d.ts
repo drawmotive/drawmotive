@@ -98,7 +98,7 @@ export interface EditorSelectionSnapshot {
   readonly anchor: EditorScreenBounds | null;
 }
 /** Opaque immutable MemoryPack graph; JS never mutates the graph or remaps IDs. */
-export interface EditorSelectionPayload { readonly version: 1; readonly data: string; readonly png?: string | null; }
+export interface EditorSelectionPayload { readonly version: 2; readonly data: string; readonly png?: string | null; }
 export interface EditorSelectionCopyOptions { png?: boolean; }
 export interface EditorClipboardCopyOptions { system?:boolean; }
 export interface EditorClipboardCopyResult { readonly internal:true;readonly system:'written'|'denied'|'unavailable'|'skipped'; }
