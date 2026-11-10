@@ -231,6 +231,7 @@ The document API exposes generated values from scene metadata and every live gra
 | `applyText(token, targetItemId, content)` | Commits host-supplied text without entering inline input |
 | `copySelection(token)` | Returns opaque `{ version: 1, data: string }` |
 | `pasteSelection(payload, { x, y })` | Clones/remaps the opaque graph through the engine; returns the pasted selection |
+| `pasteImage(data, { x, y })` | Inserts Base64 raster bytes as a self-contained image; returns the pasted selection |
 
 ### Discover objects, properties and operations
 
@@ -386,7 +387,11 @@ C# owns object cloning, ID/reference remapping, bound labels, connectors and the
 
 Copy returns `{ internal: true, system: 'written' \| 'denied' \| 'unavailable' \| 'skipped' }`. A denied system write can still leave a successful internal copy. The internal buffer is per instance, survives neither disposal nor reload, and is not a document snapshot.
 
-`internal` never reads the system clipboard. `system` requires a successful system read and a recognized DrawMotive selection. `auto` tries the system first and uses the internal buffer when system access is unavailable/denied. A successful read of unrelated text reports `ClipboardFormatUnsupported`; it never resurrects an older internal copy. Arbitrary text/image paste is not implemented by these selection APIs.
+`internal` never reads the system clipboard. `system` requires a successful system read containing a DrawMotive selection or supported raster image. `auto` tries the system first and uses the internal buffer when system access is unavailable/denied. A successful read of unrelated content reports `ClipboardFormatUnsupported`; it never resurrects an older internal copy. Arbitrary text paste is not implemented by these selection APIs.
+
+Where `navigator.clipboard.read()` is available, paste reads rich items and prefers a valid versioned DrawMotive graph over accompanying pixels, including a graph in a different item. Malformed or unsupported graph envelopes reject rather than flatten into an image. Otherwise, external `image/png`, `image/jpeg` and `image/webp` bytes become self-contained image objects, even when accompanied by unrelated text. PNG takes precedence over the other raster formats. Browsers exposing only `readText()` retain graph-only paste.
+
+Hosts can also call `pasteImage(base64RasterBytes, { x, y })` without accessing the system clipboard. Pass the encoded bytes without a data-URL prefix. Native decoding validates raster data before changing selection or history; image insertion uses the document queue and returns `EditorSelectionSnapshot`. The image begins at its intrinsic pixel dimensions in drawing/model coordinates and supports selection, movement, resizing, rotation, Undo, persistence and graph copy. Resizing retains its original pixels.
 
 Invoke system operations directly from a browser user gesture. Keep the current token from selection notifications so that you do not await another operation before initiating privileged clipboard access:
 
@@ -404,7 +409,7 @@ pasteButton.addEventListener('click', () => {
 });
 ```
 
-Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. Host shortcuts and menus can use this JS clipboard service. Native inline text retains browser text copy/paste.
+Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helper starts a promise-backed `ClipboardItem` write or a clipboard read during the gesture where supported; browser permissions and fallback behavior still vary. In-app copy/paste can explicitly use `{ system: false }` and `{ source: 'internal' }`. Host shortcuts and menus can use this JS clipboard service. Native inline text retains browser text copy/paste.
 
 Each editor keeps its own opaque internal copy in JS. Paste snapshots that fallback when invoked; a newer copy cannot replace an earlier pending paste. When no position is supplied, paste starts system access first and immediately requests the native model-space pointer position, preserving placement while permission handling is pending. Disposal immediately clears and retires the clipboard, including both deferred MIME providers and pending pastes. The C# transfer service retains no clipboard buffer; it freezes the closed graph and displayed line geometry into bytes, then remaps identities and applies placement and transactions on insertion.
 

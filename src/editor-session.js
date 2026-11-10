@@ -231,6 +231,7 @@ export async function createEditorSession(options = {}, privateOptions) {
       return {token,...(options.png === undefined ? {} : {png:boolean(options.png,'png')})};
     }); },
     pasteSelection(payload,position) { return request('pasteSelection',{ payload,position }); },
+    pasteImage(data,position) { return request('pasteImage',{ data,position }); },
     copyToClipboard(token,options) { return clipboard.copy(token,options); },
     pasteFromClipboard(position,options) { return clipboard.paste(position,options); },
     async getPreferences() { const value = await request('getPreferences'); updatePreferences(value); return latestPreferences; },

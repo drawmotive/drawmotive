@@ -202,6 +202,16 @@ test('stale notifications cannot affect a reopened document',async t=>{
 test('clipboard stays in JS and semantic payloads remain opaque',async t=>{
  const h=host(t),payload={version:1,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
 });
+test('image insertion shares the native document queue and freezes placement',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());let finish;
+ const selection={token:{session:'s',version:2},items:[]};
+ h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):selection);
+ const edit=editor.undo(),position={x:4,y:8},paste=editor.pasteImage('AQID',position);position.x=90;
+ await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['undo']);
+ finish(null);await edit;const result=await paste;assert.deepEqual(result,selection);assert.ok(Object.isFrozen(result));
+ assert.deepEqual(h.calls.at(-1),{method:'pasteImage',args:{data:'AQID',position:{x:4,y:8}}});
+ await editor.dispose();await assert.rejects(editor.pasteImage('AQID',{x:0,y:0}),{code:'EditorDisposed'});
+});
 test('clipboard is retired before blocked native disposal completes',async t=>{
  const h=host(t);let release,access=0;
  Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){access++;return Promise.resolve('drawmotive/selection:1\nAQID');},writeText(){access++;return Promise.resolve();}}});

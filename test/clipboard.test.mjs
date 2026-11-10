@@ -5,11 +5,90 @@ import { png } from './fixtures/clipboard-image.mjs';
 const payload={version:1,data:'AQID'};
 function fixture(options={}) {
  const calls=[];
- const editor={async copySelection(token,options){calls.push(['copy',token]);return {...payload,...(options?.png?{png}:{})};},async pasteSelection(data,point){calls.push(['paste',data,point]);return 'selection';},async deleteSelection(token){calls.push(['delete',token]);}};
+ const editor={async copySelection(token,options){calls.push(['copy',token]);return {...payload,...(options?.png?{png}:{})};},async pasteSelection(data,point){calls.push(['paste',data,point]);return 'selection';},async pasteImage(data,point){calls.push(['image',data,point]);return 'image selection';},async deleteSelection(token){calls.push(['delete',token]);}};
  return {calls,editor,clipboard:createEditorClipboard(editor,options)};
 }
 test('selection decoding accepts the Windows CRLF envelope separator without changing graph bytes',()=>{
  assert.deepEqual(decodeSelection('drawmotive/selection:1\r\nAQID'),payload);
+});
+function item(data) {
+ return {types:Object.keys(data),async getType(type){assert.ok(Object.hasOwn(data,type));return data[type];}};
+}
+function image(type='image/png') {return new Blob([Buffer.from(png,'base64')],{type});}
+for(const type of ['image/png','image/jpeg','image/webp']) test(`rich system paste imports ${type} bytes without reading text`,async()=>{
+ const h=fixture({clipboard:{async read(){return [item({[type]:image(type)})];},readText(){assert.fail('Rich access must own this read');}}});
+ assert.equal(await h.clipboard.paste({x:3,y:7},{source:'system'}),'image selection');
+ assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
+});
+test('a graph in a later clipboard item takes precedence over earlier PNG pixels',async()=>{
+ const h=fixture({clipboard:{async read(){return [item({'image/png':image()}),item({'text/plain':new Blob(['drawmotive/selection:1\r\nAQID'])})];}}});
+ assert.equal(await h.clipboard.paste({x:3,y:7}),'selection');
+ assert.deepEqual(h.calls,[['paste',payload,{x:3,y:7}]]);
+});
+test('rich paste prefers PNG over another supported raster format across items',async()=>{
+ const h=fixture({clipboard:{async read(){return [item({'image/jpeg':new Blob([new Uint8Array([1,2,3])])}),item({'image/png':image()})];}}});
+ await h.clipboard.paste({x:3,y:7});assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
+});
+test('external images remain importable with unrelated clipboard text',async()=>{
+ const h=fixture({clipboard:{async read(){return [item({'text/plain':new Blob(['copied from another application']),'image/png':image()})];}}});
+ await h.clipboard.paste({x:3,y:7});assert.deepEqual(h.calls,[['image',png,{x:3,y:7}]]);
+});
+for(const text of ['drawmotive/selection:1\n!','drawmotive/selection:2\nAQID']) test(`a rejected graph envelope cannot flatten into its PNG companion: ${JSON.stringify(text)}`,async()=>{
+ const h=fixture({clipboard:{async read(){return [item({'image/png':image()}),item({'text/plain':new Blob([text])})];}}});
+ await h.clipboard.copy({}, {system:false});
+ await assert.rejects(h.clipboard.paste({x:1,y:2}),{code:'ClipboardFormatUnsupported'});
+ assert.equal(h.calls.some(call=>call[0]==='paste'||call[0]==='image'),false);
+});
+for(const [name,items] of [['empty',[]],['text',[item({'text/plain':new Blob(['unrelated'])})]],['HTML',[item({'text/html':new Blob(['<b>unrelated</b>'])})]]]) test(`successful unrelated ${name} rich reads never use the internal copy`,async()=>{
+ const h=fixture({clipboard:{async read(){return items;}}});await h.clipboard.copy({}, {system:false});
+ await assert.rejects(h.clipboard.paste({x:1,y:2}),{code:'ClipboardFormatUnsupported'});
+ assert.equal(h.calls.some(call=>call[0]==='paste'||call[0]==='image'),false);
+});
+test('malformed graph data in a later text item still rejects when another graph is valid',async()=>{
+ const h=fixture({clipboard:{async read(){return [item({'text/plain':new Blob(['drawmotive/selection:1\nAQID'])}),item({'text/plain':new Blob(['drawmotive/selection:2\nAQID']),'image/png':image()})];}}});
+ await assert.rejects(h.clipboard.paste({x:1,y:2}),{code:'ClipboardFormatUnsupported'});assert.deepEqual(h.calls,[]);
+});
+test('image conversion preserves bytes across encoding chunks',async()=>{
+ const bytes=Uint8Array.from({length:256*1024+1},(_,index)=>index%251);
+ const h=fixture({clipboard:{async read(){return [item({'image/png':new Blob([bytes])})];}}});
+ await h.clipboard.paste({x:1,y:2});
+ assert.deepEqual(new Uint8Array(Buffer.from(h.calls[0][1],'base64')),bytes);
+});
+test('a denied rich read uses the frozen automatic fallback and reports explicit system failure',async()=>{
+ let deny;const h=fixture({clipboard:{read(){return new Promise((_,reject)=>deny=reject);},readText(){assert.fail('Denied rich reads must not start another system read');}}});
+ await h.clipboard.copy(1,{system:false});const pending=h.clipboard.paste({x:1,y:2});
+ h.editor.copySelection=async()=>({version:1,data:'BAUG'});await h.clipboard.copy(2,{system:false});
+ deny(new Error('Denied'));await pending;assert.deepEqual(h.calls.at(-1),['paste',payload,{x:1,y:2}]);
+ const system=h.clipboard.paste({x:1,y:2},{source:'system'});deny(new Error('Denied'));
+ await assert.rejects(system,{code:'ClipboardPermissionDenied'});
+});
+test('rich read starts during the gesture before freezing native pointer placement',async()=>{
+ let read,point={x:12,y:34};const order=[];
+ const h=fixture({clipboard:{read(){order.push('read');return new Promise(resolve=>read=resolve);}},getPastePosition(){order.push('position');return Promise.resolve({...point});}});
+ const pending=h.clipboard.paste();assert.deepEqual(order,['read','position']);
+ point={x:90,y:80};read([item({'image/png':image()})]);await pending;assert.deepEqual(h.calls,[['image',png,{x:12,y:34}]]);
+});
+test('explicit image placement is frozen while the system read is pending',async()=>{
+ let read;const point={x:4,y:8},h=fixture({clipboard:{read:()=>new Promise(resolve=>read=resolve)}});
+ const pending=h.clipboard.paste(point);point.x=90;read([item({'image/png':image()})]);
+ await pending;assert.deepEqual(h.calls,[['image',png,{x:4,y:8}]]);
+});
+test('disposal during image byte conversion rejects without inserting',async()=>{
+ let finish;const converting=new Promise(resolve=>finish=resolve);
+ const h=fixture({clipboard:{async read(){return [{types:['image/png'],async getType(){return {arrayBuffer(){return converting;}};}}];}}});
+ const pending=h.clipboard.paste({x:1,y:2});void pending.catch(()=>{});await new Promise(setImmediate);
+ h.clipboard.dispose();finish(Uint8Array.from([1,2,3]).buffer);
+ await assert.rejects(pending,{code:'EditorDisposed'});assert.deepEqual(h.calls,[]);
+});
+test('disposal during rich item resolution rejects without inserting',async()=>{
+ let finish;const h=fixture({clipboard:{async read(){return [{types:['image/png'],getType:()=>new Promise(resolve=>finish=resolve)}];}}});
+ const pending=h.clipboard.paste({x:1,y:2});void pending.catch(()=>{});await new Promise(setImmediate);
+ h.clipboard.dispose();finish(image());await assert.rejects(pending,{code:'EditorDisposed'});assert.deepEqual(h.calls,[]);
+});
+test('failed image byte conversion rejects instead of reviving an internal graph',async()=>{
+ const h=fixture({clipboard:{async read(){return [{types:['image/png'],async getType(){return {async arrayBuffer(){throw new Error('Image read failed');}};}}];}}});
+ await h.clipboard.copy({}, {system:false});await assert.rejects(h.clipboard.paste({x:1,y:2}),{message:'Image read failed'});
+ assert.equal(h.calls.some(call=>call[0]==='paste'||call[0]==='image'),false);
 });
 for(const source of ['auto','system']) test(`${source} paste in another editor accepts a system copy with native CRLF conversion`,async()=>{
  let text;const system={async writeText(value){text=value.replaceAll('\n','\r\n');},async readText(){return text;}};

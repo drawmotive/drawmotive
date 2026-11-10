@@ -14,6 +14,10 @@ async function mount(container: HTMLElement) {
   const result: EditorSnapshot = await editor.exportSnapshot({ formats: ['raw', 'png', 'svg'], render: { scale: 2 } });
   await editor.replaceDocument(result.raw!);
   await editor.replacePngDocument(result.png!.base64);
+  const imageSelection = await editor.pasteImage(result.png!.base64, { x: 120, y: 80 });
+  void imageSelection.token;
+  // @ts-expect-error Raster input is Base64 bytes, not a Blob.
+  await editor.pasteImage(new Blob(), { x: 120, y: 80 });
   await editor.replaceTextGraph('B -> C');
   const scene = await editor.getScene();
   await editor.editScene({revision:scene.revision,description:'Update document',changes:[{path:['title'],value:'Example'},
