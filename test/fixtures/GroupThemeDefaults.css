@@ -5,7 +5,7 @@
     --shape-shadow-offset-y: 0;
     --shape-shadow-opacity: 0;
     --text-body-font-family: var(--font-family);
-    --text-fallback-font-families: Noto-COLRv1, NotoSansSC-Regular;
+    --text-fallback-font-families: Noto Color Emoji, Noto Sans SC;
     --text-body-font-size: medium;
     --text-body-font-weight: 400;
     --text-heading-font-weight: 600;

@@ -8,8 +8,9 @@ import { parseNpmPack } from "../.release/release-registry.mjs";
 // Current builds embed only StandardTheme, checked against its public counterpart.
 // Retained dual-resource builds still require exact reviewed additive bytes, independently of the
 // declared filename: 96e7d2a95bda0a10ba32f7c650c0f77567d0639f introduced the
-// reviewed 10px shape radius and disabled shadow defaults.
-const groupDefaultsHash = "a179a7341644bf47489b3cc110a1cc56263ec7542e42315fdd333817e15f9046";
+// reviewed 10px shape radius and disabled shadow defaults. The retained resource
+// uses the official Noto Color Emoji and Noto Sans SC logical family names.
+const groupDefaultsHash = "80f93c8e02f77b257c0b801381afe0afd491fdf29f7abe3dd0c485f389bdace0";
 const prefix = "Graphics.Core.Styles.Resources.";
 // Reviewed schema-v2 public geometry at ec83d2a69. New names or bytes require
 // renewed source/schema review; a JSON suffix alone never grants approval.

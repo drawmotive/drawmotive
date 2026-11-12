@@ -245,7 +245,7 @@ test('shape resource approval rejects changed data, unknown names, aliases and n
 
 test('resource approval rejects superseded styling defaults',()=>{
  const withoutShapeDefaults=groupCss.toString().replace(/^    --shape-[^\n]+\n/gm,'');
- const withoutEmojiDefaults=withoutShapeDefaults.replace('Noto-COLRv1','NotoColorEmoji');
+ const withoutEmojiDefaults=withoutShapeDefaults.replace('Noto Color Emoji','Missing Emoji');
  const withoutLineLabelDefaults=withoutEmojiDefaults.replace(/^    --line-label-background-[^\n]+\n/gm,'');
  for(const css of [withoutShapeDefaults,withoutEmojiDefaults,withoutLineLabelDefaults]) {
   const entries=themeEntries();entries[0].data=Buffer.from(css);
