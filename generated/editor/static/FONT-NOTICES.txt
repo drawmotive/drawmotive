@@ -8,7 +8,7 @@ font binaries have not been asserted byte-identical to these local files.
 NotoSans-Regular.ttf
 Embedded version: 2.015
 SHA-256: bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d
-Variable axes: wght 100–900, wdth 62.5–100 (resource alias retained).
+Variable axes: wght 100–900, wdth 62.5–100 (physical filename retained).
 Binary source: https://raw.githubusercontent.com/google/fonts/2984c575fdce412ee02b2baaba67672b9a9434d8/ofl/notosans/NotoSans%5Bwdth,wght%5D.ttf
 License: NotoSans-LICENSE.txt
 License source: https://raw.githubusercontent.com/notofonts/latin-greek-cyrillic/NotoSans-v2.015/OFL.txt
@@ -28,7 +28,7 @@ License source: https://raw.githubusercontent.com/google/fonts/b346dc3e18bed8b4c
 NotoSansSC-Regular.ttf
 Embedded version: 2.004-H2
 SHA-256: a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da
-Variable axis: wght 100–900 (resource alias retained).
+Variable axis: wght 100–900 (physical filename retained).
 Binary source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf
 License: NotoSansSC-LICENSE.txt
 License source: https://raw.githubusercontent.com/google/fonts/2894aab31764f10f29c421bdfd2340d3b382d384/ofl/notosanssc/OFL.txt
@@ -41,6 +41,11 @@ see font-pack-sources.json for pinned upstream URLs, hashes and matching license
 
 Files ending in -core.ttf or -ext.ttf are derived subsets generated with
 fontTools 4.60.1 from the corresponding committed full TTF. Their embedded
-primary names begin with DrawMotive; logical family aliases in files.json do
-not change the upstream copyright or license. The subsets retain embedded
+primary names begin with DrawMotive; official application families in files.json
+do not change the upstream copyright or license. The subsets retain embedded
 copyright and OFL records and are distributed under their matching source OFL.
+
+Application and browser families use official typographic family names. The
+central tooling/font-packs.json configuration maps those names to explicit
+source and pack paths. SVG export references the selected resource family;
+internal subset names are not document or theme identities.

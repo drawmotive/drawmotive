@@ -25,14 +25,15 @@ async function loadFontResource(path, url, sha256) {
   return result;
 }
 async function prepareBrowserFont(path, sha256, bytes, pack) {
-  const family = pack?.family ?? path.split('/').pop().replace(/[.]ttf$/i, '');
-  // Disjoint packs share a family alias, while verified resource identity owns installation.
+  if (typeof pack?.family !== 'string' || !pack.family.trim() || typeof pack.weight !== 'string')
+    throw error('ResourceUnavailable', 'Font registration requires inventory family and weight metadata.');
+  const { family, weight } = pack;
+  // Packs share their official family, while verified resource identity owns installation.
   const resourceKey = JSON.stringify([path, sha256]);
   let loading = browserFontLoads.get(resourceKey);
   if (!loading) {
     loading = (async () => {
       try {
-        const weight = pack?.weight ?? (['NotoSans-Regular', 'NotoSansSC-Regular', 'NotoSansJP-Regular'].includes(family) ? '100 900' : '400');
         const descriptors = { weight, style: 'normal', display: 'swap' };
         if (pack?.coverage) descriptors.unicodeRange = pack.coverage.map(([first, last]) => 'U+' + first.toString(16).toUpperCase() + (first === last ? '' : '-' + last.toString(16).toUpperCase())).join(', ');
         const face = new FontFace(family, bytes, descriptors);
@@ -93,18 +94,12 @@ globalThis.drawmotiveCanvas = Object.freeze({
   preferencesChanged: preferencesJson => emit('preferencesChanged', JSON.parse(preferencesJson)),
   textEditingRequested: intentionJson => emit('textEditingRequested', JSON.parse(intentionJson)),
   setDarkTheme: dark => { const owner = current(); owner.container.dataset.theme = dark ? 'dark' : 'light'; },
-  // Retain native typography before web chrome mounts; later changes bubble only
-  // from this document's canvas, without modifying its caller-owned container.
-  setFontFamily: family => {
-    const owner = current(), property = '--drawmotive-font-family';
-    if (owner.container.style.getPropertyValue(property) === family) return;
-    owner.container.style.setProperty(property, family);
-    owner.container.dispatchEvent(new CustomEvent('drawmotive:font-family-change', { bubbles: true, detail: family }));
-  },
   platform,
   openDocument: () => platform('storage.open').then(() => null),
   readDocumentCheckpoint: () => platform('storage.read'),
   readDocumentJournal: () => platform('storage.journal'),
+  readDocumentAssets: hashes => platform('storage.assets.read', { hashes }),
+  writeDocumentAssets: assets => platform('storage.assets.write', { assets }).then(() => null),
   commitDocument: batch => platform('storage.commit', { batch }),
   loadFont: async (path, url, sha256, pack) => {
     const result = await loadFontResource(path, url, sha256);
@@ -195,7 +190,6 @@ export async function mountCanvas({ container, assetBaseUrl, assetPaths, options
     owner.reference = null;
     container.classList.remove('drawmotive-canvas-host');
     delete container.dataset.theme;
-    container.style.removeProperty('--drawmotive-font-family');
     if (activeCanvas === owner) activeCanvas = undefined;
   };
   try {
