@@ -4,9 +4,11 @@ const source = document.querySelector('#source');
 const status = document.querySelector('#status');
 const buttons = [...document.querySelectorAll('button')];
 const file = document.querySelector('#file');
+const pngAppearance = document.querySelector('#png-appearance');
 let editor, currentState, working = false;
 function refreshControls() {
   buttons.forEach(button => { button.disabled = !editor || leaving || working; });
+  pngAppearance.disabled = !editor || leaving || working;
   for (const action of ['undo','redo']) document.querySelector('#'+action).disabled ||= !currentState?.[action === 'undo' ? 'canUndo' : 'canRedo'];
 }
 for (const button of document.querySelectorAll('[data-tool]')) button.addEventListener('click', () => void run(() => editor.setTool(button.dataset.tool), 'Ready to edit'));
@@ -50,7 +52,8 @@ document.querySelector('#generate').addEventListener('click', () => {
   void run(async () => { await editor.replaceTextGraph(source.value); await editor.fitViewport(); }, 'Ready to edit');
 });
 document.querySelector('#download').addEventListener('click', () => {
-  void run(async () => download(pngBlob((await editor.exportSnapshot({ formats: ['png'] })).png.base64), 'diagram.png'), 'PNG downloaded');
+  const dark = pngAppearance.value === 'dark';
+  void run(async () => download(pngBlob((await editor.exportSnapshot({ formats: ['png'], render: { dark } })).png.base64), 'diagram.png'), 'PNG downloaded');
 });
 document.querySelector('#save').addEventListener('click', () => {
   void run(async () => download(new Blob([(await editor.exportSnapshot({ formats: ['raw'] })).raw], { type: 'text/plain' }), 'diagram.drawmotive'), 'Document saved');

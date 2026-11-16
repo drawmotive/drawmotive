@@ -43,10 +43,11 @@ function snapshotOptions(options) {
     if (options.png.embedDocument !== undefined) args.png.embedDocument = boolean(options.png.embedDocument, 'png.embedDocument');
   }
   if (options.render !== undefined) {
-    keys(options.render, ['scale', 'maxWidth', 'padding', 'roundSvgNumbers'], 'render');
+    keys(options.render, ['scale', 'maxWidth', 'padding', 'roundSvgNumbers', 'dark'], 'render');
     args.render = {};
     for (const key of ['scale', 'maxWidth', 'padding']) if (options.render[key] !== undefined) args.render[key] = positive(options.render[key], 'render.' + key, key === 'padding');
     if (options.render.roundSvgNumbers !== undefined) args.render.roundSvgNumbers = boolean(options.render.roundSvgNumbers, 'render.roundSvgNumbers');
+    if (options.render.dark !== undefined) args.render.dark = boolean(options.render.dark, 'render.dark');
   }
   return args;
 }
