@@ -507,14 +507,14 @@ The private storage boundary returns the blob with the retained journal
 suffix after its explicit `snapshotAfterJournalId` cut. A snapshot can precede
 later journal entries committed in the same batch; those entries still replay.
 
-The complete immutable original journal remains available through the private
-atomic `storage.journal` boundary for automatic recovery after a server reset,
-including records already acknowledged by transport. Reserved
+The immutable original journal after the adopted published checkpoint remains
+available through the private atomic `storage.journal` boundary for recovery
+after a server reset, including records already acknowledged by transport. Reserved
 `$origin:<32 lower hex guid>` records archive original scene bytes in journal order.
 They are excluded from checkpoint replay suffixes and rejected from the outbox;
 they do not add another active undo snapshot. Private replication reads a stable
 `snapshotKey` from the durable cut so ordinary appends need not export a full scene.
-The private recovery adapter passes the server clock to native, which proves the
+The private replication adapter passes the server clock to native, which proves the
 missing suffix is complete and returns original transaction bytes in causal order.
 The SDK decodes and copies that ordered suffix; it does not infer order from the
 raw storage archive or send archival origin records to transport.
@@ -527,11 +527,20 @@ Receipts use SHA-256 over every normalized logical request field and length-fram
 bytes, independent of the current scene. This is cryptographic byte identity, not
 retention of historical snapshot payloads: retired blobs and replica-state bytes
 are not kept in receipts. Matching retries also verify the original immutable
-journal and outbox bytes; missing or changed evidence fails instead of confirming
-a save. Web Crypto SHA-256 is required; there is no weaker identity fallback.
+journal and outbox bytes. Missing evidence fails unless native has atomically
+adopted a full published checkpoint that certifies its retirement; changed
+retained evidence always fails. Web Crypto SHA-256 is required; there is no weaker identity fallback.
 Outbox acknowledgements
 remove pending membership while retaining immutable identity evidence, so neither
 an identical retry nor a later edit can resurrect an acknowledged record.
+
+Private native reconciliation binds storage to the document generation and
+published revision. Its full checkpoint and explicit journal/outbox retirement
+commit together, after any uncertain earlier commit has resolved. Ordinary
+retirement cannot pass the adopted published clock; explicit native branch
+abandonment can retire an incompatible suffix and install a fresh writer. A
+transport ACK alone never authorizes original-journal deletion. Exact receipt
+retries do not recreate rows or pending membership removed by that adoption.
 
 Persistent storage uses the fixed `document-v4` database generation. Previous
 shared and per-document formats are ignored: the SDK never opens or imports them,

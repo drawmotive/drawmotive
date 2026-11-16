@@ -322,6 +322,8 @@ export async function createEditorSession(options = {}, privateOptions) {
     exportSnapshot: async () => portableSnapshot(await request('replica.exportSnapshot'), value => hostWindow.atob(value)),
     installSnapshot: (payload, expectedClock) => request('replica.installSnapshot', { payload,
       ...(expectedClock === undefined ? {} : { expectedClock }) }),
+    reconcile: (payload, expectedClock, generation, revision, acceptedClock) => request('replica.reconcile', { payload, expectedClock, generation, revision,
+      ...(acceptedClock === undefined ? {} : { acceptedClock }) }),
     archive: transactions => request('replica.archive', { transactions }),
     apply: transactions => request('replica.apply', { transactions }),
     acknowledge: platform.replication.acknowledge,

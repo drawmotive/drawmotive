@@ -1,4 +1,4 @@
-import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId, prepareAssets, copyAssetHashes, checkImmutableAsset } from './store-operations.js';
+import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId, prepareAssets, copyAssetHashes, checkImmutableAsset, checkRecovery, checkRetainedRecord, checkRetiredInsertion } from './store-operations.js';
 
 /** File/temporary hosts keep immutable history in memory; no browser storage is touched. */
 export function createMemoryDocumentStore() {
@@ -40,18 +40,21 @@ export function createMemoryDocumentStore() {
         const receipt = current.receipts.get(batch.batchId);
         if (receipt) {
           const confirmed = checkReceipt(receipt, digest);
-          for (const entry of batch.outbox) checkImmutableRecord(current.outbox.get(entry.id), entry, 'outbox', true);
-          for (const entry of batch.journal ?? []) checkImmutableRecord(current.journal.get(entry.id), entry, 'journal', true);
+          for (const entry of batch.outbox) checkRetainedRecord(current.outbox.get(entry.id), entry, 'outbox', current.recovery);
+          for (const entry of batch.journal ?? []) checkRetainedRecord(current.journal.get(entry.id), entry, 'journal', current.recovery);
           for (const asset of batch.assets ?? []) checkImmutableAsset(assets.get(asset.hash), asset, true);
           return confirmed;
         }
         if ((current.checkpoint?.revision ?? null) !== batch.expectedRevision) throw storageError('StorageConflict', 'Checkpoint revision changed.');
+        const recovery = checkRecovery(current.recovery, batch);
         // Validate every immutable identity before mutating anything. Copying all history on
         // each append would make the in-memory implementation quadratic as documents grow.
         for (const entry of batch.outbox) {
+          checkRetiredInsertion(current.outbox.get(entry.id), entry, current.recovery);
           checkImmutableRecord(current.outbox.get(entry.id), entry, 'outbox');
         }
         for (const entry of batch.journal ?? []) {
+          checkRetiredInsertion(current.journal.get(entry.id), entry, current.recovery);
           checkImmutableRecord(current.journal.get(entry.id), entry, 'journal');
         }
         for (const asset of batch.assets ?? []) checkImmutableAsset(assets.get(asset.hash), asset);
@@ -60,7 +63,15 @@ export function createMemoryDocumentStore() {
           .map(entry => ({ ...entry, ordinal: nextJournalOrdinal++ }));
         const boundary = current.journal.get(batch.checkpoint.snapshotAfterJournalId)
           ?? newJournal.find(entry => entry.id === batch.checkpoint.snapshotAfterJournalId);
-        const cut = snapshotCut(current.snapshotOrdinal, batch.checkpoint, boundary?.ordinal);
+        // A recovery replacement is captured after the complete supplied journal; unlike
+        // an ordinary rotating checkpoint it cannot leave part of this batch unapplied.
+        const cut = batch.recovery ? nextJournalOrdinal - 1 : snapshotCut(current.snapshotOrdinal, batch.checkpoint, boundary?.ordinal);
+        for (const removed of batch.removeJournalIds ?? []) current.journal.delete(removed);
+        for (const removed of batch.removeOutboxIds ?? []) { current.outbox.delete(removed); current.pending.delete(removed); }
+        if (batch.removeJournalIds?.length) {
+          const removed = new Set(batch.removeJournalIds);
+          current.suffix = current.suffix.filter(entry => !removed.has(entry.id));
+        }
         for (const asset of batch.assets ?? []) if (!assets.has(asset.hash)) assets.set(asset.hash, asset);
         for (const entry of batch.outbox) if (!current.outbox.has(entry.id)) {
           current.outbox.set(entry.id, entry); current.pending.set(entry.id, entry);
@@ -70,6 +81,7 @@ export function createMemoryDocumentStore() {
           if (!isOriginJournalId(entry.id)) current.suffix.push(entry);
         }
         current.nextJournalOrdinal = nextJournalOrdinal;
+        current.recovery = recovery;
         current.checkpoint = checkpointMetadata(current.checkpoint, batch.checkpoint);
         if (batch.checkpoint.payload.length) {
           current.snapshot = batch.checkpoint.payload; current.snapshotOrdinal = cut;

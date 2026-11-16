@@ -1,5 +1,5 @@
 import type { DocumentCheckpoint, DocumentSession, DocumentSessionOptions, DocumentStore, DocumentCommitBatch } from '../document-store.js';
-import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId, prepareAssets, copyAssetHashes, checkImmutableAsset } from '../store-operations.js';
+import { createDocumentOwner, prepareBatch, storageError, checkImmutableRecord, checkReceipt, documentKey, copyAcknowledgements, checkpointMetadata, snapshotCut, isOriginJournalId, prepareAssets, copyAssetHashes, checkImmutableAsset, checkRecovery, checkRetainedRecord, checkRetiredInsertion } from '../store-operations.js';
 import { databaseName, DocumentDatabase, type HeadRow } from './schema.ts';
 
 interface DatabaseOptions { databaseName?: string; acquireWriter?: (key: string) => Promise<() => void>; }
@@ -34,15 +34,23 @@ async function pendingOutbox(db: DocumentDatabase) {
   return rows.map(row => ({ id: row!.id, revision: row!.revision, payload: row!.payload }));
 }
 
-/** Digest matches do not excuse missing or changed immutable transaction evidence. */
+/** A matching digest permits missing originals only after certified native retirement;
+ * changed retained bytes and missing resource evidence always fail. */
 async function batchRecords(db: DocumentDatabase, batch: DocumentCommitBatch, receipt = false) {
   const journal = batch.journal ?? [];
   const [storedOutbox, storedJournal, storedAssets] = await Promise.all([
     db.outbox.bulkGet(batch.outbox.map(entry => entry.id)), db.journal.bulkGet(journal.map(entry => entry.id)),
     db.assets.bulkGet((batch.assets ?? []).map(asset => asset.hash)),
   ]);
-  batch.outbox.forEach((entry, index) => checkImmutableRecord(storedOutbox[index], entry, 'outbox', receipt));
-  journal.forEach((entry, index) => checkImmutableRecord(storedJournal[index], entry, 'journal', receipt));
+  const recovery = (await db.head())?.recovery;
+  batch.outbox.forEach((entry, index) => {
+    if (receipt) checkRetainedRecord(storedOutbox[index], entry, 'outbox', recovery);
+    else { checkRetiredInsertion(storedOutbox[index], entry, recovery); checkImmutableRecord(storedOutbox[index], entry, 'outbox'); }
+  });
+  journal.forEach((entry, index) => {
+    if (receipt) checkRetainedRecord(storedJournal[index], entry, 'journal', recovery);
+    else { checkRetiredInsertion(storedJournal[index], entry, recovery); checkImmutableRecord(storedJournal[index], entry, 'journal'); }
+  });
   (batch.assets ?? []).forEach((asset, index) => checkImmutableAsset(storedAssets[index], asset, receipt));
   return { outbox: batch.outbox.filter((_, index) => !storedOutbox[index]), journal: journal.filter((_, index) => !storedJournal[index]),
     assets: (batch.assets ?? []).filter((_, index) => !storedAssets[index]) };
@@ -99,6 +107,7 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
         }
         const current = await currentDb.head();
         if ((current?.checkpoint.revision ?? null) !== batch.expectedRevision) throw storageError('StorageConflict', 'Checkpoint revision changed.');
+        const recovery = checkRecovery(current?.recovery, batch);
         let nextOutboxOrdinal = current?.nextOutboxOrdinal ?? 0, nextJournalOrdinal = current?.nextJournalOrdinal ?? 0;
         const records = await batchRecords(currentDb, batch);
         if (records.assets.length) await currentDb.assets.bulkPut(records.assets);
@@ -112,13 +121,18 @@ export function createDocumentDatabase(options: DatabaseOptions = {}): DocumentS
         const replacesSnapshot = batch.checkpoint.payload.length > 0;
         const boundary = replacesSnapshot && batch.checkpoint.snapshotAfterJournalId !== null
           ? await currentDb.journal.get(batch.checkpoint.snapshotAfterJournalId!) : undefined;
-        const snapshotOrdinal = snapshotCut(current?.snapshotOrdinal, batch.checkpoint, boundary?.ordinal);
+        const snapshotOrdinal = batch.recovery ? nextJournalOrdinal - 1 : snapshotCut(current?.snapshotOrdinal, batch.checkpoint, boundary?.ordinal);
         const snapshotId = replacesSnapshot ? 'current' : undefined;
         if (snapshotId) await currentDb.snapshots.put({ id: snapshotId, payload: batch.checkpoint.payload });
+        // Retirement shares the checkpoint transaction. Any failed write leaves both
+        // the prior replay seed and every original/pending membership intact.
+        await currentDb.journal.bulkDelete([...(batch.removeJournalIds ?? [])]);
+        await currentDb.outbox.bulkDelete([...(batch.removeOutboxIds ?? [])]);
+        await currentDb.pending.bulkDelete([...(batch.removeOutboxIds ?? [])]);
         const head: HeadRow = { key: 'head', checkpoint: checkpointMetadata(current?.checkpoint, batch.checkpoint),
           snapshotId: snapshotId ?? current?.snapshotId,
           snapshotOrdinal,
-          nextJournalOrdinal, nextOutboxOrdinal };
+          nextJournalOrdinal, nextOutboxOrdinal, ...(recovery ? { recovery } : {}) };
         await currentDb.meta.put(head);
         await currentDb.receipts.put({ batchId: batch.batchId, revision: batch.checkpoint.revision, digest });
         return { batchId: batch.batchId, revision: batch.checkpoint.revision };

@@ -41,6 +41,14 @@ export interface DocumentOutboxEntry {
 }
 /** Immutable encoded image bytes, capped at 4,000,000 bytes; SHA-256 identity and access remain document scoped. */
 export interface DocumentImageAsset { readonly hash: string; readonly data: Uint8Array; }
+/** Private native adoption identity. This is coverage authority, not a byte-equality
+ * certificate for arbitrary transaction payloads. Branch abandonment is explicit. */
+export interface DocumentRecoveryPublication {
+  readonly generation: string;
+  readonly revision: number;
+  readonly clock: Readonly<Record<string, number>>;
+  readonly abandonedBranch?: boolean;
+}
 /** Snapshot/metadata, journal, outbox, image resources and the durable batch receipt commit atomically.
  * An empty checkpoint payload retains the previous snapshot and appends the journal.
  * A nonempty payload replaces the single opaque blob at its explicit journal cut;
@@ -59,6 +67,11 @@ export interface DocumentCommitBatch {
   readonly journal?: readonly DocumentJournalEntry[];
   /** New resources commit atomically with every referencing journal/outbox record. */
   readonly assets?: readonly DocumentImageAsset[];
+  /** Full native replacement captured after all supplied originals. Retirement is
+   * atomic with this checkpoint and must not run past an unresolved native commit. */
+  readonly recovery?: DocumentRecoveryPublication;
+  readonly removeJournalIds?: readonly string[];
+  readonly removeOutboxIds?: readonly string[];
 }
 export interface DocumentCommitReceipt {
   readonly batchId: string;
