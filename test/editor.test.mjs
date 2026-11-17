@@ -7,7 +7,8 @@ function host(t) {
  const dom=new JSDOM('<div id="editor"></div>',{url:'https://app.example/diagrams/one'});t.after(()=>dom.window.close());
  const container=dom.window.document.getElementById('editor'),calls=[];let context,behavior=()=>null,dispose=async()=>{};
  const mountCanvas=async value=>{context=value;value.emit('ready',{state:state()});const canvas=dom.window.document.createElement('canvas');value.container.append(canvas);
- return {request:async(method,args)=>{calls.push({method,args});return behavior(method,args);},dispose:async()=>{await dispose();canvas.remove();}};};
+ // The canvas host decodes a fresh response for every call, so results never alias fixture state.
+ return {request:async(method,args)=>{calls.push({method,args});return structuredClone(await behavior(method,args));},dispose:async()=>{await dispose();canvas.remove();}};};
  const options={container,assetBaseUrl:'https://assets.example/editor/',startupTimeoutMs:50,disposeTimeoutMs:50};
  return {dom,container,calls,options,get context(){return context;},behavior(fn){behavior=fn;},cleanup(fn){dispose=fn;},
  mount(extra={},privateOptions={}){return createEditorSession({...options,...extra},{runtimeLoader:async()=>({mountCanvas}),...privateOptions});}};
@@ -82,7 +83,7 @@ test('mounts one direct canvas and rejects a second editor without disturbing it
 });
 test('semantic commands are ordered and immutable native events reach subscribers',async t=>{
  const h=host(t),editor=await h.mount(),seen=[];let finish;h.behavior(method=>method==='replaceDocument'?new Promise(resolve=>finish=resolve):state({revision:'new:1'}));
- const first=editor.replaceDocument('raw'),second=editor.getState();await new Promise(setImmediate);assert.equal(h.calls.length,1);finish(null);await first;assert.equal((await second).revision,'new:1');
+ const first=editor.replaceDocument(Uint8Array.of(1)),second=editor.getState();await new Promise(setImmediate);assert.equal(h.calls.length,1);finish(null);await first;assert.equal((await second).revision,'new:1');
  editor.onStateChanged(value=>seen.push(value));h.context.emit('stateChanged',state({revision:'new:2'}));assert.ok(Object.isFrozen(seen.at(-1)));await editor.dispose();
 });
 test('native creation instructions survive state events and reads and clear on retirement',async t=>{
@@ -101,11 +102,11 @@ test('malformed native instructions are rejected at the state boundary',async t=
 });
 test('platform callbacks remain independent while a document command awaits storage',async t=>{
  const h=host(t),editor=await h.mount();h.behavior(async method=>{if(method==='replaceDocument'){await h.context.platform('storage.open');return h.context.platform('storage.read');}});
- assert.equal(await editor.replaceDocument('raw'),null);await editor.dispose();
+ assert.equal(await editor.replaceDocument(Uint8Array.of(1)),null);await editor.dispose();
 });
 test('private composition supplies replication without extending the public handle',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});assert.equal(editor.replication,undefined);assert.equal(editor.sendCommand,undefined);assert.equal(h.context.options.initialEditingEnabled,false);
- h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return method==='replica.readJournal'?{revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:'Ag=='}]}:null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[],snapshotKey:'origin'});await replication.apply([]);await replication.acknowledge([]);
+ h.behavior(method=>{assert.ok(!['replica.read','replica.ack'].includes(method));return method==='replica.readJournal'?{revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:Uint8Array.of(2)}]}:null;});await replication.establish();assert.deepEqual(await replication.read(),{clock:{},outbox:[],snapshotKey:'origin'});await replication.apply([]);await replication.acknowledge([]);
  let changes=0;replication.onChanged(()=>changes++);h.context.emit('stateChanged',state({revision:'next'}));assert.equal(changes,0);
  await h.context.platform('storage.commit',{batch:{batchId:'one',expectedRevision:null,checkpoint:{revision:'r1',payload:new Uint8Array([1]),clock:{author:1},snapshotAfterJournalId:null},journal:[{id:'author:1',payload:new Uint8Array([2])}],outbox:[{id:'author:1',revision:'r1',payload:new Uint8Array([2])}]}});
  assert.equal(changes,1);assert.deepEqual((await replication.read()).clock,{author:1});await replication.acknowledge(['author:1']);assert.deepEqual((await replication.read()).outbox,[]);
@@ -119,7 +120,7 @@ test('startup platform preferences and cache status are retained',async t=>{
 test('private replication snapshots own decoded bytes and capture install/archive inputs before dispatch',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
  assert.equal(editor.installSnapshot,undefined);assert.equal(editor.archive,undefined);
- const nativeSnapshot={payload:'AQID',clock:{author:2},key:'tx2'};
+ const nativeSnapshot={payload:Uint8Array.of(1,2,3),clock:{author:2},key:'tx2'};
  h.behavior(method=>method==='replica.exportSnapshot'?nativeSnapshot:null);
  const exported=await replication.exportSnapshot();
  assert.ok(exported.payload instanceof Uint8Array);assert.deepEqual([...exported.payload],[1,2,3]);
@@ -145,8 +146,8 @@ test('private checkpoint reconciliation stays private and copies native adoption
 });
 test('private replication rejects malformed portable snapshot responses',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
- for(const response of [null,{payload:'!!!',clock:{},key:'cut'},{payload:'AQ==',clock:null,key:'cut'},
-  {payload:'AQ==',clock:{author:-1},key:'cut'},{payload:'AQ==',clock:{},key:42}]) {
+ for(const response of [null,{payload:'AQ==',clock:{},key:'cut'},{payload:Uint8Array.of(1),clock:null,key:'cut'},
+  {payload:Uint8Array.of(1),clock:{author:-1},key:'cut'},{payload:Uint8Array.of(1),clock:{},key:42}]) {
   h.behavior(()=>response);await assert.rejects(replication.exportSnapshot(),{code:'InvalidRuntimeResponse'});
  }
 });
@@ -155,7 +156,7 @@ test('private recovery journal forwards the captured server clock and preserves 
  assert.equal(editor.readJournal,undefined);
  const origin='$origin:0123456789abcdef0123456789abcdef';
  const nativeJournal={revision:'r3',clock:{creator:3,editor:1},journal:[
-  {id:'creator:2',payload:'AP8B'},{id:'editor:1',payload:'BA=='},{id:'creator:3',payload:'BQY='}
+  {id:'creator:2',payload:Uint8Array.of(0,255,1)},{id:'editor:1',payload:Uint8Array.of(4)},{id:'creator:3',payload:Uint8Array.of(5,6)}
  ]};
  const physicalJournal=[
   {id:'creator:3',payload:new Uint8Array([5,6])},{id:'editor:1',payload:new Uint8Array([4])},
@@ -176,7 +177,7 @@ test('private recovery journal forwards the captured server clock and preserves 
  assert.deepEqual((await h.context.platform('storage.journal')).journal,physicalJournal);
  assert.ok(Object.isFrozen(recovered));assert.ok(Object.isFrozen(recovered.clock));
  assert.ok(Object.isFrozen(recovered.journal));assert.ok(Object.isFrozen(recovered.journal[0]));
- nativeJournal.clock.creator=99;nativeJournal.journal[0].payload='Bw==';
+ nativeJournal.clock.creator=99;nativeJournal.journal[0].payload=Uint8Array.of(7);
  assert.equal(recovered.clock.creator,3);assert.deepEqual([...recovered.journal[0].payload],[0,255,1]);
  recovered.journal[1].payload[0]=77;
  assert.deepEqual([...(await replication.readJournal({creator:1})).journal[1].payload],[4]);
@@ -197,15 +198,15 @@ test('private recovery journal rejects invalid server clocks before native dispa
 });
 test('private recovery journal rejects malformed native clocks, records and encoded bytes',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
- const valid={revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:'AQ=='}]};
+ const valid={revision:'r1',clock:{author:1},journal:[{id:'author:1',payload:Uint8Array.of(1)}]};
  for(const response of [null,{...valid,revision:42},{...valid,revision:' '},
   {...valid,clock:null},{...valid,clock:[]},{...valid,clock:new Date()},
   {...valid,clock:new Map()},{...valid,clock:new Uint8Array([1])},{...valid,clock:{author:-1}},
   {...valid,clock:{author:2147483648}},{...valid,clock:{' ':1}},{...valid,clock:{author:1.5}},
   {...valid,clock:{'invalid:author':1}},
   {...valid,journal:null},{...valid,journal:[null]},
-  {...valid,journal:[{id:' ',payload:'AQ=='}]},
-  {...valid,journal:[{id:'author:1',payload:new Uint8Array([1])}]},
+  {...valid,journal:[{id:' ',payload:Uint8Array.of(1)}]},
+  {...valid,journal:[{id:'author:1',payload:'AQ=='}]},
   {...valid,journal:[{id:'author:1',payload:'!!!'}]},
   {...valid,journal:[...valid.journal,...valid.journal]}]) {
   h.behavior(()=>response);await assert.rejects(replication.readJournal(),{code:'InvalidRuntimeResponse'});
@@ -223,17 +224,17 @@ test('stale notifications cannot affect a reopened document',async t=>{
  const h=host(t),first=await h.mount(),old=h.context;await first.dispose();const second=await h.mount();let seen;second.onStateChanged(value=>seen=value);old.emit('stateChanged',state({revision:'old'}));assert.equal(seen.revision,null);await second.dispose();
 });
 test('clipboard stays in JS and semantic payloads remain opaque',async t=>{
- const h=host(t),payload={version:2,data:'AQID'};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
+ const h=host(t),payload={version:2,data:Uint8Array.of(1,2,3)};h.behavior(method=>method==='copySelection'?payload:null);const editor=await h.mount();await editor.copyToClipboard({session:'s',version:1},{system:false});await editor.pasteFromClipboard({x:10,y:20},{source:'internal'});assert.deepEqual(h.calls.at(-1),{method:'pasteSelection',args:{payload,position:{x:10,y:20}}});await editor.dispose();
 });
 test('image insertion shares the native document queue and freezes placement',async t=>{
  const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());let finish;
  const selection={token:{session:'s',version:2},items:[]};
  h.behavior(method=>method==='undo'?new Promise(resolve=>finish=resolve):selection);
- const edit=editor.undo(),position={x:4,y:8},paste=editor.pasteImage('AQID',position);position.x=90;
+ const edit=editor.undo(),position={x:4,y:8},paste=editor.pasteImage(Uint8Array.of(1,2,3),position);position.x=90;
  await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['undo']);
  finish(null);await edit;const result=await paste;assert.deepEqual(result,selection);assert.ok(Object.isFrozen(result));
- assert.deepEqual(h.calls.at(-1),{method:'pasteImage',args:{data:'AQID',position:{x:4,y:8}}});
- await editor.dispose();await assert.rejects(editor.pasteImage('AQID',{x:0,y:0}),{code:'EditorDisposed'});
+ assert.deepEqual(h.calls.at(-1),{method:'pasteImage',args:{data:Uint8Array.of(1,2,3),position:{x:4,y:8}}});
+ await editor.dispose();await assert.rejects(editor.pasteImage(Uint8Array.of(1,2,3),{x:0,y:0}),{code:'EditorDisposed'});
 });
 test('clipboard is retired before blocked native disposal completes',async t=>{
  const h=host(t);let release,access=0;
@@ -252,7 +253,7 @@ test('a pending copy provider cannot supply bytes after disposal begins',async t
  Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{write(items){provider=items[0].data['text/plain'];return provider.then(()=>{});}}});
  h.behavior(()=>new Promise(resolve=>finish=resolve));const editor=await h.mount();
  const copying=editor.copyToClipboard({});void copying.catch(()=>{});await new Promise(setImmediate);
- const closing=editor.dispose();finish({version:2,data:'AQID'});
+ const closing=editor.dispose();finish({version:2,data:Uint8Array.of(1,2,3)});
  await assert.rejects(copying,{code:'EditorDisposed'});await assert.rejects(provider,{code:'EditorDisposed'});await closing;
 });
 test('a pending paste cannot dispatch into a disposed or recreated editor',async t=>{
@@ -271,7 +272,7 @@ test('interaction methods dispatch semantic intent without native keyboard event
  await assert.rejects(editor.updateInteractionModifiers({alt:'true',shift:false}),TypeError);
 });
 test('clipboard read starts before resolving native pointer placement',async t=>{
- const h=host(t),payload={version:2,data:'AQID'},order=[];
+ const h=host(t),payload={version:2,data:Uint8Array.of(1,2,3)},order=[];
  Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{readText(){order.push('system-read');return Promise.resolve('drawmotive/selection:2\nAQID');}}});
  h.behavior(method=>{order.push(method);return method==='getPointerPosition'?{x:12,y:34}:null;});
  const editor=await h.mount();t.after(()=>editor.dispose());
@@ -284,7 +285,7 @@ test('obsolete frame and transport options are rejected',async t=>{
 });
 test('native semantic errors use the exported structured error class without losing the editor',async t=>{
  const {EditorError}=await import('../src/editor-session.js');const h=host(t),editor=await h.mount();h.behavior(()=>{throw Object.assign(new Error('Invalid diagram'),{code:'InvalidDocument'});});
- await assert.rejects(editor.replaceDocument('bad'),error=>error instanceof EditorError&&error.code==='InvalidDocument');h.behavior(()=>state());assert.equal((await editor.getState()).health,'healthy');await editor.dispose();
+ await assert.rejects(editor.replaceDocument(Uint8Array.of(0)),error=>error instanceof EditorError&&error.code==='InvalidDocument');h.behavior(()=>state());assert.equal((await editor.getState()).health,'healthy');await editor.dispose();
 });
 test('core canvas positions a static container and restores it after confirmed disposal',async t=>{
  const h=host(t);h.container.style.position='static';const editor=await h.mount();assert.equal(h.container.style.position,'relative');await editor.dispose();assert.equal(h.container.style.position,'static');
@@ -342,18 +343,18 @@ test('native unsupported image conversion stays inside one queued insertion and 
  h.dom.window.HTMLCanvasElement.prototype.toBlob=function(done,type,quality){assert.equal(quality,type==='image/jpeg'?0.8:undefined);done(new Blob([type==='image/png'?Uint8Array.of(1,2,3):Uint8Array.of(4)],{type}));};
  const editor=await h.mount();t.after(()=>editor.dispose());let pastes=0;
  h.behavior(method=>{if(method==='pasteImage'&&++pastes===1)throw Object.assign(new Error('Decoder unavailable'),{code:'UnsupportedImageFormat'});return null;});
- const position={x:5,y:7},pending=editor.pasteImage('CQgH',position);position.x=90;const undo=editor.undo();
+ const position={x:5,y:7},pending=editor.pasteImage(Uint8Array.of(9,8,7),position);position.x=90;const undo=editor.undo();
  await new Promise(setImmediate);assert.deepEqual(h.calls.map(call=>call.method),['pasteImage']);
  convert({width:8,height:4,close(){closed=true;}});await pending;await undo;
- assert.deepEqual(h.calls.map(call=>call.method),['pasteImage','pasteImage','undo']);assert.deepEqual(h.calls[1].args,{data:'BA==',position:{x:5,y:7}});assert.equal(closed,true);
+ assert.deepEqual(h.calls.map(call=>call.method),['pasteImage','pasteImage','undo']);assert.deepEqual(h.calls[1].args,{data:Uint8Array.of(4),position:{x:5,y:7}});assert.equal(closed,true);
 });
 test('supported native bytes and malformed native images never start browser conversion',async t=>{
  const h=host(t);h.dom.window.createImageBitmap=()=>assert.fail('Only an unsupported native decoder permits conversion');const editor=await h.mount();t.after(()=>editor.dispose());
- await editor.pasteImage('AQID',{x:1,y:2});assert.equal(h.calls[0].args.data,'AQID');
- h.behavior(()=>{throw Object.assign(new Error('Malformed raster'),{code:'InvalidArgument'});});await assert.rejects(editor.pasteImage('BAUG',{x:1,y:2}),{code:'InvalidArgument'});
+ await editor.pasteImage(Uint8Array.of(1,2,3),{x:1,y:2});assert.deepEqual(h.calls[0].args.data,Uint8Array.of(1,2,3));
+ h.behavior(()=>{throw Object.assign(new Error('Malformed raster'),{code:'InvalidArgument'});});await assert.rejects(editor.pasteImage(Uint8Array.of(4,5,6),{x:1,y:2}),{code:'InvalidArgument'});
 });
 test('oversized image source rejects before native dispatch and respects disposal',async t=>{
- const h=host(t),editor=await h.mount(),data='A'.repeat(Math.ceil(16*1024*1024/3)*4+4);
+ const h=host(t),editor=await h.mount(),data=new Uint8Array(16*1024*1024+1);
  await assert.rejects(editor.pasteImage(data,{x:1,y:2}),{code:'InvalidArgument'});assert.equal(h.calls.length,0);
  await editor.dispose();await assert.rejects(editor.pasteImage(data,{x:1,y:2}),{code:'EditorDisposed'});
 });
@@ -362,8 +363,16 @@ test('disposal drains entered browser fallback and prevents the native retry',as
  h.dom.window.createImageBitmap=()=>new Promise(resolve=>convert=resolve);
  const editor=await h.mount({disposeTimeoutMs:1000});h.cleanup(async()=>{cleaned=true;});
  h.behavior(()=>{throw Object.assign(new Error('Decoder unavailable'),{code:'UnsupportedImageFormat'});});
- const pending=editor.pasteImage('AQID',{x:1,y:2});void pending.catch(()=>{});await new Promise(setImmediate);
+ const pending=editor.pasteImage(Uint8Array.of(1,2,3),{x:1,y:2});void pending.catch(()=>{});await new Promise(setImmediate);
  const disposing=editor.dispose();await new Promise(setImmediate);assert.equal(cleaned,false);
  convert({width:8,height:4,close(){closed=true;}});await assert.rejects(pending,{code:'EditorDisposed'});await disposing;
  assert.equal(closed,true);assert.equal(cleaned,true);assert.equal(h.calls.length,1);
+});
+test('binary editor inputs accept only Uint8Array bytes, not base64 text',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ await assert.rejects(editor.replaceDocument('AQID'),TypeError);
+ await assert.rejects(editor.replacePngDocument('AQID'),TypeError);
+ await assert.rejects(editor.pasteImage('AQID',{x:1,y:2}),TypeError);
+ await editor.replacePngDocument(Uint8Array.of(137,80));
+ assert.deepEqual(h.calls,[{method:'replacePngDocument',args:{png:Uint8Array.of(137,80)}}]);
 });

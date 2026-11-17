@@ -44,25 +44,21 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function pngBlob(base64) {
-  return new Blob([Uint8Array.from(atob(base64), byte => byte.charCodeAt(0))], { type: 'image/png' });
-}
-
 document.querySelector('#generate').addEventListener('click', () => {
   void run(async () => { await editor.replaceTextGraph(source.value); await editor.fitViewport(); }, 'Ready to edit');
 });
 document.querySelector('#download').addEventListener('click', () => {
   const dark = pngAppearance.value === 'dark';
-  void run(async () => download(pngBlob((await editor.exportSnapshot({ formats: ['png'], render: { dark } })).png.base64), 'diagram.png'), 'PNG downloaded');
+  void run(async () => download(new Blob([(await editor.exportSnapshot({ formats: ['png'], render: { dark } })).png.bytes], { type: 'image/png' }), 'diagram.png'), 'PNG downloaded');
 });
 document.querySelector('#save').addEventListener('click', () => {
-  void run(async () => download(new Blob([(await editor.exportSnapshot({ formats: ['raw'] })).raw], { type: 'text/plain' }), 'diagram.drawmotive'), 'Document saved');
+  void run(async () => download(new Blob([(await editor.exportSnapshot({ formats: ['raw'] })).raw], { type: 'application/octet-stream' }), 'diagram.drawmotive'), 'Document saved');
 });
 document.querySelector('#open').addEventListener('click', () => file.click());
 file.addEventListener('change', () => {
   const selected = file.files[0];
   file.value = '';
-  if (selected) void run(async () => { await editor.replaceDocument(await selected.text()); await editor.fitViewport(); }, 'Document opened');
+  if (selected) void run(async () => { await editor.replaceDocument(new Uint8Array(await selected.arrayBuffer())); await editor.fitViewport(); }, 'Document opened');
 });
 window.addEventListener('pagehide', event => {
   if (event.persisted) return;

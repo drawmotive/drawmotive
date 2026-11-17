@@ -44,8 +44,10 @@ export interface SnapshotOptions {
 }
 export interface EditorSnapshot {
   readonly revision: string;
-  readonly raw?: string | null;
-  readonly png?: { readonly base64: string; readonly width: number; readonly height: number; readonly scale: number; readonly displayWidth: number; readonly displayHeight: number } | null;
+  /** Opaque editable document bytes. */
+  readonly raw?: Uint8Array | null;
+  /** Complete PNG file bytes, including the embedded document when requested. */
+  readonly png?: { readonly bytes: Uint8Array; readonly width: number; readonly height: number; readonly scale: number; readonly displayWidth: number; readonly displayHeight: number } | null;
   readonly svg?: string | null;
 }
 export interface ViewportOptions { padding?: number; minScale?: number; maxScale?: number; }
@@ -98,7 +100,7 @@ export interface EditorSelectionSnapshot {
   readonly anchor: EditorScreenBounds | null;
 }
 /** Opaque immutable MemoryPack graph; JS never mutates the graph or remaps IDs. */
-export interface EditorSelectionPayload { readonly version: 2; readonly data: string; readonly png?: string | null; }
+export interface EditorSelectionPayload { readonly version: 2; readonly data: Uint8Array; readonly png?: Uint8Array | null; }
 export interface EditorSelectionCopyOptions { png?: boolean; }
 export interface EditorClipboardCopyOptions { system?:boolean; }
 export interface EditorClipboardCopyResult { readonly internal:true;readonly system:'written'|'denied'|'unavailable'|'skipped'; }
@@ -109,8 +111,10 @@ export interface EditorFontCacheStatus { readonly path: string; readonly cache: 
 export interface EditorInstance {
   readonly textEditing: TextEditingMode;
   readonly lifecycle: 'ready' | 'disposing' | 'disposed';
-  replaceDocument(raw: string): Promise<void>;
-  replacePngDocument(base64: string): Promise<void>;
+  /** Accepts the opaque bytes returned as `EditorSnapshot.raw`. */
+  replaceDocument(raw: Uint8Array): Promise<void>;
+  /** Accepts complete PNG file bytes that embed an editable document. */
+  replacePngDocument(png: Uint8Array): Promise<void>;
   replaceTextGraph(source: string): Promise<void>;
   clearDocument(): Promise<void>;
   /** Explicitly retries the retained identical storage batch after an unknown receipt. */
@@ -148,8 +152,8 @@ export interface EditorInstance {
   /** Optional PNG is rendered from the same native selection capture as the graph. */
   copySelection(token: EditorSelectionToken, options?: EditorSelectionCopyOptions): Promise<EditorSelectionPayload>;
   pasteSelection(payload: EditorSelectionPayload, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
-  /** Inserts Base64 encoded image bytes as a self-contained image at a drawing/model position. */
-  pasteImage(data: string, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
+  /** Inserts encoded image file bytes as a self-contained image at a drawing/model position. */
+  pasteImage(data: Uint8Array, position: { x: number; y: number }): Promise<EditorSelectionSnapshot>;
   copyToClipboard(token:EditorSelectionToken,options?:EditorClipboardCopyOptions):Promise<EditorClipboardCopyResult>;
   /** Omitted position uses the native canvas pointer in drawing/model coordinates. */
   pasteFromClipboard(position?:{x:number;y:number},options?:EditorClipboardPasteOptions):Promise<EditorSelectionSnapshot>;

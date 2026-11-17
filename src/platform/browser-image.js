@@ -1,13 +1,6 @@
 import { EditorError } from '../errors.js';
 
 export const MAX_IMAGE_INPUT_BYTES = 16 * 1024 * 1024;
-/** Bound each argument list while preserving encoded source bytes exactly. */
-export function imageBase64(bytes, encode = btoa) {
-  const chunks = [];
-  for (let offset = 0; offset < bytes.length; offset += 32768)
-    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
-  return encode(chunks.join(''));
-}
 const unsupported = cause => new EditorError('UnsupportedImageFormat', 'Neither the native engine nor this browser can decode this image format.', { cause });
 const xmlSpace = value => value === ' ' || value === '\t' || value === '\r' || value === '\n';
 
@@ -57,7 +50,7 @@ export async function convertUnsupportedImage(data, type, { window, active }) {
   if (!window?.document || !window.Blob) throw unsupported();
   let bitmap, image, imageUrl, canvas;
   try {
-    const bytes = Uint8Array.from(window.atob(data), value => value.charCodeAt(0));
+    const bytes = data;
     if (!bytes.length || bytes.length > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
     // Public pasteImage has no MIME parameter. Give browser-only SVG decoding its
     // required media type when the caller supplied self-describing XML bytes.
@@ -93,7 +86,7 @@ export async function convertUnsupportedImage(data, type, { window, active }) {
     if (!selected) throw unsupported();
     if (selected.size > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The converted image exceeds the supported input size.');
     const result = new Uint8Array(await selected.arrayBuffer()); active();
-    return imageBase64(result, value => window.btoa(value));
+    return result;
   } catch (error) {
     active();
     if (error instanceof EditorError) throw error;

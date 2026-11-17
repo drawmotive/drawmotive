@@ -1,4 +1,4 @@
-import { EditorError, fromErrorDescriptor, immutableSnapshot } from './errors.js';
+import { EditorError, fromErrorDescriptor, immutableSnapshot, isBytes } from './errors.js';
 import { createPlatformServices } from './platform/services.js';
 import { createPreferenceStore, validatePreferences } from './platform/preferences.js';
 import { createEditorClipboard } from './platform/clipboard.js';
@@ -16,6 +16,11 @@ function boolean(value, name) {
 }
 function text(value, name) {
   if (typeof value !== 'string') throw new TypeError(name + ' must be a string');
+  return value;
+}
+/** Binary inputs stay bytes end to end; base64 text is not an accepted encoding. */
+function bytes(value, name) {
+  if (!isBytes(value)) throw new TypeError(name + ' must be a Uint8Array');
   return value;
 }
 function positive(value, name, zero = false) {
@@ -65,27 +70,21 @@ function replicationClock(value) {
       Number.isInteger(sequence) && sequence >= 0 && sequence <= 2147483647);
 }
 /** The private transport receives portable native bytes, never a live scene or replica identity. */
-function portableSnapshot(value, decode) {
-  if (!record(value) || typeof value.payload !== 'string' || typeof value.key !== 'string' || !value.key.trim() ||
+function portableSnapshot(value) {
+  if (!record(value) || !isBytes(value.payload) || typeof value.key !== 'string' || !value.key.trim() ||
       !replicationClock(value.clock))
     throw new EditorError('InvalidRuntimeResponse', 'Invalid portable replication snapshot');
-  try {
-    const bytes = decode(value.payload);
-    return Object.freeze({ payload: Uint8Array.from(bytes, character => character.charCodeAt(0)), clock: immutableSnapshot(value.clock), key: value.key });
-  } catch (error) { throw new EditorError('InvalidRuntimeResponse', 'Invalid portable replication snapshot bytes', { cause: error }); }
+  return Object.freeze({ payload: value.payload, clock: value.clock, key: value.key });
 }
 /** Native proves suffix completeness and causal order; this boundary only owns and validates its DTO bytes. */
-function recoveryJournal(value, decode) {
+function recoveryJournal(value) {
   if (!record(value) || !(value.revision === null || typeof value.revision === 'string' && value.revision.trim()) ||
       !replicationClock(value.clock) || !Array.isArray(value.journal) ||
-      value.journal.some(entry => !record(entry) || typeof entry.id !== 'string' || !entry.id.trim() || typeof entry.payload !== 'string') ||
+      value.journal.some(entry => !record(entry) || typeof entry.id !== 'string' || !entry.id.trim() || !isBytes(entry.payload)) ||
       new Set(value.journal.map(entry => entry.id)).size !== value.journal.length)
     throw new EditorError('InvalidRuntimeResponse', 'Invalid replication recovery journal');
-  try {
-    return Object.freeze({ revision: value.revision, clock: immutableSnapshot(value.clock),
-      journal: Object.freeze(value.journal.map(entry => Object.freeze({ id: entry.id,
-        payload: Uint8Array.from(decode(entry.payload), character => character.charCodeAt(0)) }))) });
-  } catch (error) { throw new EditorError('InvalidRuntimeResponse', 'Invalid replication recovery journal bytes', { cause: error }); }
+  return Object.freeze({ revision: value.revision, clock: value.clock,
+    journal: Object.freeze(value.journal.map(entry => Object.freeze({ id: entry.id, payload: entry.payload }))) });
 }
 
 
@@ -175,7 +174,8 @@ export async function createEditorSession(options = {}, privateOptions) {
     const result = queue.then(async () => {
       try { return await native.request(method,copy); }
       catch (error) { if (!recover) throw error; return recover(error,copy); }
-    }).then(immutableSnapshot).catch(error => {
+      // Native results are freshly decoded and exclusively owned here, so their buffers move instead of being copied.
+    }).then(value => immutableSnapshot(value, { transfer: true })).catch(error => {
       if (error instanceof EditorError) throw error;
       throw new EditorError(error?.code ?? 'RuntimeError',error?.message ?? String(error),{cause:error});
     });
@@ -184,7 +184,8 @@ export async function createEditorSession(options = {}, privateOptions) {
   }
   function pasteImage(data, position, type) {
     if (lifecycle !== 'ready') return Promise.reject(disposedError());
-    if (typeof data === 'string' && data.length > Math.ceil(MAX_IMAGE_INPUT_BYTES / 3) * 4)
+    if (!isBytes(data)) return Promise.reject(new TypeError('Image data must be a Uint8Array'));
+    if (data.byteLength > MAX_IMAGE_INPUT_BYTES)
       return Promise.reject(new EditorError('InvalidArgument', 'The image input exceeds the supported size.'));
     return request('pasteImage', { data, position }, async (error, copy) => {
       if (error?.code !== 'UnsupportedImageFormat') throw error;
@@ -204,8 +205,8 @@ export async function createEditorSession(options = {}, privateOptions) {
   };
   const instance = Object.freeze({
     get lifecycle() { return lifecycle; }, get textEditing() { return textEditing; },
-    replaceDocument(raw) { return invoke('replaceDocument', () => ({ raw: text(raw,'Document') })); },
-    replacePngDocument(base64) { return invoke('replacePngDocument', () => ({ base64: text(base64,'PNG document') })); },
+    replaceDocument(raw) { return invoke('replaceDocument', () => ({ raw: bytes(raw,'Document') })); },
+    replacePngDocument(png) { return invoke('replacePngDocument', () => ({ png: bytes(png,'PNG document') })); },
     replaceTextGraph(source) { return invoke('replaceTextGraph', () => ({ source: text(source,'TextGraph source') })); },
     clearDocument() { return request('clearDocument'); }, exportSnapshot(value) { return invoke('exportSnapshot', () => snapshotOptions(value)); },
     retryPersistence() { return request('retryPersistence'); },
@@ -311,16 +312,16 @@ export async function createEditorSession(options = {}, privateOptions) {
     },
     readAssets: hashes => {
       if (lifecycle !== 'ready') return Promise.reject(disposedError());
-      try { return platform.request('storage.assets.read', { hashes:copyAssetHashes(hashes) }).then(immutableSnapshot); }
+      try { return platform.request('storage.assets.read', { hashes:copyAssetHashes(hashes) }).then(value => immutableSnapshot(value, { transfer: true })); }
       catch(error) { return Promise.reject(error); }
     },
     installAssets: assets => request('replica.installAssets', { assets }),
     read: platform.replication.read,
     readJournal: async (serverClock = {}) => {
       if (!replicationClock(serverClock)) throw new TypeError('serverClock must contain valid author identities and nonnegative 32-bit sequences');
-      return recoveryJournal(await request('replica.readJournal', { clock: serverClock }), value => hostWindow.atob(value));
+      return recoveryJournal(await request('replica.readJournal', { clock: serverClock }));
     },
-    exportSnapshot: async () => portableSnapshot(await request('replica.exportSnapshot'), value => hostWindow.atob(value)),
+    exportSnapshot: async () => portableSnapshot(await request('replica.exportSnapshot')),
     installSnapshot: (payload, expectedClock) => request('replica.installSnapshot', { payload,
       ...(expectedClock === undefined ? {} : { expectedClock }) }),
     reconcile: (payload, expectedClock, generation, revision, acceptedClock) => request('replica.reconcile', { payload, expectedClock, generation, revision,

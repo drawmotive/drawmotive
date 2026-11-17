@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createWorkerChannel, serveWorkerRequests } from '../src/platform/worker-channel.js';
-import { EditorError, fromErrorDescriptor, immutableSnapshot, toErrorDescriptor } from '../src/errors.js';
+import { EditorError, exclusiveBuffers, fromErrorDescriptor, immutableSnapshot, toErrorDescriptor } from '../src/errors.js';
 
 class Endpoint extends EventTarget {
   sent = [];
-  postMessage(value) {
-    const copy = structuredClone(value);
-    this.sent.push(copy);
+  transfers = [];
+  postMessage(value, transfer = []) {
+    // Record an independent copy: the delivered value may later be transferred onward.
+    this.sent.push(structuredClone(value));
+    this.transfers.push(transfer);
+    const copy = structuredClone(value, { transfer });
     queueMicrotask(() => this.peer.dispatchEvent(new MessageEvent('message', { data: copy })));
   }
 }
@@ -28,6 +31,35 @@ test('dedicated Workers use only a request ID, method and structured args', asyn
   assert.deepEqual(await channel.request('echo', { bytes }), { bytes });
   assert.deepEqual(worker.sent[1], { id: 2, method: 'echo', args: { bytes } });
   assert.deepEqual(Object.keys(worker.sent[0]), ['id', 'method', 'args']);
+});
+
+test('Worker results move their exclusively owned buffers instead of cloning them', async t => {
+  let produced;
+  const { channel, scope } = await pair(t, { read: () => (produced = { payload: new Uint8Array([1, 2, 3]) }) });
+  const result = await channel.request('read');
+  assert.deepEqual([...result.payload], [1, 2, 3]);
+  assert.equal(produced.payload.byteLength, 0, 'the Worker no longer owns the moved bytes');
+  assert.equal(scope.transfers.at(-1).length, 1);
+});
+
+test('argument buffers move only when the caller gives up ownership', async t => {
+  const { channel, worker } = await pair(t, { write: ({ bytes }) => bytes.length });
+  const kept = new Uint8Array([1, 2]);
+  assert.equal(await channel.request('write', { bytes: kept }), 2);
+  assert.equal(kept.byteLength, 2);
+  const moved = new Uint8Array([1, 2]);
+  assert.equal(await channel.request('write', { bytes: moved }, { transfer: true }), 2);
+  assert.equal(moved.byteLength, 0);
+  assert.equal(worker.transfers.at(-1).length, 1);
+});
+
+test('views into larger or shared memory are never detached', () => {
+  const heap = new ArrayBuffer(16);
+  const whole = new Uint8Array(4);
+  const value = { partial: new Uint8Array(heap, 4, 4), whole, again: whole, nested: [{ whole }],
+    shared: new Uint8Array(new SharedArrayBuffer(4)), empty: new Uint8Array() };
+  value.self = value;
+  assert.deepEqual(exclusiveBuffers(value), [whole.buffer]);
 });
 
 test('document Worker handlers execute in order and survive a rejected request', async t => {
@@ -105,4 +137,14 @@ test('snapshots reject shared memory including non-enumerable Error causes', () 
   const shared = new SharedArrayBuffer(8);
   for (const value of [shared, new Uint8Array(shared), { nested: shared }, new Error('shared', { cause: shared })])
     assert.throws(() => immutableSnapshot(value), TypeError);
+});
+test('owned snapshots move whole buffers while ordinary snapshots and partial views copy', () => {
+  const argument = Uint8Array.of(1, 2);
+  immutableSnapshot({ argument });
+  assert.equal(argument.byteLength, 2);
+  const owned = Uint8Array.of(3, 4), heap = new Uint8Array(new ArrayBuffer(8), 2, 2);
+  const moved = immutableSnapshot({ owned, heap }, { transfer: true });
+  assert.equal(owned.byteLength, 0);
+  assert.deepEqual([...moved.owned], [3, 4]);
+  assert.equal(heap.byteLength, 2, 'a view into larger memory is never detached');
 });

@@ -152,8 +152,8 @@ Unless stated otherwise, commands return promises. Await dependent operations. R
 
 | Function | Result and semantics |
 | --- | --- |
-| `replaceDocument(raw: string)` | Validates an editable base64 document, replaces content and resets selection/history |
-| `replacePngDocument(base64: string)` | Opens a PNG containing an embedded editable document; pass bare base64, not a data URL |
+| `replaceDocument(raw: Uint8Array)` | Validates editable document bytes, replaces content and resets selection/history |
+| `replacePngDocument(png: Uint8Array)` | Opens complete PNG file bytes containing an embedded editable document |
 | `replaceTextGraph(source: string)` | Compiles TextGraph into a replacement document |
 | `clearDocument()` | Replaces with an empty document and resets history |
 | `retryPersistence()` | Explicitly confirms/retries a retained identical local storage batch after an uncertain receipt; does not repeat the edit |
@@ -187,9 +187,9 @@ const snapshot = await editor.exportSnapshot({
 | `render.roundSvgNumbers` | Optional boolean controlling SVG number rounding |
 | `render.dark` | Optional boolean: `true` renders the native dark palette, `false` renders light; omission follows the editor palette. Affects PNG/SVG only and preserves document, history and preferences. |
 
-PNG options require `png` in `formats`. Raw-only export does not render. The result always includes `revision`; requested outputs are `raw` (base64 string), `svg` (string), and `png` (`{ base64, width, height, scale, displayWidth, displayHeight }`). Unrequested outputs may be null or absent. PNG dimensions are pixels; display dimensions are logical dimensions. Use returned scale/dimensions rather than assuming an uncapped render size.
+PNG options require `png` in `formats`. Raw-only export does not render. The result always includes `revision`; requested outputs are `raw` (`Uint8Array`), `svg` (string), and `png` (`{ bytes, width, height, scale, displayWidth, displayHeight }`, where `bytes` is the complete PNG file as a `Uint8Array`). Unrequested outputs may be null or absent. PNG dimensions are pixels; display dimensions are logical dimensions. Use returned scale/dimensions rather than assuming an uncapped render size.
 
-For download, prepend `data:image/png;base64,` to `snapshot.png.base64`. For reopening, pass `snapshot.png.base64` to `replacePngDocument`. Ordinary PNG images without the embedded document are rejected; this is not an image-placement API. Hosts write the complete exported bytes without implementing PNG metadata chunks themselves.
+For download, wrap `snapshot.png.bytes` in a `Blob` of type `image/png`. For reopening, pass `snapshot.png.bytes` to `replacePngDocument`. Ordinary PNG images without the embedded document are rejected; this is not an image-placement API. Hosts write the complete exported bytes without implementing PNG metadata chunks themselves.
 
 `fitViewport({ padding?, minScale?, maxScale? })` defaults to `60`, `0.2`, `1`; padding must be nonnegative and scales positive with `minScale <= maxScale`. It adjusts only the view.
 
@@ -230,9 +230,9 @@ The document API exposes generated values from scene metadata and every live gra
 | `deleteSelection(token)` | Deletes the validated selection through the engine |
 | `beginTextEditing(targetItemId?)` | Begins text input for an explicit item or the selected target |
 | `applyText(token, targetItemId, content)` | Commits host-supplied text without entering inline input |
-| `copySelection(token)` | Returns opaque `{ version: 2, data: string }` |
+| `copySelection(token)` | Returns opaque `{ version: 2, data: Uint8Array }` |
 | `pasteSelection(payload, { x, y })` | Clones/remaps the opaque graph through the engine; returns the pasted selection |
-| `pasteImage(data, { x, y })` | Inserts Base64 encoded image bytes as a self-contained image; returns the pasted selection |
+| `pasteImage(data, { x, y })` | Inserts encoded image file bytes (`Uint8Array`) as a self-contained image; returns the pasted selection |
 
 Selection transfer payloads use version `2`, and system clipboard text uses the `drawmotive/selection:2` envelope. Version `1` payloads and envelopes are rejected. The selection token version is an independent counter.
 
@@ -395,7 +395,7 @@ Copy returns `{ internal: true, system: 'written' \| 'denied' \| 'unavailable' \
 
 Where `navigator.clipboard.read()` is available, paste reads rich items and prefers a valid versioned DrawMotive graph over accompanying pixels, including a graph in a different item. Malformed or unsupported graph envelopes reject rather than flatten into an image. Otherwise, external `image/*` bytes become self-contained image objects, even when accompanied by unrelated text. Image representations retain the provider's advertised order, so an earlier JPEG is preserved when a PNG alternative is also available. Native decoding determines supported formats. Browsers exposing only `readText()` retain graph-only paste.
 
-Hosts can also call `pasteImage(base64ImageBytes, { x, y })` without accessing the system clipboard. Pass the encoded bytes without a data-URL prefix. Native decoding validates image data before changing selection or history; image insertion uses the document queue and returns `EditorSelectionSnapshot`. The image begins at its intrinsic pixel dimensions in drawing/model coordinates and supports selection, movement, resizing, rotation, Undo, persistence and graph copy. Resizing the drawing object retains its stored pixels.
+Hosts can also call `pasteImage(imageBytes, { x, y })` without accessing the system clipboard. Pass the encoded image file as a `Uint8Array`. Native decoding validates image data before changing selection or history; image insertion uses the document queue and returns `EditorSelectionSnapshot`. The image begins at its intrinsic pixel dimensions in drawing/model coordinates and supports selection, movement, resizing, rotation, Undo, persistence and graph copy. Resizing the drawing object retains its stored pixels.
 
 Native insertion preserves the exact original encoded bytes for every supported format, including JPEG, PNG and WebP, when they fit the 4,000,000-byte resource limit. Only oversized inputs are resized; JPEG encoding uses quality 80. Source input is limited to 16 MiB, 16384 pixels per side and 16777216 total pixels. An unavailable native decoder reports `UnsupportedImageFormat`; only that error permits browser decoding and conversion to the smaller of PNG and JPEG at quality 0.8. The browser tries bitmap decoding, then an Image element where needed for SVG. If neither browser decoder supports the source, paste rejects with `UnsupportedImageFormat`. Malformed native-recognized data never enters browser conversion. Conversion and native retry remain in the same queued operation with the original placement.
 
@@ -423,7 +423,7 @@ Here `copyButton`, `pasteButton` and `reportError` belong to the host. The helpe
 
 Each editor keeps its own opaque internal copy in JS. Paste snapshots that fallback when invoked; a newer copy cannot replace an earlier pending paste. When no position is supplied, paste starts system access first and immediately requests the native model-space pointer position, preserving placement while permission handling is pending. Disposal immediately clears and retires the clipboard, including both deferred MIME providers and pending pastes. The C# transfer service retains no clipboard buffer; it freezes the closed graph and displayed line geometry into bytes, then remaps identities and applies placement and transactions on insertion.
 
-Where `ClipboardItem` is supported, system copy writes one item with `image/png` and `text/plain`. Other applications can consume the PNG; DrawMotive decodes the versioned graph envelope from the text representation to retain editable objects, labels and connections. Both formats come from one native capture of the selected graph, not a whole-document screenshot. Large selection images are proportionally reduced to fit the native raster budget; graph data retains the full geometry. `copySelection(token, { png: true })` also exposes that PNG companion as base64 for custom hosts. Internal-only copies skip raster rendering. The older `writeText` fallback carries graph data alone.
+Where `ClipboardItem` is supported, system copy writes one item with `image/png` and `text/plain`. Other applications can consume the PNG; DrawMotive decodes the versioned graph envelope from the text representation to retain editable objects, labels and connections. Both formats come from one native capture of the selected graph, not a whole-document screenshot. Large selection images are proportionally reduced to fit the native raster budget; graph data retains the full geometry. `copySelection(token, { png: true })` also exposes that PNG companion as bytes for custom hosts. Only the system clipboard text envelope encodes the graph bytes as base64, because other applications exchange it as text. Internal-only copies skip raster rendering. The older `writeText` fallback carries graph data alone.
 
 ## State and events
 

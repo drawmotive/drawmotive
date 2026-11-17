@@ -101,7 +101,7 @@ unsubscribe();
 await editor.dispose();
 ```
 
-Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque base64 editable document, not TextGraph source. The default memory policy is temporary. Persistent mode requires an explicit namespace and documentId; all IndexedDB access runs in a Dedicated Worker, and disposal preserves that document.
+Creation resolves after the configured empty scene and storage are ready. Replacement and fitting are separate operations. `raw` is an opaque editable document as a `Uint8Array`, not TextGraph source. The default memory policy is temporary. Persistent mode requires an explicit namespace and documentId; all IndexedDB access runs in a Dedicated Worker, and disposal preserves that document.
 
 TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to the saved document and do not rewrite TextGraph. Calling `replaceTextGraph()` again creates a replacement document; it does not merge source changes with earlier canvas edits.
 
@@ -111,7 +111,7 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 | --- | --- |
 | `createEditor(options)` | Ready isolated instance |
 | `replaceDocument(raw)` | Validates and replaces; resets selection/history |
-| `replacePngDocument(base64)` | Validates a PNG with an embedded editable document, then replaces |
+| `replacePngDocument(png)` | Validates complete PNG file bytes with an embedded editable document, then replaces |
 | `replaceTextGraph(source)` / `clearDocument()` | Establishes a new document |
 | `exportSnapshot({ formats, render?, png? })` | Requested formats from one revision |
 | `fitViewport({ padding?, minScale?, maxScale? })` | Display only; defaults: 60, 0.2, 1 |
@@ -121,7 +121,7 @@ TextGraph to canvas is intentionally a one-way workflow. Canvas edits belong to 
 | `dispose()` | Releases this instance and its writer lease; persistent documents remain |
 | `copyToClipboard(token, { system? })` | Copies an opaque graph; reports system success separately from the internal copy |
 | `pasteFromClipboard(position, { source? })` | Pastes a DrawMotive graph or external image; source is `auto`, `system` or `internal` |
-| `pasteImage(data, { x, y })` | Inserts Base64 encoded image bytes as a self-contained, scalable image through the engine |
+| `pasteImage(data, { x, y })` | Inserts encoded image file bytes (`Uint8Array`) as a self-contained, scalable image through the engine |
 | `onDisposed(listener)` | Releases host UI on disposal or forced page closure |
 
 Image insertion preserves supported original encoded bytes up to 4,000,000 bytes; larger inputs are resized by the engine. Source input is capped at 16 MiB. Only an unsupported native format enters browser conversion, which chooses the smaller PNG or JPEG at quality 0.8.
@@ -138,10 +138,10 @@ const snapshot = await editor.exportSnapshot({
   render: { scale: 2, maxWidth: 1920, padding: 10 },
   png: { embedDocument: true },
 });
-await writeFile(snapshot.png.base64, snapshot.revision);
+await writeFile(snapshot.png.bytes, snapshot.revision);
 ```
 
-Choose distinct formats: `raw`, `png`, `svg`. Raw-only export does not render. Render defaults are `scale: 1` and `padding: 10`, with no product width limit. PNG contains `base64`, pixel `width/height`, `scale`, and logical `displayWidth/displayHeight`. SVG is a logical-coordinate string; `render.roundSvgNumbers` optionally rounds its numbers.
+Choose distinct formats: `raw`, `png`, `svg`. Raw-only export does not render. Render defaults are `scale: 1` and `padding: 10`, with no product width limit. PNG contains the complete file as `bytes` (`Uint8Array`), pixel `width/height`, `scale`, and logical `displayWidth/displayHeight`. SVG is a logical-coordinate string; `render.roundSvgNumbers` optionally rounds its numbers.
 
 `png.embedDocument` defaults to false. When true, WASM inserts the editable document into the PNG from the same snapshot; hosts write the complete image without implementing chunks or CRC. PNG options require the PNG format. `replacePngDocument` rejects ordinary PNGs without embedded documents and damaged images without clearing the current diagram.
 

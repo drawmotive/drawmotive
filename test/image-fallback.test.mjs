@@ -1,22 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 const { convertUnsupportedImage } = await import('../src/platform/browser-image.js').catch(error => { if (error.code === 'ERR_MODULE_NOT_FOUND') return {}; throw error; });
-const b64 = bytes => Buffer.from(bytes).toString('base64');
+const u8 = bytes => new Uint8Array(bytes);
 function fixture({ png = [1,2,3,4], jpeg = [5,6], width = 8, height = 4, decode } = {}) {
   const calls = []; let closed = false, active = true;
   const bitmap = { width, height, close() { closed = true; } };
   const canvas = { width:0, height:0, getContext() { return { drawImage(value,x,y) { calls.push(['draw',value,x,y]); } }; },
     toBlob(done,type,quality) { calls.push(['encode',type,quality]); done(new Blob([Uint8Array.from(type === 'image/png' ? png : jpeg)], { type })); } };
-  const window = { Blob, atob, btoa, createImageBitmap:async blob => { calls.push(['decode',blob.type,[...new Uint8Array(await blob.arrayBuffer())]]); return decode ? decode() : bitmap; }, document:{createElement:()=>canvas} };
-  const run = (data = b64([9,8,7]), type = 'image/gif') => convertUnsupportedImage(data,type,{window,active:()=> { if (!active) throw Object.assign(new Error('Closed'),{code:'EditorDisposed'}); }});
+  const window = { Blob, createImageBitmap:async blob => { calls.push(['decode',blob.type,[...new Uint8Array(await blob.arrayBuffer())]]); return decode ? decode() : bitmap; }, document:{createElement:()=>canvas} };
+  const run = (data = u8([9,8,7]), type = 'image/gif') => convertUnsupportedImage(data,type,{window,active:()=> { if (!active) throw Object.assign(new Error('Closed'),{code:'EditorDisposed'}); }});
   return {run,calls,canvas,window,get closed(){return closed;},close(){active=false;}};
 }
 test('browser fallback compares PNG with JPEG quality 0.8 and preserves the smaller encoded bytes',async()=>{
   assert.equal(typeof convertUnsupportedImage,'function');
-  const h=fixture();assert.equal(await h.run(),b64([5,6]));
+  const h=fixture();assert.deepEqual(await h.run(),u8([5,6]));
   assert.deepEqual(h.calls.filter(call=>call[0]==='encode'),[['encode','image/png',undefined],['encode','image/jpeg',0.8]]);
   assert.deepEqual(h.calls[0],['decode','image/gif',[9,8,7]]);assert.equal(h.closed,true);assert.equal(h.canvas.width,0);
-  assert.equal(await fixture({png:[1],jpeg:[2,3]}).run(),b64([1]));
+  assert.deepEqual(await fixture({png:[1],jpeg:[2,3]}).run(),u8([1]));
 });
 test('browser fallback reports unsupported decoding and bounds raster allocations before encoding',async()=>{
   await assert.rejects(fixture({decode(){throw new Error('Unsupported');}}).run(),{code:'UnsupportedImageFormat'});
@@ -28,7 +28,7 @@ test('disposal during browser decoding closes its bitmap and prevents conversion
 });
 test('public fallback recognizes SVG XML without changing its source bytes',async()=>{
  const h=fixture(),svg='<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>';
- await h.run(b64(Buffer.from(svg)),'');assert.deepEqual(h.calls[0],['decode','image/svg+xml',[...Buffer.from(svg)]]);
+ await h.run(u8(Buffer.from(svg)),'');assert.deepEqual(h.calls[0],['decode','image/svg+xml',[...Buffer.from(svg)]]);
 });
 for(const [name,prolog] of [
  ['comment','<?xml version="1.0"?><!-- exported -->'],
@@ -38,20 +38,20 @@ for(const [name,prolog] of [
  ['long comment','<!--'+'x'.repeat(1024*1024)+'-->'],
 ]) test(`public SVG fallback infers MIME after a ${name} without rewriting source bytes`,async()=>{
  const h=fixture(),bytes=Buffer.from(prolog+'<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4"/>');
- await h.run(b64(bytes),'');assert.equal(h.calls[0][1],'image/svg+xml');assert.deepEqual(h.calls[0][2],[...bytes]);
+ await h.run(u8(bytes),'');assert.equal(h.calls[0][1],'image/svg+xml');assert.deepEqual(h.calls[0][2],[...bytes]);
 });
 for(const [name,source] of [
  ['different root','<!-- <svg/> --><!DOCTYPE svg [<!ENTITY sample "<svg/>">]><other/>'],
  ['unterminated comment','<!-- <svg xmlns="http://www.w3.org/2000/svg"/>'],
  ['unterminated DOCTYPE','<!DOCTYPE svg [<!ENTITY note "<svg/>">'],
 ]) test(`public fallback leaves ${name} data untyped rather than finding SVG inside declarations`,async()=>{
- const h=fixture();await h.run(b64(Buffer.from(source)),'');assert.equal(h.calls[0][1],'');
+ const h=fixture();await h.run(u8(Buffer.from(source)),'');assert.equal(h.calls[0][1],'');
 });
 test('browser Image decoding recovers a rejected bitmap and releases its Blob URL',async()=>{
  const h=fixture({decode(){throw new Error('Bitmap cannot decode SVG');}}),urls=[];let image;
  h.window.URL={createObjectURL(blob){assert.equal(blob.type,'image/svg+xml');urls.push('created');return 'blob:svg';},revokeObjectURL(url){urls.push(url);}};
  h.window.Image=class {constructor(){image=this;this.naturalWidth=8;this.naturalHeight=4;}set src(value){this.source=value;if(value)queueMicrotask(()=>this.onload());}};
- assert.equal(await h.run(b64(Buffer.from('<svg/>')),'image/svg+xml'),b64([5,6]));
+ assert.deepEqual(await h.run(u8(Buffer.from('<svg/>')),'image/svg+xml'),u8([5,6]));
  assert.deepEqual(urls,['created','blob:svg']);assert.equal(image.source,'');assert.equal(h.canvas.width,0);
 });
 for(const disposed of [false,true]) test(`Image decoder ${disposed?'disposal':'failure'} releases its Blob URL and never encodes`,async()=>{
