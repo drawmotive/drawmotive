@@ -1,27 +1,40 @@
-import { EditorError } from '../errors.js';
-import { imageBase64, MAX_IMAGE_INPUT_BYTES } from './browser-image.js';
+import { EditorError, isBytes } from '../errors.js';
+import { MAX_IMAGE_INPUT_BYTES } from './browser-image.js';
 const prefix = 'drawmotive/selection:2\n';
 const windowsPrefix = prefix.replace('\n', '\r\n');
+const MAX_SELECTION_BYTES = 24 * 1024 * 1024;
 const invalid = () => new EditorError('ClipboardFormatUnsupported', 'The clipboard does not contain a DrawMotive selection.');
 function selection(value) {
-  if (!value || value.version !== 2 || typeof value.data !== 'string' || !value.data.length || value.data.length > 32 * 1024 * 1024
-      || /[^A-Za-z0-9+/=]/.test(value.data) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data)) throw invalid();
+  if (!value || value.version !== 2 || !isBytes(value.data) || !value.data.length || value.data.length > MAX_SELECTION_BYTES) throw invalid();
   return Object.freeze({version:2,data:value.data});
 }
-export const encodeSelection = payload => prefix + selection(payload).data;
+/** System clipboard text is a cross-application text protocol, so only this envelope encodes graph bytes as base64. */
+function base64(bytes) {
+  if (typeof bytes.toBase64 === 'function') return bytes.toBase64();
+  const chunks = [];
+  for (let offset = 0; offset < bytes.length; offset += 32768)
+    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
+  return btoa(chunks.join(''));
+}
+function fromBase64(text) {
+  if (!text.length || text.length > Math.ceil(MAX_SELECTION_BYTES / 3) * 4
+      || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)) throw invalid();
+  if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(text);
+  return Uint8Array.from(atob(text), character => character.charCodeAt(0));
+}
+export const encodeSelection = payload => prefix + base64(selection(payload).data);
 export function decodeSelection(text) {
   if (typeof text !== 'string') throw invalid();
   // Windows clipboard text normalizes the envelope separator to CRLF. Accept
   // that transport change without relaxing validation of the opaque graph bytes.
   const length = text.startsWith(prefix) ? prefix.length : text.startsWith(windowsPrefix) ? windowsPrefix.length : 0;
   if (!length) throw invalid();
-  return selection({version:2,data:text.slice(length)});
+  return selection({version:2,data:fromBase64(text.slice(length))});
 }
 function pngBytes(value) {
-  if (typeof value !== 'string' || !value.length) throw new EditorError('ClipboardImageUnavailable', 'The engine did not provide a PNG selection image.');
-  const bytes = Uint8Array.from(atob(value), character => character.charCodeAt(0));
-  if (![137,80,78,71,13,10,26,10].every((byte,index) => bytes[index] === byte)) throw new EditorError('ClipboardImageUnavailable', 'The selection image is not PNG.');
-  return bytes;
+  if (!isBytes(value) || !value.length) throw new EditorError('ClipboardImageUnavailable', 'The engine did not provide a PNG selection image.');
+  if (![137,80,78,71,13,10,26,10].every((byte,index) => value[index] === byte)) throw new EditorError('ClipboardImageUnavailable', 'The selection image is not PNG.');
+  return value;
 }
 /** Graph envelopes own editable content; inspect every text item before choosing pixels. */
 async function clipboardContent(items, active) {
@@ -46,7 +59,7 @@ async function clipboardContent(items, active) {
     if (blob.size > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
     const bytes = new Uint8Array(await blob.arrayBuffer()); active();
     if (bytes.length > MAX_IMAGE_INPUT_BYTES) throw new EditorError('InvalidArgument', 'The image input exceeds the supported size.');
-    return {kind:'image',data:imageBase64(bytes),type};
+    return {kind:'image',data:bytes,type};
   }
   throw invalid();
 }

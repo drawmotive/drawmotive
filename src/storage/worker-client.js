@@ -16,8 +16,9 @@ export async function createDocumentWorkerClient({
     readCheckpoint: session => channel.request('storage.read', { session }),
     readRetainedJournal: session => channel.request('storage.journal', { session }),
     readAssets: (session, hashes) => channel.request('storage.assets.read', { session, hashes }),
-    writeAssets: (session, assets) => channel.request('storage.assets.write', { session, assets }),
-    commitBatch: (session, batch) => channel.request('storage.commit', { session, batch }),
+    // Native interop creates these bytes for this call alone, so they move into the Worker.
+    writeAssets: (session, assets) => channel.request('storage.assets.write', { session, assets }, { transfer: true }),
+    commitBatch: (session, batch) => channel.request('storage.commit', { session, batch }, { transfer: true }),
     acknowledgeOutbox: (session, ids) => channel.request('storage.ack', { session, ids }),
     readOutbox: session => channel.request('storage.outbox', { session }),
     readReplicationState: session => channel.request('storage.replication', { session }),

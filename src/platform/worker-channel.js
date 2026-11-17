@@ -1,4 +1,4 @@
-import { EditorError, toErrorDescriptor } from '../errors.js';
+import { EditorError, exclusiveBuffers, toErrorDescriptor } from '../errors.js';
 import { createWorkerFactory } from './worker-factory.js';
 
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
@@ -44,6 +44,8 @@ export async function createWorkerChannel({ url, timeoutMs = 120000, workerFacto
   }
   const channel = Object.freeze({
     get disposed() { return disposed; },
+    /** `options.transfer` moves exclusively owned argument buffers to the Worker; the caller
+     * must not read them afterwards. Results always arrive with their buffers transferred. */
     request(method, args = {}, options = {}) {
       if (disposed) return Promise.reject(new EditorError('EditorDisposed', 'Editor Worker is closed.'));
       const deadline = options.timeoutMs ?? timeoutMs;
@@ -56,7 +58,7 @@ export async function createWorkerChannel({ url, timeoutMs = 120000, workerFacto
         const timer = setTimeout(() => reject(new EditorError('RequestTimeoutUnknown', 'Worker request timed out; completion is unconfirmed.',
           { method, requestId: id, completion })), deadline);
         pending.set(id, { resolve, reject, timer, complete });
-        try { handle.worker.postMessage({ id, method, args }); }
+        try { handle.worker.postMessage({ id, method, args }, options.transfer ? exclusiveBuffers(args) : []); }
         catch (error) { settle(id, { error: toErrorDescriptor(error) }); }
       });
     },
@@ -72,7 +74,8 @@ export async function createWorkerChannel({ url, timeoutMs = 120000, workerFacto
 }
 
 /** Worker-side dispatch is ordered for document transactions. The independent font
- * Worker opts into concurrency and drains its active loads before closing.
+ * Worker opts into concurrency and drains its active loads before closing. Handlers return
+ * fresh values, so their exclusively owned buffers move to the caller without a copy.
  * @param {{ addEventListener: Function, removeEventListener: Function, postMessage: Function }} scope
  * @param {Record<string, (args: any) => any>} handlers
  */
@@ -81,7 +84,8 @@ export function serveWorkerRequests(scope, handlers, { concurrent = false } = {}
   async function execute({ id, method, args }) {
     try {
       if (!own(handlers, method)) throw new EditorError('UnknownMethod', 'Unknown Worker method: ' + method);
-      scope.postMessage({ id, result: await handlers[method](args) });
+      const result = await handlers[method](args);
+      scope.postMessage({ id, result }, exclusiveBuffers(result));
     } catch (error) { scope.postMessage({ id, error: toErrorDescriptor(error) }); }
   }
   function received(event) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Breaking: binary values are `Uint8Array` across the public API. `EditorSnapshot.raw`
+  and the new `png.bytes` (replacing `png.base64`) are bytes; `replaceDocument(raw)`,
+  `replacePngDocument(png)` and `pasteImage(data)` accept bytes and reject base64 text.
+- Breaking: selection payloads carry `data` and the optional `png` companion as bytes.
+  Base64 remains only inside the cross-application system clipboard text envelope.
+- The native bridge carries documents, images, fonts and replication payloads beside
+  its JSON envelope instead of as base64, and Worker messages transfer exclusively
+  owned buffers instead of cloning them. Fonts are written once, directly into the
+  memory Skia adopts.
+
 ## 0.2.2-alpha.8
 
 - Replace product-specific initialization with atomic document, snapshot, viewport, history and editing operations.

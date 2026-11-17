@@ -23,8 +23,35 @@ const validError = value => record(value) && identifier(value.code) && typeof va
 
 /** Copy transport values so no caller receives an engine-owned mutable reference.
  * Objects and arrays are frozen; binary values are independent structured copies. */
-export function immutableSnapshot(value) {
-  const result = structuredClone(value);
+/** Binary values cross every SDK boundary as Uint8Array; a realm-independent check also admits frames. */
+export function isBytes(value) {
+  return ArrayBuffer.isView(value) && Object.prototype.toString.call(value) === '[object Uint8Array]';
+}
+/** Buffers that a message value exclusively owns can move to the peer instead of being cloned.
+ * Only a view spanning its whole non-shared ArrayBuffer qualifies: a partial view may alias
+ * unrelated memory, such as the WASM heap, which must never be detached. */
+export function exclusiveBuffers(value) {
+  const buffers = new Set(), visited = new WeakSet();
+  (function visit(item) {
+    if (!item || typeof item !== 'object' || visited.has(item)) return;
+    visited.add(item);
+    if (ArrayBuffer.isView(item)) {
+      if (item.buffer instanceof ArrayBuffer && item.byteLength > 0 && item.byteOffset === 0 && item.byteLength === item.buffer.byteLength)
+        buffers.add(item.buffer);
+      return;
+    }
+    const prototype = Object.getPrototypeOf(item);
+    if (Array.isArray(item) || prototype === Object.prototype || prototype === null)
+      for (const child of Object.values(item)) visit(child);
+  })(value);
+  return [...buffers];
+}
+
+/** Detach a value from its producer and freeze it. `transfer` is only for values the caller
+ * exclusively owns, such as freshly decoded native results: their whole buffers move instead of
+ * being copied. Host-supplied arguments are always copied, so later host mutation cannot leak in. */
+export function immutableSnapshot(value, { transfer = false } = {}) {
+  const result = structuredClone(value, transfer ? { transfer: exclusiveBuffers(value) } : undefined);
   const visited = new WeakSet();
   function freeze(item) {
     if (!item || typeof item !== 'object' || visited.has(item)) return item;
