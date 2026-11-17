@@ -18,6 +18,18 @@ test('canvas session exposes independent text policy without web chrome',async t
  assert.equal(editor.textEditing,'external');
  for(const name of ['ui','onUiChanged','invokeAction','setActionState'])assert.equal(editor[name],undefined);
 });
+test('snapshot appearance forwards explicit light and dark without changing preferences',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ h.behavior(()=>({revision:'r1'}));
+ for(const dark of [true,false]) {
+  await editor.exportSnapshot({formats:['png','svg'],render:{dark}});
+  assert.deepEqual(h.calls.at(-1),{method:'exportSnapshot',args:{formats:['png','svg'],render:{dark}}});
+ }
+ await editor.exportSnapshot({formats:['png']});
+ assert.deepEqual(h.calls.at(-1).args,{formats:['png']});
+ for(const dark of [null,1,'dark',{}]) await assert.rejects(editor.exportSnapshot({formats:['png'],render:{dark}}),TypeError);
+ assert.ok(h.calls.every(call=>call.method==='exportSnapshot'));
+});
 test('deployment license keys reach native startup unchanged and stay out of public state',async t=>{
  const h=host(t);
  for(const licenseKey of ['', '  raw.not-a-jwt.key  ', 'x'.repeat(8193)]) {

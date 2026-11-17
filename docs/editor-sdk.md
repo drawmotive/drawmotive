@@ -185,6 +185,7 @@ const snapshot = await editor.exportSnapshot({
 | `render.maxWidth` | Optional finite, positive width limit |
 | `render.padding` | Default `10`; finite, nonnegative padding |
 | `render.roundSvgNumbers` | Optional boolean controlling SVG number rounding |
+| `render.dark` | Optional boolean: `true` renders the native dark palette, `false` renders light; omission follows the editor palette. Affects PNG/SVG only and preserves document, history and preferences. |
 
 PNG options require `png` in `formats`. Raw-only export does not render. The result always includes `revision`; requested outputs are `raw` (base64 string), `svg` (string), and `png` (`{ base64, width, height, scale, displayWidth, displayHeight }`). Unrequested outputs may be null or absent. PNG dimensions are pixels; display dimensions are logical dimensions. Use returned scale/dimensions rather than assuming an uncapped render size.
 

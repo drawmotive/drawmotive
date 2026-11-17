@@ -4,7 +4,7 @@
   "packageVersion": "0.3.3",
   "runtimeVersion": 1,
   "privateSource": {
-    "commit": "0c8fb440624e16d401433220dd4c6b4d70112a95",
+    "commit": "4ad7d0f8627b9fde581ac846938bcdcc63ad952a",
     "project": "Editor.Client"
   },
   "assets": [
@@ -34,9 +34,9 @@
       "sha256": "417849b895c7b592f040efa0c7f294db5ce8b3fc11f35fd91e4d7e12515d7fec"
     },
     {
-      "path": "editor/_framework/Editor.Client.a3lmylqbjj.wasm",
-      "bytes": 492309,
-      "sha256": "bab5359a2e3ceb7fddb6b7fb4f6a07d63c49b56c9a885c55835ff204247fa4bb"
+      "path": "editor/_framework/Editor.Client.hfcc9tfe63.wasm",
+      "bytes": 493845,
+      "sha256": "ed76cf49d2a4320b4e5b0b884def6422154a6ba093fcadc537166a5feee6ac99"
     },
     {
       "path": "editor/_framework/ExCSS.1jyjm4dx0m.wasm",
@@ -44,9 +44,9 @@
       "sha256": "7354d17ae4ca035d9f1af9fd76abe8b4d289c532e186ee50b22c18b7e6699982"
     },
     {
-      "path": "editor/_framework/Graphics.Core.qs97bd3cko.wasm",
-      "bytes": 4907801,
-      "sha256": "5a9c45c51d85700e7e076728f5483ed40b2faaa7581a2f973d7f010607f6cee3"
+      "path": "editor/_framework/Graphics.Core.oqyyzq1bdt.wasm",
+      "bytes": 4909849,
+      "sha256": "a0a0940de3af840492aa5646bfbe1da66ecd5f9ca75ed9f51248acf5d524f4cc"
     },
     {
       "path": "editor/_framework/HarfBuzzSharp.dkkte5l69t.wasm",
@@ -189,9 +189,9 @@
       "sha256": "7edf1bf34d3ab23694c7c9cecc28dc58845f2101a1562fd90c95c60a809ee4cf"
     },
     {
-      "path": "editor/_framework/RBush.26iy2a9fo4.wasm",
+      "path": "editor/_framework/RBush.ic955sfvoi.wasm",
       "bytes": 24341,
-      "sha256": "867544505694b6f9b49fb3f410c25815b3bb1d4202b00003ab3ab485508f746e"
+      "sha256": "928339730c8ba57533fb15ec4d59efd65fb42ba1469faf72bffa11f091d29eb7"
     },
     {
       "path": "editor/_framework/SkiaSharp.HarfBuzz.224o4jx5vh.wasm",
@@ -506,7 +506,7 @@
     {
       "path": "editor/_framework/dotnet.js",
       "bytes": 63270,
-      "sha256": "32fa72ef357d858553a159c5152f116d08e4e52c4eda8d64ad5bc0da672e30cb"
+      "sha256": "178370d23d70bc287d8f6bfa59bade18af110dadcf54b1c2bb3b1e979923104d"
     },
     {
       "path": "editor/_framework/dotnet.native.biv6cdchir.js",
