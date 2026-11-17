@@ -39,13 +39,18 @@ export function setupCanvasFocusHandler() {
     canvas.addEventListener('pointerdown', canvas._focusHandler);
 }
 
-export function saveAsFile(filename, bytesBase64) {
-    var link = document.createElement('a');
+export function saveAsFile(filename, bytes) {
+    // A Blob URL references the bytes directly; revoke it once the download has started.
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+    const link = document.createElement('a');
     link.download = filename;
-    link.href = 'data:application/octet-stream;base64,' + bytesBase64;
+    link.href = url;
     document.body.appendChild(link); // Required for Firefox
-    link.click();
-    document.body.removeChild(link);
+    try { link.click(); }
+    finally {
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
 }
 
 // Resource fetching methods for VS Code mode

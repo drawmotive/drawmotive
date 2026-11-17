@@ -1,14 +1,39 @@
 // One WASM runtime belongs to the page; each opened document owns a fresh native root.
 let activeCanvas, runtimeStartup, runtimeAssetBaseUrl, runtimeAssetVersion, resolveRuntimeReady, rejectRuntimeReady;
 const browserFontLoads = new Map();
+// Verified font bytes wait here until managed code supplies the Skia block they are copied into.
+const retainedFonts = new Map();
+let fontToken = 0;
 const error = (code, message, cause) => Object.assign(new Error(message, cause ? { cause } : undefined), { code });
-const json = value => JSON.stringify(value, (_key, item) => {
-  // System.Text.Json represents byte[] as base64. Platform and Worker calls stay binary.
-  if (!(item instanceof Uint8Array)) return item;
-  let binary = '';
-  for (let offset = 0; offset < item.length; offset += 16384) binary += String.fromCharCode(...item.subarray(offset, offset + 16384));
-  return btoa(binary);
-});
+// Native bridge JSON carries binary values as {"$binary": index} placeholders. Arguments travel
+// as Blazor binary interop arrays; results are copied once out of WASM memory by acceptBinary.
+const binaryKey = '$binary';
+function encodeArguments(value) {
+  const binaries = [];
+  const json = JSON.stringify(value, (_key, item) => {
+    if (!(item instanceof Uint8Array)) return item;
+    binaries.push(item);
+    return { [binaryKey]: binaries.length - 1 };
+  });
+  return { json, binaries };
+}
+const responseBinaries = new Map();
+let callSequence = 0;
+/** Reserves the result channel of one native call; the caller must release it. */
+function beginCall() {
+  const callId = ++callSequence;
+  responseBinaries.set(callId, []);
+  return callId;
+}
+function decodeResponse(serialized, binaries) {
+  return JSON.parse(serialized, (_key, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || !Object.hasOwn(item, binaryKey)) return item;
+    const index = item[binaryKey];
+    if (Object.keys(item).length !== 1 || !Number.isSafeInteger(index) || !(binaries[index] instanceof Uint8Array))
+      throw error('InvalidRuntimeResponse', 'Native response names an unknown binary value.');
+    return binaries[index];
+  });
+}
 function current() {
   if (!activeCanvas || activeCanvas.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
   return activeCanvas;
@@ -105,7 +130,24 @@ globalThis.drawmotiveCanvas = Object.freeze({
     const result = await loadFontResource(path, url, sha256);
     // All renderers, including color emoji, consume the same verified font bytes.
     await prepareBrowserFont(path, sha256, result.bytes, pack);
-    return result.bytes;
+    const token = ++fontToken;
+    retainedFonts.set(token, result.bytes);
+    return [token, result.bytes.length];
+  },
+  // Synchronous managed import: the memory view is valid only during this call.
+  takeFont: (token, view) => {
+    const bytes = retainedFonts.get(token);
+    retainedFonts.delete(token);
+    if (!bytes) throw error('ResourceUnavailable', 'Font bytes are no longer retained.');
+    if (view.length === 0) return;
+    if (view.length !== bytes.length) throw error('ResourceUnavailable', 'Font block length does not match its bytes.');
+    view.set(bytes);
+  },
+  // Synchronous managed import: the memory view is valid only during this call.
+  acceptBinary: (callId, view) => {
+    const values = responseBinaries.get(callId);
+    if (!values) throw error('InvalidRuntimeResponse', 'Native result arrived for an unknown call.');
+    values.push(view.slice());
   },
   getPreferences: async () => JSON.stringify(await platform('preferences.get')),
   updatePreferences: preferencesJson => platform('preferences.update', JSON.parse(preferencesJson)).then(() => null),
@@ -150,14 +192,22 @@ function startRuntime(assetBaseUrl, assetPaths = {}) {
   })();
   return runtimeStartup;
 }
-function readResponse(owner, serialized) {
-  const response = JSON.parse(serialized);
+function readResponse(owner, serialized, binaries = []) {
+  const response = decodeResponse(serialized, binaries);
   if (response.state && !owner.closing) owner.emit('stateChanged', response.state);
   if (response.error) throw error(response.error.code, response.error.message);
   return response.result;
 }
-async function execute(owner, method, args) {
-  return readResponse(owner, await owner.reference.invokeMethodAsync('ExecuteAsync', method, json(args ?? {})));
+async function invokeNative(owner, entry, ...args) {
+  const callId = beginCall();
+  try {
+    const serialized = await owner.reference.invokeMethodAsync(entry, ...args, callId);
+    return readResponse(owner, serialized, responseBinaries.get(callId));
+  } finally { responseBinaries.delete(callId); }
+}
+function execute(owner, method, args) {
+  const { json, binaries } = encodeArguments(args ?? {});
+  return invokeNative(owner, 'ExecuteAsync', method, json, binaries);
 }
 /** Mounts the page's only canvas. Cleanup finishes before another document can open. */
 export async function mountCanvas({ container, assetBaseUrl, assetPaths, options, drawingId, platform: platformCallback, emit: emitCallback, signal }) {
@@ -208,7 +258,7 @@ export async function mountCanvas({ container, assetBaseUrl, assetPaths, options
     // before native disposal. The public SDK only uses request and dispose.
     compileTextGraph: async source => {
       if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
-      return readResponse(owner, await owner.reference.invokeMethodAsync('CompileSiteTextGraphAsync', source));
+      return invokeNative(owner, 'CompileSiteTextGraphAsync', source);
     },
     request: async (method, args) => {
       if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
