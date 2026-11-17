@@ -2,6 +2,7 @@ export const storageError = (code, message) => Object.assign(new Error(message),
 const id = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 1024;
 const validClock = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   Object.entries(value).every(([author, sequence]) => id(author) && Number.isInteger(sequence) && sequence >= 0 && sequence <= 2147483647);
+const clockAt = (value, author) => value && Object.hasOwn(value, author) ? value[author] : 0;
 export const isOriginJournalId = value => typeof value === 'string' && /^\$origin:[0-9a-f]{32}$/.test(value);
 const reservedOrigin = value => typeof value === 'string' && value.startsWith('$origin:');
 export const validAssetHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -73,6 +74,7 @@ export async function prepareBatch(value) {
   if (batch?.checkpoint?.payload?.length === 0 && batch.checkpoint.snapshotAfterJournalId === null) delete batch.checkpoint.snapshotAfterJournalId;
   if (batch?.journal === null) delete batch.journal;
   if (batch?.assets === null) delete batch.assets;
+  for (const field of ['recovery', 'removeJournalIds', 'removeOutboxIds']) if (batch?.[field] === null) delete batch[field];
   if (batch?.checkpoint) delete batch.checkpoint.journal;
   const validEntries = entries => Array.isArray(entries) && entries.every(entry => id(entry?.id) && entry.payload instanceof Uint8Array) &&
     new Set(entries.map(entry => entry.id)).size === entries.length;
@@ -84,6 +86,26 @@ export async function prepareBatch(value) {
       !validEntries(batch.outbox) || batch.outbox.some(entry => !id(entry.revision) || reservedOrigin(entry.id)) ||
       batch.journal !== undefined && (!validEntries(batch.journal) || batch.journal.some(entry => reservedOrigin(entry.id) && !isOriginJournalId(entry.id))))
     throw storageError('InvalidCommitBatch', 'A complete checkpoint and distinct immutable records are required.');
+  const retirement = batch.removeJournalIds !== undefined || batch.removeOutboxIds !== undefined;
+  const recovery = batch.recovery;
+  const validIds = values => Array.isArray(values) && values.every(id) && new Set(values).size === values.length;
+  if (recovery !== undefined && (!id(recovery.generation) || !Number.isSafeInteger(recovery.revision) || recovery.revision < 0 ||
+      !validClock(recovery.clock) || recovery.abandonedBranch !== undefined && typeof recovery.abandonedBranch !== 'boolean') ||
+      (retirement || recovery !== undefined) && (!recovery || !batch.checkpoint.payload.length) ||
+      batch.removeJournalIds !== undefined && !validIds(batch.removeJournalIds) ||
+      batch.removeOutboxIds !== undefined && !validIds(batch.removeOutboxIds))
+    throw storageError('InvalidCommitBatch', 'Recovery retirement requires a full native checkpoint and publication identity.');
+  if (recovery) {
+    if (Object.entries(recovery.clock).some(([author, sequence]) => sequence > clockAt(batch.checkpoint.clock, author)))
+      throw storageError('InvalidCommitBatch', 'The publication cannot exceed the adopted native checkpoint.');
+    for (const removed of batch.removeJournalIds ?? [])
+      if ((!isOriginJournalId(removed) && !coveredByRecovery(removed, recovery) && !recovery.abandonedBranch) ||
+          (batch.journal ?? []).some(entry => entry.id === removed))
+        throw storageError('InvalidCommitBatch', 'Journal retirement exceeds the adopted publication.');
+    for (const removed of batch.removeOutboxIds ?? [])
+      if ((!coveredByRecovery(removed, recovery) && !recovery.abandonedBranch) || batch.outbox.some(entry => entry.id === removed))
+        throw storageError('InvalidCommitBatch', 'Delivery retirement exceeds the adopted publication.');
+  }
   // SharedArrayBuffer and oversized views must become compact ordinary buffers.
   batch.checkpoint.payload = new Uint8Array(batch.checkpoint.payload);
   if (batch.checkpoint.state !== undefined) batch.checkpoint.state = new Uint8Array(batch.checkpoint.state);
@@ -104,6 +126,11 @@ async function batchDigest(batch) {
     batch.journal === undefined ? null : batch.journal.map(entry => [entry.id, entry.payload.length])];
   // Additive resource support preserves receipt identities for pre-assets requests.
   if (batch.assets !== undefined) metadata.push(batch.assets.map(asset => [asset.hash, asset.data.length]));
+  // Presence and every retirement ID are part of the same immutable commit receipt.
+  if (batch.recovery !== undefined || batch.removeJournalIds !== undefined || batch.removeOutboxIds !== undefined)
+    metadata.push(['recovery', batch.recovery ? [batch.recovery.generation, batch.recovery.revision,
+      Object.entries(batch.recovery.clock).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0), batch.recovery.abandonedBranch ?? false] : null,
+      batch.removeJournalIds ?? null, batch.removeOutboxIds ?? null]);
   const header = new TextEncoder().encode(JSON.stringify(metadata));
   const parts = [checkpoint.payload, ...(checkpoint.state === undefined ? [] : [checkpoint.state]),
     ...batch.outbox.map(entry => entry.payload), ...(batch.journal ?? []).map(entry => entry.payload), ...(batch.assets ?? []).map(asset => asset.data)];
@@ -136,6 +163,34 @@ export function checkImmutableRecord(existing, entry, kind, receipt = false) {
   const equal = existing && (kind === 'outbox' ? equalOutbox(existing, entry) : equalBytes(existing.payload, entry.payload));
   if (receipt && !equal) throw storageError('StorageUnavailable', 'Immutable ' + kind + ' evidence is missing or changed.');
   if (existing && !equal) throw storageError('BatchConflict', kind + ' identities cannot change.');
+}
+/** Coverage authorizes retirement, never equality of arbitrary offered payloads. A matching
+ * cryptographic batch receipt separately proves the original request's byte identity. */
+export function coveredByRecovery(value, recovery) {
+  const match = /^([A-Za-z0-9_-]{1,128}):([1-9][0-9]*)$/.exec(value);
+  return !!match && Number.isSafeInteger(Number(match[2])) && Number(match[2]) <= clockAt(recovery?.clock, match[1]);
+}
+export function checkRetainedRecord(existing, entry, kind, recovery) {
+  const retired = !existing && (coveredByRecovery(entry.id, recovery) ||
+    kind === 'journal' && isOriginJournalId(entry.id) && recovery != null);
+  checkImmutableRecord(existing, entry, kind, !retired);
+}
+/** Only a full native adoption can advance the retirement cut; logical lifecycle changes
+ * require a new document namespace rather than relabeling persisted originals. */
+export function checkRecovery(previous, batch) {
+  const next = batch.recovery;
+  if (!next) return previous;
+  const sameClock = (left, right) => Object.entries(left).every(([author, seq]) => seq === clockAt(right, author)) &&
+    Object.entries(right).every(([author, seq]) => seq === clockAt(left, author));
+  if (previous && (previous.generation !== next.generation || previous.revision > next.revision ||
+      Object.entries(previous.clock).some(([author, seq]) => seq > clockAt(next.clock, author)) ||
+      previous.revision === next.revision && !sameClock(previous.clock, next.clock)))
+    throw storageError('StorageConflict', 'The adopted publication cannot change lifecycle or rewind its covered cut.');
+  return next;
+}
+export function checkRetiredInsertion(existing, entry, recovery) {
+  if (!existing && coveredByRecovery(entry.id, recovery))
+    throw storageError('StorageConflict', 'A new batch cannot restore a retired original identity.');
 }
 /** Native names the last included journal record; the batch tail is not a snapshot boundary. */
 export function snapshotCut(previous, checkpoint, ordinal) {

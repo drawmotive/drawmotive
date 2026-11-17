@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DocumentCheckpoint, DocumentOutboxEntry, DocumentImageAsset } from '../document-store.js';
+import type { DocumentCheckpoint, DocumentOutboxEntry, DocumentImageAsset, DocumentRecoveryPublication } from '../document-store.js';
 
 /** A document's mutable head contains only small replica metadata and immutable-log offsets. */
 export interface HeadRow {
@@ -9,6 +9,7 @@ export interface HeadRow {
   snapshotOrdinal: number;
   nextJournalOrdinal: number;
   nextOutboxOrdinal: number;
+  recovery?: DocumentRecoveryPublication;
 }
 /** One replaceable opaque snapshot is separate from the immutable original journal. */
 export interface PayloadRow { id: string; payload: Uint8Array; }

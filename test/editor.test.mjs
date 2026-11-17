@@ -18,6 +18,18 @@ test('canvas session exposes independent text policy without web chrome',async t
  assert.equal(editor.textEditing,'external');
  for(const name of ['ui','onUiChanged','invokeAction','setActionState'])assert.equal(editor[name],undefined);
 });
+test('snapshot appearance forwards explicit light and dark without changing preferences',async t=>{
+ const h=host(t),editor=await h.mount();t.after(()=>editor.dispose());
+ h.behavior(()=>({revision:'r1'}));
+ for(const dark of [true,false]) {
+  await editor.exportSnapshot({formats:['png','svg'],render:{dark}});
+  assert.deepEqual(h.calls.at(-1),{method:'exportSnapshot',args:{formats:['png','svg'],render:{dark}}});
+ }
+ await editor.exportSnapshot({formats:['png']});
+ assert.deepEqual(h.calls.at(-1).args,{formats:['png']});
+ for(const dark of [null,1,'dark',{}]) await assert.rejects(editor.exportSnapshot({formats:['png'],render:{dark}}),TypeError);
+ assert.ok(h.calls.every(call=>call.method==='exportSnapshot'));
+});
 test('deployment license keys reach native startup unchanged and stay out of public state',async t=>{
  const h=host(t);
  for(const licenseKey of ['', '  raw.not-a-jwt.key  ', 'x'.repeat(8193)]) {
@@ -119,6 +131,17 @@ test('private replication snapshots own decoded bytes and capture install/archiv
  assert.deepEqual(h.calls,[{method:'replica.exportSnapshot',args:{}},
   {method:'replica.installSnapshot',args:{payload:new Uint8Array([4,5]),expectedClock:{author:2}}},
   {method:'replica.archive',args:{transactions:[{id:'one',payload:new Uint8Array([6])}]}}]);
+});
+test('private checkpoint reconciliation stays private and copies native adoption inputs',async t=>{
+ const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());
+ assert.equal(editor.reconcile,undefined);
+ h.behavior(method=>method==='replica.reconcile'?{abandonedBranch:false,generation:'g1',revision:2}:null);
+ const payload=Uint8Array.of(7),clock={author:2};
+ const result=replication.reconcile(payload,clock,'g1',2);payload[0]=9;clock.author=99;
+ assert.deepEqual(await result,{abandonedBranch:false,generation:'g1',revision:2});
+ assert.deepEqual(h.calls,[{method:'replica.reconcile',args:{payload:Uint8Array.of(7),expectedClock:{author:2},generation:'g1',revision:2}}]);
+ const accepted={author:1};const settlement=replication.reconcile(null,{author:1},'g1',2,accepted);accepted.author=9;
+ await settlement;assert.deepEqual(h.calls.at(-1),{method:'replica.reconcile',args:{payload:null,expectedClock:{author:1},generation:'g1',revision:2,acceptedClock:{author:1}}});
 });
 test('private replication rejects malformed portable snapshot responses',async t=>{
  const h=host(t),{editor,replication}=await h.mount({}, {replication:true});t.after(()=>editor.dispose());

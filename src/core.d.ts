@@ -40,7 +40,7 @@ export interface EditorCreateOptions {
 export interface SnapshotOptions {
   formats: readonly ('raw' | 'png' | 'svg')[];
   png?: { embedDocument?: boolean };
-  render?: { scale?: number; maxWidth?: number; padding?: number; roundSvgNumbers?: boolean };
+  render?: { scale?: number; maxWidth?: number; padding?: number; roundSvgNumbers?: boolean; dark?: boolean };
 }
 export interface EditorSnapshot {
   readonly revision: string;

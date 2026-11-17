@@ -1,6 +1,6 @@
 {
   "name": "@drawmotive/editor",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Embed the DrawMotive visual diagram editor in any browser application.",
   "type": "module",
   "types": "./src/index.d.ts",
@@ -51,10 +51,10 @@
     "node": ">=22"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.65.1",
     "esbuild": "0.28.2",
-    "fake-indexeddb": "6.2.6",
-    "jsdom": "^30.1.2",
+    "fake-indexeddb": "6.2.8",
+    "jsdom": "^31.0.1",
     "typescript": "^7.0.2"
   },
   "keywords": [
