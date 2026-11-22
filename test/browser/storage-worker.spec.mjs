@@ -15,11 +15,12 @@ test('all IndexedDB operations run in the Worker; dispose/reopen preserves check
     };
     let { store, session } = await open(options);
     const batch = { batchId: 'batch-one', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([10, 20, 30]), clock: { author: 1 }, snapshotAfterJournalId: null }, outbox: [{ id: 'txn-one', revision: 'r1', payload: new Uint8Array([40]) }] };
-    await store.commitBatch(session, batch);
+    // Each commit transfers the sent buffers, so retain the original bytes for replay.
+    await store.commitBatch(session, structuredClone(batch));
     await store.dispose(); // does not delete the document
     ({ store, session } = await open(options));
     const checkpoint = await store.readCheckpoint(session), delivery = await store.readReplicationState(session), outbox = delivery.outbox;
-    const repeated = await store.commitBatch(session, batch);
+    const repeated = await store.commitBatch(session, structuredClone(batch));
     await store.acknowledgeOutbox(session, ['txn-one']);
     await store.commitBatch(session, batch); // lost ACK/commit response cannot reinsert an acknowledged entry
     const afterAck = await store.readOutbox(session);
@@ -68,17 +69,18 @@ test('independent document Workers restore an incremental suffix and retain ACK 
     const other = await second.openSession(b);
     const snapshot = { batchId: 'snapshot', expectedRevision: null,
       checkpoint: { revision: 'r1', payload: new Uint8Array([10]), state: new Uint8Array([1]), clock: { author: 1 }, snapshotAfterJournalId: null }, outbox: [] };
-    await first.commitBatch(session, snapshot);
-    await second.commitBatch(other, { ...snapshot, checkpoint: { ...snapshot.checkpoint, payload: new Uint8Array([99]) } });
+    await first.commitBatch(session, structuredClone(snapshot));
+    await second.commitBatch(other, structuredClone({ ...snapshot,
+      checkpoint: { ...snapshot.checkpoint, payload: new Uint8Array([99]) } }));
     const append = { batchId: 'append', expectedRevision: 'r1',
       checkpoint: { revision: 'r2', payload: new Uint8Array(), state: new Uint8Array([2]), clock: { author: 2 } },
       journal: [{ id: 'tx', payload: new Uint8Array([20]) }], outbox: [{ id: 'tx', revision: 'r2', payload: new Uint8Array([20]) }] };
-    await first.commitBatch(session, append);
+    await first.commitBatch(session, structuredClone(append));
     await first.dispose(); first = await createDocumentWorkerClient({ databaseName }); session = await first.openSession(a);
     const restored = await first.readCheckpoint(session);
     await first.acknowledgeOutbox(session, ['tx']);
     await first.commitBatch(session, { ...snapshot, batchId: 'new-snapshot', expectedRevision: 'r2', checkpoint: { ...snapshot.checkpoint, revision: 'r3', snapshotAfterJournalId: 'tx' } });
-    await first.commitBatch(session, append);
+    await first.commitBatch(session, structuredClone(append));
     let conflict;
     try { await first.commitBatch(session, { ...append, batchId: 'changed-id', expectedRevision: 'r3', journal: [{ id: 'tx', payload: new Uint8Array([21]) }] }); }
     catch (error) { conflict = error.code; }
@@ -106,7 +108,7 @@ test('fresh Workers ignore retired databases and preserve only current-generatio
     const initial = await store.readCheckpoint(session), initialOutbox = await store.readOutbox(session);
     const batch = { batchId: 'current', expectedRevision: null, checkpoint: { revision: 'r1', payload: new Uint8Array([10]), clock: { author: 1 }, snapshotAfterJournalId: null },
       outbox: [{ id: 'current', revision: 'r1', payload: new Uint8Array([20]) }] };
-    await store.commitBatch(session, batch); await store.dispose();
+    await store.commitBatch(session, structuredClone(batch)); await store.dispose();
     store = await createDocumentWorkerClient({ databaseName }); session = await store.openSession(configuration);
     const restored = await store.readCheckpoint(session);
     await store.acknowledgeOutbox(session, ['current']);
@@ -134,7 +136,7 @@ test('real Worker honors same-batch snapshot cuts and recovers acknowledged arch
       checkpoint: { revision: 'r1', payload: new Uint8Array([10]), clock: { author: 1 }, snapshotAfterJournalId: origin },
       journal: [{ id: origin, payload: new Uint8Array([1]) }, { id: 'tx1', payload: new Uint8Array([20]) }],
       outbox: [{ id: 'tx1', revision: 'r1', payload: new Uint8Array([20]) }] };
-    await store.commitBatch(session, initial);
+    await store.commitBatch(session, structuredClone(initial));
     const suffix = (await store.readCheckpoint(session)).journal.map(row => row.id);
     await store.acknowledgeOutbox(session, ['tx1']);
     await store.commitBatch(session, { batchId: 'replacement', expectedRevision: 'r1',
@@ -142,7 +144,7 @@ test('real Worker honors same-batch snapshot cuts and recovers acknowledged arch
       journal: [{ id: 'tx2', payload: new Uint8Array([40]) }], outbox: [{ id: 'tx2', revision: 'r2', payload: new Uint8Array([40]) }] });
     await store.dispose(); store = await createDocumentWorkerClient({ databaseName }); session = await store.openSession(configuration);
     const checkpoint = await store.readCheckpoint(session), retained = await store.readRetainedJournal(session);
-    const retry = await store.commitBatch(session, initial);
+    const retry = await store.commitBatch(session, structuredClone(initial));
     let conflict, originRejected;
     try { await store.commitBatch(session, { ...initial, checkpoint: { ...initial.checkpoint, snapshotAfterJournalId: null } }); }
     catch (error) { conflict = error.code; }

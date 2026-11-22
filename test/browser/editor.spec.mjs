@@ -60,14 +60,14 @@ test('public API preserves the document after invalid import and releases the ca
     await editor.fitViewport();
     const before = await editor.exportSnapshot({ formats: ['raw', 'png'] });
     let rejected = false;
-    try { await editor.replaceDocument('not-valid-base64'); } catch { rejected = true; }
+    try { await editor.replaceDocument(Uint8Array.of(0)); } catch { rejected = true; }
     const after = await editor.exportSnapshot({ formats: ['raw', 'png'] });
     await editor.dispose();
     return { rejected, before, after, canvases: container.querySelectorAll('canvas').length, state: editor.lifecycle };
   });
   expect(result.rejected).toBe(true);
   expect(result.after.png).toEqual(result.before.png);
-  expect(result.after.raw).toBe(result.before.raw);
+  expect(result.after.raw).toEqual(result.before.raw);
   expect(result.after.revision).toBe(result.before.revision);
   expect(result.before.png.width).toBeGreaterThan(0);
   expect(result.canvases).toBe(0);

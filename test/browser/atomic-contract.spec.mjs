@@ -5,8 +5,8 @@ async function create(page,options={}){
  await expect(page.locator('.dm-canvas-root canvas')).toBeVisible();await expect(page.locator('iframe')).toHaveCount(0);
 }
 test('direct semantic import/export rejects invalid input without changing the document',async({page})=>{
- await create(page);const result=await page.evaluate(async()=>{await editor.replaceTextGraph('A -> B');const before=await editor.exportSnapshot({formats:['raw']});let code;try{await editor.replaceDocument('invalid');}catch(error){code=error.code;}const after=await editor.exportSnapshot({formats:['raw']});await editor.dispose();return {before,after,code};});
- expect(result.code).toBeTruthy();expect(result.after).toEqual(result.before);await expect(page.locator('canvas')).toHaveCount(0);
+ await create(page);const result=await page.evaluate(async()=>{await editor.replaceTextGraph('A -> B');const before=await editor.exportSnapshot({formats:['raw']});let code;try{await editor.replaceDocument(Uint8Array.of(0));}catch(error){code=error.code;}const after=await editor.exportSnapshot({formats:['raw']});await editor.dispose();return {before,after,code};});
+ expect(result.code).toBe('InvalidArgument');expect(result.after).toEqual(result.before);await expect(page.locator('canvas')).toHaveCount(0);
 });
 test('a page rejects concurrent mounts and reopening starts with fresh undo history',async({page})=>{
  await create(page);const result=await page.evaluate(async()=>{const {createEditor}=await import('/src/core.js');await editor.setSketchyMode(true);const state=await editor.getState();let code;try{await createEditor({container:document.body,assetBaseUrl:'/generated/editor/'});}catch(error){code=error.code;}await editor.dispose();editor=await createEditor({container:document.querySelector('.editor'),assetBaseUrl:'/generated/editor/'});return {code,hadUndo:state.canUndo,next:await editor.getState()};});
@@ -69,7 +69,7 @@ test('standalone edits and persisted Undo/Redo advance durable clocks without de
     await editor.dispose();
     return { before, after, reopened, redone, undone, final: await readDurableState() };
   }, persistence);
-  expect(result.after.raw).toBe(result.before.raw);
+  expect(result.after.raw).toEqual(result.before.raw);
   expect(result.reopened.sketchyMode).toBe(false);
   expect(result.reopened.canRedo).toBe(true);
   expect(result.redone.sketchyMode).toBe(true);
