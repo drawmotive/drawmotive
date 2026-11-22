@@ -76,8 +76,8 @@
     --line-width-thin: 1px;
     --line-width-normal: 2px;
     --line-width-bold: 4px;
-    /* Display-only line-to-node gap along the connector path in drawing units, after stroke compensation.
-       Positive values add space; negative values bring ends closer. Stored geometry is unchanged.
+    /* Display-only connector spacing from attached ports in world drawing units.
+       Positive values retract along the route. Negative values extend along the terminal tangent.
        Accepts finite signed px or unitless 0; omitted values default to 0. */
     --line-node-gap: 0px;
     --stroke-cap: round;
@@ -140,6 +140,22 @@
     --editor-text-border-role: secondary-stroke;
     --editor-text-border-width: var(--line-width-thin);
     --editor-text-padding: 3px;
+
+    /* Badges keep their dimensions across appearances; each recipe owns its ink.
+       Long numbers expand towards the outside of the object's upper-left corner. */
+    --number-height: 22px;
+    --number-horizontal-padding: 6px;
+    --number-font-size: 12px;
+    --number-font-weight: 600;
+    --number-fill-mix: 0.16;
+    --number-light-fill-role: primary-stroke;
+    --number-light-text-role: background;
+    --number-light-stroke-role: background;
+    --number-light-stroke-width: 1.5px;
+    --number-dark-fill-role: primary-stroke;
+    --number-dark-text-role: background;
+    --number-dark-stroke-role: background;
+    --number-dark-stroke-width: 1px;
 
     /* TextGraph Styles */
     --textgraph-node-min-width: 80px;
@@ -220,6 +236,16 @@
 }
 
 .styling.minimal {
+    /* A quiet surface and neutral outline match the minimal theme in both modes. */
+    --number-fill-mix: 0;
+    --number-light-fill-role: background;
+    --number-light-text-role: foreground;
+    --number-light-stroke-role: secondary-stroke;
+    --number-light-stroke-width: 1px;
+    --number-dark-fill-role: background;
+    --number-dark-text-role: foreground;
+    --number-dark-stroke-role: secondary-stroke;
+    --number-dark-stroke-width: 1.25px;
     --line-width-thin: 0.75px;
     --line-width-normal: 1px;
     --line-width-bold: 2px;

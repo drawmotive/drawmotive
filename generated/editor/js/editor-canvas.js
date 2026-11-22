@@ -182,10 +182,18 @@ function startRuntime(assetBaseUrl, assetPaths = {}) {
     await Blazor.start({ loadBootResource: (type, _name, uri, integrity) => {
       const url = assetUrl(uri);
       if (type === 'dotnetjs') return url;
-      // .NET 10 fingerprints each WASM filename. Keep that URL as its cache
-      // identity and retain SRI even when reusing a previously cached response.
       const immutableWasm = /[.][a-z0-9]{10}[.]wasm$/.test(new URL(url).pathname) && !!integrity;
-      return fetch(url, { cache: immutableWasm ? 'force-cache' : 'no-cache', integrity });
+      const revalidate = () => fetch(url, { cache: 'no-cache', integrity });
+      if (!immutableWasm) return revalidate();
+      // Chromium can store an error body even when SRI rejects it. Revalidate
+      // the same fingerprinted URL once so the runtime can escape that cache entry.
+      return fetch(url, { cache: 'force-cache', integrity }).then(
+        response => response.ok ? response : revalidate(),
+        error => {
+          if (!(error instanceof TypeError)) throw error;
+          return revalidate();
+        },
+      );
     } });
     // Blazor.start starts the async managed entry point without awaiting renderer creation.
     await rendererReady;
@@ -259,6 +267,10 @@ export async function mountCanvas({ container, assetBaseUrl, assetPaths, options
     compileTextGraph: async source => {
       if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
       return invokeNative(owner, 'CompileSiteTextGraphAsync', source);
+    },
+    present: async action => {
+      if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
+      return invokeNative(owner, 'PresentSiteDrawingAsync', action);
     },
     request: async (method, args) => {
       if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
