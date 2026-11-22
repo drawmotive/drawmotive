@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.4
 
 - Breaking: binary values are `Uint8Array` across the public API. `EditorSnapshot.raw`
   and the new `png.bytes` (replacing `png.base64`) are bytes; `replaceDocument(raw)`,
