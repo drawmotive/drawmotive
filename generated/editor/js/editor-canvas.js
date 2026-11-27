@@ -1,5 +1,5 @@
 // One WASM runtime belongs to the page; each opened document owns a fresh native root.
-let activeCanvas, runtimeStartup, runtimeAssetBaseUrl, runtimeAssetVersion, resolveRuntimeReady, rejectRuntimeReady;
+let activeCanvas, runtimeStartup, runtimeAssetBaseUrl, runtimeAssetVersion, resolveRuntimeAsset, resolveRuntimeReady, rejectRuntimeReady;
 const browserFontLoads = new Map();
 // Verified font bytes wait here until managed code supplies the Skia block they are copied into.
 const retainedFonts = new Map();
@@ -75,6 +75,9 @@ async function prepareBrowserFont(path, sha256, bytes, pack) {
 globalThis.drawmotiveCanvas = Object.freeze({
   getDrawingId: () => current().drawingId,
   getAssetBaseUrl: () => runtimeAssetBaseUrl,
+  getAssetUrl: logical => resolveRuntimeAsset(logical).href,
+  // Published hosts declare a drawing resource origin while the SDK owns runtime URLs.
+  getResourceBaseUrl: () => document.querySelector('meta[name="drawmotive-editor-resource-base"]')?.content || runtimeAssetBaseUrl,
   getPageAddress: () => globalThis.location?.href ?? null,
   getLanguage: () => document.documentElement?.lang || globalThis.navigator?.language || 'en',
   // The public component initializer runs only after the framework enables dynamic roots.
@@ -170,24 +173,48 @@ function startRuntime(assetBaseUrl, assetPaths = {}) {
   }
   runtimeAssetBaseUrl = assetBaseUrl;
   runtimeAssetVersion = assetVersion;
-  const assetUrl = logical => new URL(assetPaths[logical] ?? logical, assetBaseUrl).href;
+  const base = new URL(assetBaseUrl);
+  function assetUrl(logical) {
+    const original = new URL(logical, base);
+    const relative = original.origin === base.origin && original.pathname.startsWith(base.pathname)
+      ? original.pathname.slice(base.pathname.length) : '';
+    if (!Object.hasOwn(assetPaths, relative)) return original;
+    const published = new URL(assetPaths[relative], base);
+    const version = published.searchParams.get('v');
+    published.search = original.search;
+    if (version) published.searchParams.set('v', version);
+    published.hash = original.hash;
+    return published;
+  }
+  // Managed imports and Blazor boot use the same release selected by the page.
+  resolveRuntimeAsset = assetUrl;
+  function publicationIntegrity(url) {
+    const version = url.searchParams.get('v');
+    return /^[a-f0-9]{64}$/.test(version)
+      ? 'sha256-' + btoa(String.fromCharCode(...version.match(/../g).map(byte => parseInt(byte, 16)))) : undefined;
+  }
+  function bootAsset(logical, attribute) {
+    const url = assetUrl(logical), integrity = publicationIntegrity(url);
+    return integrity ? { [attribute]: url.href, integrity, crossOrigin: 'anonymous' } : { [attribute]: url.href };
+  }
   const rendererReady = new Promise((resolve, reject) => { resolveRuntimeReady = resolve; rejectRuntimeReady = reject; });
   rendererReady.catch(() => {});
   runtimeStartup = (async () => {
     await Promise.all([
-      loadAsset('link', { rel: 'stylesheet', href: assetUrl('css/editor-canvas.css') }),
-      loadAsset('link', { rel: 'stylesheet', href: assetUrl('Editor.Client.styles.css') }),
-      loadAsset('script', { src: assetUrl('_framework/blazor.webassembly.js') }),
+      loadAsset('link', { rel: 'stylesheet', ...bootAsset('css/editor-canvas.css', 'href') }),
+      loadAsset('link', { rel: 'stylesheet', ...bootAsset('Editor.Client.styles.css', 'href') }),
+      loadAsset('script', bootAsset('_framework/blazor.webassembly.js', 'src')),
     ]);
     await Blazor.start({ loadBootResource: (type, _name, uri, integrity) => {
       const url = assetUrl(uri);
-      if (type === 'dotnetjs') return url;
-      const immutableWasm = /[.][a-z0-9]{10}[.]wasm$/.test(new URL(url).pathname) && !!integrity;
-      const revalidate = () => fetch(url, { cache: 'no-cache', integrity });
+      if (type === 'dotnetjs') return url.href;
+      const publishedIntegrity = publicationIntegrity(url);
+      const immutableWasm = !publishedIntegrity && /[.][a-z0-9]{10}[.]wasm$/.test(url.pathname) && !!integrity;
+      const revalidate = () => fetch(url.href, { cache: 'no-cache', integrity: integrity || publishedIntegrity });
       if (!immutableWasm) return revalidate();
       // Chromium can store an error body even when SRI rejects it. Revalidate
       // the same fingerprinted URL once so the runtime can escape that cache entry.
-      return fetch(url, { cache: 'force-cache', integrity }).then(
+      return fetch(url.href, { cache: 'force-cache', integrity }).then(
         response => response.ok ? response : revalidate(),
         error => {
           if (!(error instanceof TypeError)) throw error;
@@ -217,12 +244,69 @@ function execute(owner, method, args) {
   const { json, binaries } = encodeArguments(args ?? {});
   return invokeNative(owner, 'ExecuteAsync', method, json, binaries);
 }
+function svgMime(data) {
+  let encoding = 'utf-8';
+  if (data[0] === 0xff && data[1] === 0xfe) encoding = 'utf-16le';
+  if (data[0] === 0xfe && data[1] === 0xff) encoding = 'utf-16be';
+  const text = new TextDecoder(encoding).decode(data);
+  if (!text.trimStart().startsWith('<')) return '';
+  const root = new DOMParser().parseFromString(text, 'image/svg+xml').documentElement;
+  return root.localName === 'svg' && root.namespaceURI === 'http://www.w3.org/2000/svg' ? 'image/svg+xml' : '';
+}
+/** Supplies an alpha-preserving carrier to the native image pipeline after a decoder rejection. */
+async function browserPasteSource(data, requireActive) {
+  const blob = new Blob([data], { type: svgMime(data) });
+  let bitmap, image, url, canvas;
+  try {
+    try { bitmap = await globalThis.createImageBitmap?.(blob); }
+    catch { /* Browser SVG decoding can require an image element. */ }
+    requireActive();
+    if (!bitmap) {
+      try {
+        image = new Image();
+        url = URL.createObjectURL(blob);
+        image.src = url;
+        await image.decode();
+      } catch { requireActive(); return null; }
+    }
+    requireActive();
+    const width = bitmap?.width ?? image.naturalWidth;
+    const height = bitmap?.height ?? image.naturalHeight;
+    if (width <= 0 || height <= 0 || width > 16384 || height > 16384 || width * height > 16777216)
+      throw error('InvalidArgument', 'The image dimensions exceed the supported size.');
+    canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(bitmap ?? image, 0, 0);
+    const maxSourceBytes = 16 * 1024 * 1024;
+    const encode = (type, quality) => new Promise(resolve => canvas.toBlob(resolve, type, quality));
+    let carrier = await encode('image/png');
+    requireActive();
+    if (!carrier?.size || carrier.size > maxSourceBytes) {
+      carrier = await encode('image/webp', 0.8);
+      requireActive();
+    }
+    if (!carrier?.size || carrier.size > maxSourceBytes || !['image/png', 'image/webp'].includes(carrier.type))
+      throw error('InvalidArgument', 'The converted image exceeds the supported input size.');
+    return new Uint8Array(await carrier.arrayBuffer());
+  } finally {
+    bitmap?.close();
+    if (image) image.removeAttribute('src');
+    if (url) URL.revokeObjectURL(url);
+    if (canvas) canvas.width = canvas.height = 0;
+  }
+}
 /** Mounts the page's only canvas. Cleanup finishes before another document can open. */
 export async function mountCanvas({ container, assetBaseUrl, assetPaths, options, drawingId, platform: platformCallback, emit: emitCallback, signal }) {
   if (activeCanvas) throw error('EditorAlreadyMounted', 'Only one DrawMotive canvas can be mounted on a page.');
   if (signal?.aborted) throw error('Aborted', 'Canvas startup was aborted.');
   const owner = { container, options, drawingId, platform: platformCallback, emit: emitCallback, closing: false, closed: false };
   activeCanvas = owner;
+  const requireActive = () => {
+    if (activeCanvas !== owner || owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
+  };
   container.classList.add('drawmotive-canvas-host');
   let root, failure, cleanup;
   const ready = new Promise((resolve, reject) => { owner.resolveReady = resolve; owner.fail = reject; });
@@ -273,8 +357,17 @@ export async function mountCanvas({ container, assetBaseUrl, assetPaths, options
       return invokeNative(owner, 'PresentSiteDrawingAsync', action);
     },
     request: async (method, args) => {
-      if (owner.closing || owner.closed) throw error('EditorDisposed', 'The canvas is unavailable.');
-      return execute(owner, method, args);
+      requireActive();
+      if (method !== 'pasteImage') return execute(owner, method, args);
+      try { return await execute(owner, method, args); }
+      catch (failure) {
+        if (failure.code !== 'UnsupportedImageFormat') throw failure;
+        requireActive();
+        const data = await browserPasteSource(args.data, requireActive);
+        requireActive();
+        if (!data) throw failure;
+        return execute(owner, method, { ...args, data });
+      }
     },
     dispose: () => {
       if (cleanup) return cleanup;
