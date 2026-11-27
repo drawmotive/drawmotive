@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5
+
+- Store pasted and imported drawing images as WebP.
+- Support the shared drawing-resource inventory while keeping the public binary document and image API.
+
 ## 0.3.4
 
 - Breaking: binary values are `Uint8Array` across the public API. `EditorSnapshot.raw`
